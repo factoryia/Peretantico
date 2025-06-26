@@ -10,14 +10,16 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSubButton,
-} from "../ui/sidebar";
+} from "@/components/ui/sidebar";
 import { data } from "@/constants";
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 
 export function AppSidebar() {
   const { pathname } = useLocation();
+  const { logout } = useAuthStore();
 
   return (
     <Sidebar>
@@ -76,6 +78,7 @@ export function AppSidebar() {
             <SidebarMenuButton asChild>
               <Button
                 variant="ghost"
+                onClick={logout}
                 className="py-2 px-3 h-auto text-red-600 hover:text-red-700 justify-start hover:bg-red-100/50 cursor-pointer"
               >
                 <LogOut className="min-w-5 min-h-5" />
