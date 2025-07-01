@@ -16,6 +16,7 @@ import { initialRepartidores } from "@/constants";
 import { useState } from "react";
 import type { DeliveryDriver } from "../types";
 import { EditDeliveryDriverModal } from "../components/edit-delivery-driver-modal";
+import { SidebarHeader } from "@/components/navigation/sidebar-header";
 
 export function Distributors() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -24,14 +25,15 @@ export function Distributors() {
   );
 
   const handleEditDriver = (driver: DeliveryDriver) => {
-    console.log(driver)
+    console.log(driver);
     setSelectedDriver(driver);
     setIsEditModalOpen(true);
   };
 
   return (
-    <>
-      <div className="flex flex-1 flex-col gap-6 p-6 bg-gray-50 rounded-md border">
+    <div className="pt-[65px] overflow-y-auto h-full">
+      <SidebarHeader title="Gestión de repartidores" />
+      <div className="flex flex-1 flex-col gap-6 p-6 bg-gray-50">
         {/* Search and Add Button */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="relative w-full sm:max-w-md">
@@ -129,6 +131,6 @@ export function Distributors() {
         driver={selectedDriver}
         onSave={() => {}}
       />
-    </>
+    </div>
   );
 }

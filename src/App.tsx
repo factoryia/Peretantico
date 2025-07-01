@@ -8,6 +8,7 @@ import { Distributors } from "@/features/distributors/pages/distributors";
 import { AuthRoutes } from "@/features/auth/routes/auth-routes";
 import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 import { PrivateRoutes } from "@/features/auth/components/private-routes";
+import { Configuration } from "./features/config/pages/configuration";
 
 export default function App() {
   const { isCheckingAuth, authUser, auth } = useAuthStore();
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/repartidores" element={<Distributors />} />
             <Route path="/reportes" element={<Reports />} />
+            <Route path="/configuraciones" element={<Configuration />} />
           </Route>
         </Route>
       </Routes>

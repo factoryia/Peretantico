@@ -1,5 +1,5 @@
 import type { DeliveryDriver } from "@/features/distributors/types";
-import { FileText, MessageSquare, Truck } from "lucide-react";
+import { Cog, FileText, MessageSquare, Truck } from "lucide-react";
 
 // Datos de navegación
 export const data = {
@@ -15,23 +15,18 @@ export const data = {
       url: "/repartidores",
       icon: Truck,
     },
-    // {
-    //   title: "Usuarios",
-    //   url: "#",
-    //   icon: Users,
-    // },
     {
       title: "Reportes",
       url: "/reportes",
       icon: FileText,
     },
-    // {
-    //   title: "Configuración",
-    //   url: "#",
-    //   icon: Settings,
-    // },
+    {
+      title: "Configración",
+      url: "/configuraciones",
+      icon: Cog,
+    },
   ],
-}
+};
 
 export const initialRepartidores: DeliveryDriver[] = [
   {
@@ -67,4 +62,4 @@ export const initialRepartidores: DeliveryDriver[] = [
     placa: "XYZ789",
     estado: "Disponible",
   },
-]
+];
