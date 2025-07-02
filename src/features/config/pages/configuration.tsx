@@ -2,7 +2,7 @@ import { SidebarHeader } from "@/components/navigation/sidebar-header";
 import { useState } from "react";
 import { ConfigSidebar } from "../components/config-sidebar";
 import { CategoriesTab } from "../components/categories-tab";
-import { SubservicesTab } from "../components/subservices-tab";
+import { SubservicesTab } from "../components/services/subservices-tab";
 import { ServicesTab } from "../components/services-tab";
 
 export function Configuration() {
@@ -29,7 +29,7 @@ export function Configuration() {
           activeSection={activeSection}
           onSectionChange={setActiveSection}
         />
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">{renderContent()}</div>
+        <div className="flex-1 overflow-y-auto p-4 md:px-6">{renderContent()}</div>
       </div>
     </div>
   );
