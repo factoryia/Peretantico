@@ -13,22 +13,6 @@ interface ApiResponse {
   }[];
 }
 
-export async function fetchCategories(): Promise<Category[]> {
-  try {
-    const { data } = await api.get<ApiResponse>("/api/taxonomy_term/category");
-
-    return data.data.map((item) => ({
-      uuid: item.id,
-      name: item.attributes.name,
-      description: item.attributes.description?.value || "",
-      status: item.attributes.status,
-      created: item.attributes.revision_created?.substring(0, 10) ?? "",
-    }));
-  } catch (error) {
-    console.error("Error al obtener categorías:", error);
-    return [];
-  }
-}
 
 export const fetchActiveCategories = async (): Promise<Category[]> => {
   try {

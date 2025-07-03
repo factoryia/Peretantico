@@ -49,7 +49,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createCategory, deleteCategory, fetchCategories, updateCategory } from "../utils/category";
+import { createCategory, deleteCategory, fetchActiveCategories, updateCategory } from "../utils/category";
 import type { Category } from "../types";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -72,8 +72,8 @@ export function CategoriesTab() {
 
   const { data: categorias = [], isLoading } = useQuery({
     queryKey: ["categorias"],
-    queryFn: fetchCategories,
-    refetchInterval: 10000,
+    queryFn: fetchActiveCategories,
+    staleTime: 5 * 60 * 1000,
   });
 
   const queryClient = useQueryClient();
@@ -448,7 +448,7 @@ export function CategoriesTab() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
-                          variant="destructive"
+                          variant={"outline"}
                           size="sm"
                           onClick={() => handleOpenDeleteDialog(categoria.uuid)}
                         >

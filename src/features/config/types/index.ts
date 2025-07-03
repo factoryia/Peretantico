@@ -15,3 +15,18 @@ export interface Service {
   status: "activo" | "inactivo";
   creationDate: string;
 }
+
+export interface Subservice {
+  id: string;
+  categoriaId: string;
+  categoriaNombre: string;
+  servicioId: string;
+  servicioNombre: string;
+  nombre: string;
+  descripcion?: string;
+  codigo: string;
+  valor: string;
+  valorPrioridad: string;
+  estado: "activo" | "inactivo";
+  fechaCreacion: string;
+}

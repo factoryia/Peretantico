@@ -107,7 +107,7 @@ export const ServiceDialog = ({
         queryKey: ["services", categoryId],
       });
       form.reset();
-    } catch (error: any) {
+    } catch (error) {
       const err = error as AxiosError;
 
       if (err instanceof isAxiosError) {

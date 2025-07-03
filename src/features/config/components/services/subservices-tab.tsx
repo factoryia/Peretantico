@@ -1,529 +1,199 @@
 "use client";
-
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-
-const subservicioSchema = z.object({
-  categoriaId: z.string().min(1, "Debe seleccionar una categoría"),
-  servicioId: z.string().min(1, "Debe seleccionar un servicio"),
-  nombre: z
-    .string()
-    .min(1, "El nombre es obligatorio")
-    .max(100, "Máximo 100 caracteres"),
-  descripcion: z.string().max(250, "Máximo 250 caracteres").optional(),
-  codigo: z
-    .string()
-    .min(1, "El código es obligatorio")
-    .max(100, "Máximo 100 caracteres"),
-  valor: z
-    .string()
-    .min(1, "El valor es obligatorio")
-    .max(20, "Máximo 20 caracteres"),
-  valorPrioridad: z
-    .string()
-    .min(1, "El valor prioridad es obligatorio")
-    .max(20, "Máximo 20 caracteres"),
-  estado: z.enum(["activo", "inactivo"], {
-    required_error: "Debe seleccionar un estado",
-  }),
-});
-
-type SubservicioFormValues = z.infer<typeof subservicioSchema>;
-
-interface Subservicio {
-  id: number;
-  categoriaId: number;
-  categoriaNombre: string;
-  servicioId: number;
-  servicioNombre: string;
-  nombre: string;
-  descripcion?: string;
-  codigo: string;
-  valor: string;
-  valorPrioridad: string;
-  estado: "activo" | "inactivo";
-  fechaCreacion: string;
-}
-
-const categoriasDisponibles = [
-  { id: 1, nombre: "Servicios Públicos" },
-  { id: 2, nombre: "Documentación" },
-  { id: 3, nombre: "Atención Ciudadana" },
-];
-
-const serviciosDisponibles = [
-  { id: 1, nombre: "Registro Civil", categoriaId: 1 },
-  { id: 2, nombre: "Certificados", categoriaId: 2 },
-  { id: 3, nombre: "Licencias", categoriaId: 1 },
-];
-
-const subserviciosIniciales: Subservicio[] = [
-  {
-    id: 1,
-    categoriaId: 1,
-    categoriaNombre: "Servicios Públicos",
-    servicioId: 1,
-    servicioNombre: "Registro Civil",
-    nombre: "Certificado de Nacimiento",
-    descripcion: "Emisión de certificado de nacimiento",
-    codigo: "RC001",
-    valor: "15000",
-    valorPrioridad: "25000",
-    estado: "activo",
-    fechaCreacion: "2024-01-15",
-  },
-  {
-    id: 2,
-    categoriaId: 2,
-    categoriaNombre: "Documentación",
-    servicioId: 2,
-    servicioNombre: "Certificados",
-    nombre: "Certificado de Estudios",
-    descripcion: "Certificado oficial de estudios realizados",
-    codigo: "CERT001",
-    valor: "12000",
-    valorPrioridad: "20000",
-    estado: "activo",
-    fechaCreacion: "2024-01-16",
-  },
-];
+import { Search, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import type { Subservice } from "../../types";
+import { fetchActiveCategories } from "../../utils/category";
+import { fetchServicesByCategory } from "../../utils/service";
+import { createSubservice, deleteSubservice, fetchSubservicesByService, updateSubservice } from "../../utils/subservice";
+import { SubserviceTable } from "./subservice-table";
+import { SubserviceDialog } from "./subservice-dialog";
+import type { SubserviceFormValues } from "../../schemas";
 
 export function SubservicesTab() {
-  const [subservicios, setSubservicios] = useState<Subservicio[]>(
-    subserviciosIniciales
-  );
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingSubservicio, setEditingSubservicio] =
-    useState<Subservicio | null>(null);
-  const [selectedCategoriaId, setSelectedCategoriaId] = useState<string>("");
+  const queryClient = useQueryClient();
 
-  const form = useForm<SubservicioFormValues>({
-    resolver: zodResolver(subservicioSchema),
-    defaultValues: {
-      categoriaId: "",
-      servicioId: "",
-      nombre: "",
-      descripcion: "",
-      codigo: "",
-      valor: "",
-      valorPrioridad: "",
-      estado: "activo",
-    },
+  // Estados locales
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSubservice, setEditingSubservice] = useState<Subservice | null>(null);
+  const [selectedCategoriaId, setSelectedCategoriaId] = useState<string>("");
+  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+
+  // Categorías principales (servicios principales)
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchActiveCategories,
+    staleTime: 5 * 60 * 1000,
   });
 
-  const watchedCategoriaId = form.watch("categoriaId");
+  // Servicios por categoría
+  const { data: services = [], isLoading: isLoadingServices } = useQuery({
+    queryKey: ["services", selectedCategoriaId],
+    queryFn: () => fetchServicesByCategory(selectedCategoriaId),
+    enabled: !!selectedCategoriaId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const serviciosFiltrados = serviciosDisponibles.filter(
-    (servicio) =>
-      servicio.categoriaId === Number.parseInt(watchedCategoriaId || "0")
-  );
+  // Subservicios hijos
+  const { data: subservices = [], isLoading: isLoadingSubservices } = useQuery({
+    queryKey: ["subservices", selectedServiceId],
+    queryFn: () => fetchSubservicesByService(selectedServiceId),
+    enabled: !!selectedServiceId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const filteredSubservicios = subservicios.filter(
-    (subservicio) =>
-      subservicio.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      subservicio.servicioNombre
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      subservicio.codigo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const onSubmit = (data: SubservicioFormValues) => {
-    const categoria = categoriasDisponibles.find(
-      (c) => c.id === Number.parseInt(data.categoriaId)
-    );
-    const servicio = serviciosDisponibles.find(
-      (s) => s.id === Number.parseInt(data.servicioId)
-    );
-
-    if (editingSubservicio) {
-      setSubservicios((prev) =>
-        prev.map((sub) =>
-          sub.id === editingSubservicio.id
-            ? {
-                ...sub,
-                ...data,
-                categoriaId: Number.parseInt(data.categoriaId),
-                categoriaNombre: categoria?.nombre || "",
-                servicioId: Number.parseInt(data.servicioId),
-                servicioNombre: servicio?.nombre || "",
-              }
-            : sub
-        )
-      );
-    } else {
-      const newSubservicio: Subservicio = {
-        id: Math.max(...subservicios.map((s) => s.id)) + 1,
-        categoriaId: Number.parseInt(data.categoriaId),
-        categoriaNombre: categoria?.nombre || "",
-        servicioId: Number.parseInt(data.servicioId),
-        servicioNombre: servicio?.nombre || "",
-        nombre: data.nombre,
-        descripcion: data.descripcion,
-        codigo: data.codigo,
-        valor: data.valor,
-        valorPrioridad: data.valorPrioridad,
-        estado: data.estado,
-        fechaCreacion: new Date().toISOString().split("T")[0],
-      };
-      setSubservicios((prev) => [...prev, newSubservicio]);
+  // Setear la primera categoría por defecto
+  React.useEffect(() => {
+    if (categories.length > 0 && !selectedCategoriaId) {
+      setSelectedCategoriaId(categories[0].uuid);
     }
+  }, [categories]);
 
-    setIsDialogOpen(false);
-    setEditingSubservicio(null);
-    form.reset();
+  // Setear el primer servicio por defecto cuando cambia la categoría
+  React.useEffect(() => {
+    if (services.length > 0 && !selectedServiceId) {
+      setSelectedServiceId(String(services[0].id));
+    } else if (services.length === 0) {
+      setSelectedServiceId("");
+    }
+  }, [services]);
+
+  // Mutaciones
+  const createMutation = useMutation({
+    mutationFn: (data: SubserviceFormValues) => createSubservice(data, selectedServiceId),
+    onSuccess: () => {
+      toast.success("Subservicio creado correctamente");
+      queryClient.invalidateQueries({ queryKey: ["subservices", selectedServiceId] });
+      setDialogOpen(false);
+      setEditingSubservice(null);
+    },
+    onError: () => toast.error("Error al crear el subservicio"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: SubserviceFormValues }) => updateSubservice(id, data),
+    onSuccess: () => {
+      toast.success("Subservicio actualizado correctamente");
+      queryClient.invalidateQueries({ queryKey: ["subservices", selectedServiceId] });
+      setDialogOpen(false);
+      setEditingSubservice(null);
+    },
+    onError: () => toast.error("Error al actualizar el subservicio"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteSubservice,
+    onSuccess: () => {
+      toast.success("Subservicio eliminado correctamente");
+      queryClient.invalidateQueries({ queryKey: ["subservices", selectedServiceId] });
+    },
+    onError: () => toast.error("Error al eliminar el subservicio"),
+  });
+
+  // Filtrado de subservicios
+  const filteredSubservices = subservices.filter((sub) =>
+    [sub.nombre, sub.servicioNombre, sub.codigo]
+      .join(" ")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  );
+
+  // Acciones
+  const handleEdit = (sub: Subservice) => {
+    setEditingSubservice(sub);
+    setDialogOpen(true);
   };
 
-  const handleEdit = (subservicio: Subservicio) => {
-    setEditingSubservicio(subservicio);
-    form.reset({
-      categoriaId: subservicio.categoriaId.toString(),
-      servicioId: subservicio.servicioId.toString(),
-      nombre: subservicio.nombre,
-      descripcion: subservicio.descripcion || "",
-      codigo: subservicio.codigo,
-      valor: subservicio.valor,
-      valorPrioridad: subservicio.valorPrioridad,
-      estado: subservicio.estado,
-    });
-    setIsDialogOpen(true);
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
-  const handleDelete = (id: number) => {
-    setSubservicios((prev) => prev.filter((sub) => sub.id !== id));
+  const handleNew = () => {
+    setEditingSubservice(null);
+    setDialogOpen(true);
   };
 
-  const handleNewSubservicio = () => {
-    setEditingSubservicio(null);
-    form.reset({
-      categoriaId: "",
-      servicioId: "",
-      nombre: "",
-      descripcion: "",
-      codigo: "",
-      valor: "",
-      valorPrioridad: "",
-      estado: "activo",
-    });
-    setIsDialogOpen(true);
+  const handleSave = (data: SubserviceFormValues) => {
+    const dataWithContext = {
+      ...data,
+      categoriaId: selectedCategoriaId,
+      servicioId: selectedServiceId,
+    };
+    if (editingSubservice) {
+      updateMutation.mutate({ id: String(editingSubservice.id), data: dataWithContext });
+    } else {
+      createMutation.mutate(data);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight">
-          Gestión de Subservicios
-        </h2>
+        <h2 className="text-2xl font-bold tracking-tight">Gestión de Subservicios</h2>
         <p className="text-muted-foreground">
-          Asocia subservicios a cada tipo de servicio principal para definir con
-          mayor precisión los requerimientos del usuario.
+          Asocia subservicios a cada tipo de servicio principal para definir con mayor precisión los requerimientos del usuario.
         </p>
       </div>
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Gestión de Subservicios</CardTitle>
-            <CardDescription>
-              Asocia subservicios a cada tipo de servicio principal para definir
-              con mayor precisión los requerimientos
-            </CardDescription>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>Gestión de Subservicios</CardTitle>
+                <CardDescription>
+                  Asocia subservicios a cada tipo de servicio principal.
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                {/* Select de categorías principales */}
+                <select
+                  className="border rounded px-3 py-2"
+                  value={selectedCategoriaId}
+                  onChange={e => {
+                    setSelectedCategoriaId(e.target.value);
+                    setSelectedServiceId(""); // Reinicia el servicio seleccionado
+                  }}
+                  disabled={isLoadingCategories}
+                >
+                  {categories.map((cat) => (
+                    <option key={cat.uuid} value={cat.uuid}>{cat.name}</option>
+                  ))}
+                </select>
+                {/* Select de servicios hijos */}
+                <select
+                  className="border rounded px-3 py-2"
+                  value={selectedServiceId}
+                  onChange={e => setSelectedServiceId(e.target.value)}
+                  disabled={isLoadingServices || services.length === 0}
+                >
+                  {services.length === 0 && <option value="">Sin servicios</option>}
+                  {services.map((srv) => (
+                    <option key={String(srv.id)} value={String(srv.id)}>{srv.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between space-y-2">
-              <div className="flex items-center space-x-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar subservicios..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
+            <div className="flex items-center justify-between">
+              <div className="relative w-80">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar subservicios..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
               </div>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={handleNewSubservicio}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nuevo Subservicio
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingSubservicio
-                        ? "Editar Subservicio"
-                        : "Nuevo Subservicio"}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {editingSubservicio
-                        ? "Modifica los datos del subservicio existente."
-                        : "Completa los datos para crear un nuevo subservicio."}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form
-                      onSubmit={form.handleSubmit(onSubmit)}
-                      className="space-y-4"
-                    >
-                      <FormField
-                        control={form.control}
-                        name="categoriaId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Categoría</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccione una categoría" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {categoriasDisponibles.map((categoria) => (
-                                  <SelectItem
-                                    key={categoria.id}
-                                    value={categoria.id.toString()}
-                                  >
-                                    {categoria.nombre}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Listado de categorías activas en el sistema.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="servicioId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Tipo de servicio</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccione un servicio" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {serviciosFiltrados.map((servicio) => (
-                                  <SelectItem
-                                    key={servicio.id}
-                                    value={servicio.id.toString()}
-                                  >
-                                    {servicio.nombre}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Selecciona el tipo de servicio al que se asociará
-                              el subservicio.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="nombre"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nombre del Subservicio</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="Ej: Solicitud registros civiles"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Título o nombre identificador del subservicio.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="descripcion"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Descripción del Subservicio</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Descripción más detallada del subservicio"
-                                className="resize-none"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Descripción más detallada del subservicio, si se
-                              requiere.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="codigo"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Código</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Ej: RC001" {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                Define el código por subservicio.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="estado"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Estado</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                defaultValue={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Seleccione un estado" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="activo">Activo</SelectItem>
-                                  <SelectItem value="inactivo">
-                                    Inactivo
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormDescription>
-                                Define si el subservicio está disponible o no.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="valor"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Valor</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="15000"
-                                  type="number"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Valor por subservicio.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="valorPrioridad"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Valor Prioridad</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="25000"
-                                  type="number"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Valor por subservicio priorizado.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="flex justify-end space-x-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsDialogOpen(false)}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button type="submit">
-                          {editingSubservicio ? "Actualizar" : "Crear"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={handleNew} disabled={!selectedServiceId}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Subservicio
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -532,77 +202,47 @@ export function SubservicesTab() {
           <CardHeader>
             <CardTitle>Lista de Subservicios</CardTitle>
             <CardDescription>
-              {filteredSubservicios.length} subservicio(s) encontrado(s)
+              {filteredSubservices.length} subservicio(s) encontrado(s)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Servicio</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Valor Prioridad</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSubservicios.map((subservicio) => (
-                  <TableRow key={subservicio.id}>
-                    <TableCell className="font-medium">
-                      {subservicio.nombre}
-                    </TableCell>
-                    <TableCell>{subservicio.servicioNombre}</TableCell>
-                    <TableCell>{subservicio.codigo}</TableCell>
-                    <TableCell>
-                      ${Number.parseInt(subservicio.valor).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      $
-                      {Number.parseInt(
-                        subservicio.valorPrioridad
-                      ).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          subservicio.estado === "activo"
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {subservicio.estado === "activo"
-                          ? "Activo"
-                          : "Inactivo"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(subservicio)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(subservicio.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            {isLoadingSubservices ? (
+              <div className="py-12 text-center text-muted-foreground">
+                Cargando subservicios...
+              </div>
+            ) : filteredSubservices.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay subservicios para mostrar.
+              </div>
+            ) : (
+              <SubserviceTable
+                subservices={filteredSubservices}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                isLoading={isLoadingSubservices}
+              />
+            )}
           </CardContent>
         </Card>
       </div>
+      <SubserviceDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={handleSave}
+        isEdit={!!editingSubservice}
+        initialData={
+          editingSubservice
+            ? {
+              nombre: editingSubservice.nombre,
+              descripcion: editingSubservice.descripcion,
+              codigo: editingSubservice.codigo,
+              valor: editingSubservice.valor,
+              valorPrioridad: editingSubservice.valorPrioridad,
+              estado: editingSubservice.estado,
+            }
+            : undefined
+        }
+      />
     </div>
   );
 }
