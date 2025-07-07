@@ -1,5 +1,6 @@
 import api from "@/api";
 import type { Category } from "../types";
+import type { CategoryFormValues } from "../schemas";
 
 interface ApiResponse {
   data: {
@@ -11,10 +12,10 @@ interface ApiResponse {
       revision_created: string;
     };
   }[];
+  meta: { count: number };
 }
 
-
-export const fetchActiveCategories = async (): Promise<Category[]> => {
+export const fetchAllActiveCategories = async (): Promise<Category[]> => {
   try {
     const response = await api.get<ApiResponse>("/api/taxonomy_term/category", {
       params: {
@@ -26,7 +27,7 @@ export const fetchActiveCategories = async (): Promise<Category[]> => {
       uuid: item.id,
       name: item.attributes.name,
       description: item.attributes.description?.value ?? null,
-      status: item.attributes.status,
+      status: item.attributes.status ? "activo" : "inactivo",
       created: item.attributes.revision_created,
     }));
   } catch (error) {
@@ -35,25 +36,58 @@ export const fetchActiveCategories = async (): Promise<Category[]> => {
   }
 };
 
-export async function createCategory({
-  nombre,
-  descripcion,
-  estado,
-}: {
-  nombre: string;
-  descripcion?: string;
-  estado: "activo" | "inactivo";
-}) {
-  // Toma los tokens del localStorage
-  const csrfToken = localStorage.getItem("CSRF_TOKEN");
+export const fetchCategories = async (
+  searchTerm: string = "",
+  page: number = 1,
+  limit: number = 10
+): Promise<{ categories: Category[]; totalPages: number }> => {
+  try {
+    const offset = (page - 1) * limit;
 
+    const params: Record<string, string | number> = {
+      "page[limit]": limit,
+      "page[offset]": offset,
+    };
+
+    // Add name filter if searchTerm is provided
+    if (searchTerm) {
+      params["filter[name][condition][path]"] = "name";
+      params["filter[name][condition][operator]"] = "CONTAINS";
+      params["filter[name][condition][value]"] = searchTerm;
+    }
+
+    const response = await api.get<ApiResponse>("/api/taxonomy_term/category", {
+      params,
+    });
+
+    const categories: Category[] = response.data.data.map(
+      (item: ApiResponse["data"][number]) => ({
+        uuid: item.id,
+        name: item.attributes.name,
+        description: item.attributes.description?.value ?? null,
+        status: item.attributes.status ? "activo" : "inactivo",
+        created: item.attributes.revision_created,
+      })
+    );
+
+    const totalItems = response.data.meta?.count ?? categories.length; // Adjust based on API response
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return { categories, totalPages };
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    return { categories: [], totalPages: 1 };
+  }
+};
+
+export async function createCategory(data: CategoryFormValues) {
   const payload = {
     data: {
       type: "taxonomy_term--category",
       attributes: {
-        name: nombre,
-        description: descripcion || "",
-        status: estado === "activo",
+        name: data.name,
+        description: data.description || "",
+        status: data.status === "activo",
       },
     },
   };
@@ -61,50 +95,29 @@ export async function createCategory({
   return api.post("/api/taxonomy_term/category", payload, {
     headers: {
       "Content-Type": "application/vnd.api+json",
-      "X-Csrf-Token": csrfToken,
     },
   });
 }
 
 export async function deleteCategory(uuid: string): Promise<void> {
-  const csrfToken = localStorage.getItem("CSRF_TOKEN");
-
-  await api.delete(`/api/taxonomy_term/category/${uuid}`, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-      "X-Csrf-Token": csrfToken,
-    },
-  });
+  await api.delete(`/api/taxonomy_term/category/${uuid}`);
 }
 
-export async function updateCategory(
-  uuid: string,
-  {
-    nombre,
-    descripcion,
-    estado,
-  }: {
-    nombre: string;
-    descripcion?: string;
-    estado: "activo" | "inactivo";
-  }
-) {
-  const csrfToken = localStorage.getItem("CSRF_TOKEN");
+export async function updateCategory(uuid: string, data: CategoryFormValues) {
   const payload = {
     data: {
       id: uuid,
       type: "taxonomy_term--category",
       attributes: {
-        name: nombre,
-        description: descripcion || "",
-        status: estado === "activo",
+        name: data.name,
+        description: data.description || "",
+        status: data.status === "activo",
       },
     },
   };
   return api.patch(`/api/taxonomy_term/category/${uuid}`, payload, {
     headers: {
       "Content-Type": "application/vnd.api+json",
-      "X-Csrf-Token": csrfToken,
     },
   });
 }

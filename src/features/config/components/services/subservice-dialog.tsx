@@ -1,28 +1,66 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
 import { subserviceSchema, type SubserviceFormValues } from "../../schemas";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Loader } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { createSubservice, updateSubservice } from "../../utils/subservice";
+import type { Subservice } from "../../types";
+import { isAxiosError, type AxiosError } from "axios";
+import { SUBSERVICE_QUERY_KEY } from "../../constants/query-keys";
 
 interface Props {
   open: boolean;
+  selectedServiceId: string;
+  selectedCategoryId: string;
+  setDialogOpen: (value: boolean) => void;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: SubserviceFormValues) => void;
   isEdit: boolean;
-  initialData?: SubserviceFormValues;
+  editingSubservice: Subservice | null;
+  setEditingSubservice: (value: Subservice | null) => void;
 }
 
 export function SubserviceDialog({
-  open, onOpenChange, onSubmit, isEdit, initialData
+  open,
+  isEdit,
+  editingSubservice,
+  selectedServiceId,
+  onOpenChange,
+  setDialogOpen,
+  setEditingSubservice,
 }: Props) {
+  const queryClient = useQueryClient();
+
   const form = useForm<SubserviceFormValues>({
     resolver: zodResolver(subserviceSchema),
-    defaultValues: initialData || {
+    defaultValues: {
       nombre: "",
       descripcion: "",
       codigo: "",
@@ -32,9 +70,18 @@ export function SubserviceDialog({
     },
   });
 
+  const { isValid, isSubmitting } = form.formState;
+
   useEffect(() => {
-    if (initialData) {
-      form.reset(initialData);
+    if (editingSubservice) {
+      form.reset({
+        nombre: editingSubservice.nombre,
+        descripcion: editingSubservice.descripcion,
+        codigo: editingSubservice.codigo,
+        estado: editingSubservice.estado,
+        valor: editingSubservice.valor,
+        valorPrioridad: editingSubservice.valor,
+      });
     } else {
       form.reset({
         nombre: "",
@@ -45,20 +92,64 @@ export function SubserviceDialog({
         estado: "activo",
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData, open]);
+  }, [editingSubservice, open]);
+
+  const handleSave = async (data: SubserviceFormValues) => {
+    try {
+      if (editingSubservice) {
+        await updateSubservice(editingSubservice.id, data);
+
+        toast.success("Subservicio actualizado", {
+          description: `El subservicio "${data.nombre}" fue actualizado correctamente.`,
+        });
+        setEditingSubservice(null);
+      } else {
+        await createSubservice(data, selectedServiceId);
+        toast.success("Subservicio creado", {
+          description: `El subservicio "${data.nombre}" fue creado exitosamente.`,
+        });
+      }
+
+      setDialogOpen(false);
+      queryClient.invalidateQueries({
+        queryKey: [SUBSERVICE_QUERY_KEY, selectedServiceId],
+      });
+      form.reset();
+    } catch (error) {
+      const err = error as AxiosError;
+
+      if (err instanceof isAxiosError) {
+        toast.error("Error al crear el subservicio", {
+          description: err.message,
+        });
+      } else {
+        toast.error("Error al crear el subservicio", {
+          description:
+            "Ocurrió un error inesperado al intentar crear el subservicio.",
+        });
+      }
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Subservicio" : "Nuevo Subservicio"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Editar Subservicio" : "Nuevo Subservicio"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Modifica los datos del subservicio existente." : "Completa los datos para crear un nuevo subservicio."}
+            {isEdit
+              ? "Modifica los datos del subservicio existente."
+              : "Completa los datos para crear un nuevo subservicio."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" autoComplete="off">
+          <form
+            onSubmit={form.handleSubmit(handleSave)}
+            className="space-y-4"
+            autoComplete="off"
+          >
             <FormField
               control={form.control}
               name="nombre"
@@ -66,9 +157,15 @@ export function SubserviceDialog({
                 <FormItem>
                   <FormLabel>Nombre del Subservicio</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej: Solicitud registros civiles" {...field} />
+                    <Input
+                      placeholder="Ej: Solicitud registros civiles"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
+                  <FormDescription>
+                    Título o nombre identificador del subservicio.
+                  </FormDescription>
                 </FormItem>
               )}
             />
@@ -82,6 +179,9 @@ export function SubserviceDialog({
                     <Textarea placeholder="Descripción detallada" {...field} />
                   </FormControl>
                   <FormMessage />
+                  <FormDescription>
+                    Descripción más detallada del subservicio, si se requiere.
+                  </FormDescription>
                 </FormItem>
               )}
             />
@@ -96,6 +196,9 @@ export function SubserviceDialog({
                       <Input placeholder="Ej: SC-123" {...field} />
                     </FormControl>
                     <FormMessage />
+                    <FormDescription>
+                      Define el código por subservicio.
+                    </FormDescription>
                   </FormItem>
                 )}
               />
@@ -107,7 +210,7 @@ export function SubserviceDialog({
                     <FormLabel>Estado</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="data-[size=default]:h-11">
                           <SelectValue placeholder="Seleccione un estado" />
                         </SelectTrigger>
                       </FormControl>
@@ -117,6 +220,9 @@ export function SubserviceDialog({
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                    <FormDescription>
+                      Define si está disponible o no.
+                    </FormDescription>
                   </FormItem>
                 )}
               />
@@ -132,6 +238,7 @@ export function SubserviceDialog({
                       <Input type="number" placeholder="15000" {...field} />
                     </FormControl>
                     <FormMessage />
+                    <FormDescription>Valor por subservicio.</FormDescription>
                   </FormItem>
                 )}
               />
@@ -145,13 +252,26 @@ export function SubserviceDialog({
                       <Input type="number" placeholder="25000" {...field} />
                     </FormControl>
                     <FormMessage />
+
+                    <FormDescription>
+                      Valor por subservicio priorizado.
+                    </FormDescription>
                   </FormItem>
                 )}
               />
             </div>
             <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit">{isEdit ? "Actualizar" : "Crear"}</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={!isValid || isSubmitting}>
+                {isSubmitting && <Loader className="animate-spin" />}
+                {isEdit ? "Actualizar" : "Crear"}
+              </Button>
             </div>
           </form>
         </Form>

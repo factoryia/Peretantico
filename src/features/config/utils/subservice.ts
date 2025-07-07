@@ -36,6 +36,7 @@ interface ApiResponse {
       name: string;
     };
   }[];
+  meta: { count: number };
 }
 
 interface SingleApiResponse {
@@ -68,20 +69,88 @@ interface SingleApiResponse {
 }
 
 // **1. Listar subservicios de un tipo de servicio**
+// export const fetchSubservicesByService = async (
+//   serviceUuid: string
+// ): Promise<Subservice[]> => {
+//   try {
+//     const response = await api.get<ApiResponse>("/api/taxonomy_term/category", {
+//       params: {
+//         "filter[parent.id]": serviceUuid,
+//         include: "parent",
+//       },
+//     });
+
+//     console.log(response);
+
+//     return response.data.data.map((item) => {
+//       const attrs = item.attributes;
+//       const parentData = item.relationships.parent.data[0];
+//       let parent: CategoryRef = { id: "", name: "" };
+
+//       if (parentData && response.data.included) {
+//         const parentIncluded = response.data.included.find(
+//           (i) => i.id === parentData.id
+//         );
+//         if (parentIncluded) {
+//           parent = {
+//             id: parentIncluded.id,
+//             name: parentIncluded.attributes.name,
+//           };
+//         }
+//       }
+
+//       return {
+//         id: item.id,
+//         categoriaId: parent.id,
+//         categoriaNombre: parent.name,
+//         nombre: attrs.name,
+//         descripcion:
+//           typeof attrs.description === "string"
+//             ? attrs.description
+//             : (attrs.description && typeof attrs.description === "object" && "value" in attrs.description)
+//               ? ((attrs.description as { value?: string }).value ?? "")
+//               : "",
+//         codigo: attrs.field_code ?? "",
+//         valor: attrs.field_value?.toString() ?? "",
+//         valorPrioridad: attrs.field_priority_value?.toString() ?? "",
+//         estado: attrs.status ? "activo" : "inactivo",
+//         fechaCreacion: attrs.revision_created?.split("T")[0] ?? "",
+//         servicioId: parent.id,
+//         servicioNombre: parent.name,
+//       } as Subservice;
+//     });
+//   } catch {
+//     // Puedes customizar el manejo de error
+//     return [];
+//   }
+// };
 export const fetchSubservicesByService = async (
-  serviceUuid: string
-): Promise<Subservice[]> => {
+  serviceUuid: string,
+  searchTerm: string = "",
+  page: number = 1,
+  limit: number = 10
+): Promise<{ subservices: Subservice[]; totalPages: number }> => {
   try {
+    const offset = (page - 1) * limit;
+
+    const params: Record<string, string | number> = {
+      "filter[parent.id]": serviceUuid,
+      include: "parent",
+      "page[limit]": limit,
+      "page[offset]": offset,
+    };
+
+    if (searchTerm) {
+      params["filter[name][condition][path]"] = "name";
+      params["filter[name][condition][operator]"] = "CONTAINS";
+      params["filter[name][condition][value]"] = searchTerm;
+    }
+
     const response = await api.get<ApiResponse>("/api/taxonomy_term/category", {
-      params: {
-        "filter[parent.id]": serviceUuid,
-        include: "parent",
-      },
+      params,
     });
 
-    console.log(response);
-
-    return response.data.data.map((item) => {
+    const subservices: Subservice[] = response.data.data.map((item) => {
       const attrs = item.attributes;
       const parentData = item.relationships.parent.data[0];
       let parent: CategoryRef = { id: "", name: "" };
@@ -118,11 +187,17 @@ export const fetchSubservicesByService = async (
         servicioNombre: parent.name,
       } as Subservice;
     });
-  } catch {
-    // Puedes customizar el manejo de error
-    return [];
+
+    const totalItems = response.data.meta?.count ?? subservices.length;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return { subservices, totalPages };
+  } catch (error) {
+    console.error("Error fetching subservices:", error);
+    return { subservices: [], totalPages: 1 };
   }
 };
+
 
 // **2. Obtener un subservicio específico**
 export const fetchSubservice = async (

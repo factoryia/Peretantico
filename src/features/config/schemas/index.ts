@@ -2,7 +2,10 @@ import * as z from "zod";
 
 export const serviceSchema = z.object({
   categoryId: z.string().min(1, "Debe seleccionar una categoría"),
-  name: z.string().min(1, "El nombre es obligatorio").max(100, "Máximo 100 caracteres"),
+  name: z
+    .string()
+    .min(1, "El nombre es obligatorio")
+    .max(100, "Máximo 100 caracteres"),
   description: z.string().max(500, "Máximo 500 caracteres").optional(),
   status: z.enum(["activo", "inactivo"], {
     required_error: "Debe seleccionar un estado",
@@ -10,8 +13,6 @@ export const serviceSchema = z.object({
 });
 
 export type ServiceFormValues = z.infer<typeof serviceSchema>;
-
-
 
 export const subserviceSchema = z.object({
   nombre: z.string().min(1).max(100),
@@ -23,3 +24,16 @@ export const subserviceSchema = z.object({
 });
 
 export type SubserviceFormValues = z.infer<typeof subserviceSchema>;
+
+export const categorySchema = z.object({
+  name: z
+    .string()
+    .min(1, "El nombre es obligatorio")
+    .max(100, "Máximo 100 caracteres"),
+  description: z.string().max(300, "Máximo 300 caracteres").optional(),
+  status: z.enum(["activo", "inactivo"], {
+    required_error: "Debe seleccionar un estado",
+  }),
+});
+
+export type CategoryFormValues = z.infer<typeof categorySchema>;

@@ -1,9 +1,10 @@
-import { SidebarHeader } from "@/components/navigation/sidebar-header";
 import { useState } from "react";
-import { ConfigSidebar } from "../components/config-sidebar";
-import { CategoriesTab } from "../components/categories-tab";
-import { SubservicesTab } from "../components/services/subservices-tab";
-import { ServicesTab } from "../components/services-tab";
+import { SidebarHeader } from "@/components/navigation/sidebar-header";
+import { ConfigSidebar } from "@/features/config/components/config-sidebar";
+import { CategoriesTab } from "@/features/config/components/categories-tab";
+import { SubservicesTab } from "@/features/config/components/services/subservices-tab";
+import { ServicesTab } from "@/features/config/components/services-tab";
+import { SpecialDatesTab } from "../components/dates/especial-dates-tab";
 
 export function Configuration() {
   const [activeSection, setActiveSection] = useState("categorias");
@@ -16,6 +17,8 @@ export function Configuration() {
         return <ServicesTab />;
       case "subservicios":
         return <SubservicesTab />;
+      case "fechas":
+        return <SpecialDatesTab />;
       default:
         return <CategoriesTab />;
     }
@@ -29,7 +32,9 @@ export function Configuration() {
           activeSection={activeSection}
           onSectionChange={setActiveSection}
         />
-        <div className="flex-1 overflow-y-auto p-4 md:px-6">{renderContent()}</div>
+        <div className="flex-1 overflow-y-auto p-4 md:px-6">
+          {renderContent()}
+        </div>
       </div>
     </div>
   );

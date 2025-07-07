@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, FileText, Layers, BarChart3 } from "lucide-react";
+import { Settings, FileText, Layers, BarChart3, Calendar } from "lucide-react";
 
 interface ConfigSidebarProps {
   activeSection: string;
@@ -30,6 +30,13 @@ const menuItems = [
     title: "Subservicios",
     description: "Configurar subservicios específicos",
     icon: FileText,
+    count: 128,
+  },
+  {
+    id: "fechas",
+    title: "Fechas especiales",
+    description: "Gestionar fechas para notificaciones",
+    icon: Calendar,
     count: 128,
   },
 ];

@@ -1,3 +1,11 @@
+import { toast } from "sonner";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { Loader, Plus } from "lucide-react";
+import { isAxiosError, type AxiosError } from "axios";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
+
 import {
   Dialog,
   DialogContent,
@@ -6,6 +14,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import type { Category } from "@/features/config/types";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -24,102 +34,90 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import type { Service } from "../../types";
-import { serviceSchema, type ServiceFormValues } from "../../schemas";
-import { Loader, Plus } from "lucide-react";
-import { RequiredDot } from "@/components/common/required-dot";
-import { toast } from "sonner";
-import { isAxiosError, type AxiosError } from "axios";
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { createService, updateService } from "../../utils/service";
-import { SERVICE_QUERY_KEY } from "../../constants/query-keys";
+import {
+  categorySchema,
+  type CategoryFormValues,
+} from "@/features/config/schemas";
+import {
+  createCategory,
+  updateCategory,
+} from "@/features/config/utils/category";
+import { CATEGORY_QUERY_KEY } from "@/features/config/constants/query-keys";
 
-interface Props {
+interface CategoryDialogProps {
   open: boolean;
-  categoryId: string;
-  editingService: Service | null;
+  editingCategory: Category | null;
   onOpenChange: (open: boolean) => void;
-  setEditingService: (value: Service | null) => void;
+  setEditingCategory: (value: Category | null) => void;
   setIsDialogOpen: (value: boolean) => void;
 }
 
-export const ServiceDialog = ({
+export function CategoryDialog({
   open,
-  categoryId,
-  editingService,
+  editingCategory,
   onOpenChange,
+  setEditingCategory,
   setIsDialogOpen,
-  setEditingService,
-}: Props) => {
+}: CategoryDialogProps) {
   const queryClient = useQueryClient();
 
-  const form = useForm<ServiceFormValues>({
-    resolver: zodResolver(serviceSchema),
+  const form = useForm<CategoryFormValues>({
+    resolver: zodResolver(categorySchema),
     defaultValues: {
-      categoryId: categoryId,
-      name: editingService?.name || "",
-      description: editingService?.description || "",
-      status: editingService?.status || "activo",
+      name: "",
+      description: "",
+      status: "activo",
     },
   });
 
   const { isValid, isSubmitting } = form.formState;
 
   useEffect(() => {
-    if (!editingService) {
+    if (!editingCategory) {
       form.reset({
-        categoryId,
         name: "",
         description: "",
         status: "activo",
       });
     } else {
       form.reset({
-        categoryId,
-        name: editingService.name,
-        description: editingService.description,
-        status: editingService.status,
+        name: editingCategory.name,
+        description: editingCategory.description ?? "",
+        status: editingCategory.status,
       });
     }
-  }, [categoryId, editingService, form]);
+  }, [editingCategory, form]);
 
-  const onSubmit = async (data: ServiceFormValues) => {
+  const onSubmit = async (data: CategoryFormValues) => {
     try {
-      if (editingService) {
-        await updateService(editingService.id, data);
+      if (editingCategory) {
+        await updateCategory(editingCategory.uuid, data);
 
-        toast.success("Servicio actualizado", {
-          description: `El servicio "${data.name}" fue actualizado correctamente.`,
+        toast.success("Categoría actualizada", {
+          description: `La categoría "${data.name}" fue actualizada correctamente.`,
         });
-        setEditingService(null);
+        setEditingCategory(null);
       } else {
-        await createService(data);
-        toast.success("Servicio creado", {
-          description: `El servicio "${data.name}" fue creado exitosamente.`,
+        await createCategory(data);
+        toast.success("Categoría creado", {
+          description: `La categoría "${data.name}" fue creada exitosamente.`,
         });
       }
 
       setIsDialogOpen(false);
-      await queryClient.invalidateQueries({
-        queryKey: [SERVICE_QUERY_KEY, categoryId],
-        exact: false,
-      });
+      queryClient.invalidateQueries({ queryKey: [CATEGORY_QUERY_KEY] });
       form.reset();
     } catch (error) {
       const err = error as AxiosError;
 
       if (err instanceof isAxiosError) {
-        toast.error("Error al crear el servicio", {
+        toast.error("Error al crear la categoría", {
           description: err.message,
         });
       } else {
-        toast.error("Error al crear el servicio", {
+        toast.error("Error al crear la categoría", {
           description:
-            "Ocurrió un error inesperado al intentar crear el servicio.",
+            "Ocurrió un error inesperado al intentar crear la categoría.",
         });
       }
     }
@@ -129,19 +127,19 @@ export const ServiceDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <Button>
-          <Plus />
-          Nuevo Servicio
+          <Plus className="mr-2 h-4 w-4" />
+          Nueva Categoría
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            {editingService ? "Editar Servicio" : "Nuevo Servicio"}
+            {editingCategory ? "Editar Categoría" : "Nueva Categoría"}
           </DialogTitle>
           <DialogDescription>
-            {editingService
-              ? "Modifica los datos del servicio existente."
-              : "Completa los datos para crear un nuevo servicio."}
+            {editingCategory
+              ? "Modifica los datos de la categoría existente."
+              : "Completa los datos para crear una nueva categoría."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -151,19 +149,14 @@ export const ServiceDialog = ({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>
-                    Nombre del servicio <RequiredDot />
-                  </FormLabel>
+                  <FormLabel>Nombre de la categoría</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Ingrese el nombre del servicio"
-                      {...field}
-                    />
+                    <Input placeholder="Ingrese el nombre" {...field} />
                   </FormControl>
-                  <FormMessage />
                   <FormDescription>
-                    Nombre que identifica el tipo de servicio.
+                    Nombre identificador de la categoría (único).
                   </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -175,15 +168,16 @@ export const ServiceDialog = ({
                   <FormLabel>Descripción</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Descripción detallada del servicio"
+                      placeholder="Descripción opcional"
                       className="resize-none"
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
                   <FormDescription>
-                    Descripción detallada del servicio (si aplica).
+                    Información adicional sobre el propósito o detalle de la
+                    categoría.
                   </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -192,9 +186,7 @@ export const ServiceDialog = ({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>
-                    Estado <RequiredDot />
-                  </FormLabel>
+                  <FormLabel>Estado</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
@@ -209,11 +201,11 @@ export const ServiceDialog = ({
                       <SelectItem value="inactivo">Inactivo</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormMessage />
                   <FormDescription>
-                    Permite activar o inactivar el tipo de servicio sin
-                    eliminarlo.
+                    Define si la categoría está disponible para ser usada en
+                    servicios.
                   </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -221,13 +213,19 @@ export const ServiceDialog = ({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => setIsDialogOpen(false)}
               >
                 Cancelar
               </Button>
-              <Button disabled={!isValid || isSubmitting}>
+              <Button type="submit" disabled={!isValid || isSubmitting}>
                 {isSubmitting && <Loader className="animate-spin" />}
-                {editingService ? "Actualizar" : "Crear"}
+                {editingCategory
+                  ? isSubmitting
+                    ? "Actualizando..."
+                    : "Actualizar"
+                  : isSubmitting
+                  ? "Creando..."
+                  : "Crear"}
               </Button>
             </div>
           </form>
@@ -235,4 +233,4 @@ export const ServiceDialog = ({
       </DialogContent>
     </Dialog>
   );
-};
+}

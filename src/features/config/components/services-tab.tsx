@@ -1,5 +1,4 @@
 import { toast } from "sonner";
-import { Search } from "lucide-react";
 import type { AxiosError } from "axios";
 import { useState, useEffect, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,10 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { AlertModal } from "@/components/common/alert-modal";
 import type { Category, Service } from "@/features/config/types";
-import { fetchActiveCategories } from "@/features/config/utils/category";
+import { fetchAllActiveCategories } from "@/features/config/utils/category";
 import { ServiceTable } from "@/features/config/components/services/services-table";
 import { ServiceDialog } from "@/features/config/components/services/service-dialog";
 import {
@@ -29,6 +27,9 @@ import {
   fetchServicesByCategory,
 } from "@/features/config/utils/service";
 import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
+import { CATEGORY_QUERY_KEY, SERVICE_QUERY_KEY } from "../constants/query-keys";
+import { SearchInput } from "@/components/common/search-input";
+import { Paginator } from "@/components/common/paginator";
 
 export const ServicesTab = () => {
   const queryClient = useQueryClient();
@@ -42,12 +43,15 @@ export const ServicesTab = () => {
   const [selectedCategoriaId, setSelectedCategoriaId] = useState<string>("");
   const [editingService, setEditingService] = useState<Service | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery<
     Category[],
     Error
   >({
-    queryKey: ["categories"],
-    queryFn: fetchActiveCategories,
+    queryKey: [CATEGORY_QUERY_KEY],
+    queryFn: fetchAllActiveCategories,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -58,21 +62,27 @@ export const ServicesTab = () => {
     }
   }, [categories]);
 
-  const { data: fetchedServices = [], isLoading: isLoadingServices } = useQuery<
-    Service[],
-    Error
-  >({
-    queryKey: ["services", selectedCategoriaId],
-    queryFn: () => fetchServicesByCategory(selectedCategoriaId),
+  const { data: servicesData, isLoading: isLoadingServices } = useQuery({
+    queryKey: [
+      SERVICE_QUERY_KEY,
+      selectedCategoriaId,
+      searchTerm,
+      currentPage,
+      pageSize,
+    ],
+    queryFn: () =>
+      fetchServicesByCategory(
+        selectedCategoriaId,
+        searchTerm,
+        currentPage,
+        pageSize
+      ),
     enabled: !!selectedCategoriaId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
-  const filteredServices = fetchedServices.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.categoryName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const services = servicesData?.services ?? [];
+  const totalPages = servicesData?.totalPages ?? 1;
 
   const handleEdit = (service: Service) => {
     setEditingService(service);
@@ -89,7 +99,13 @@ export const ServicesTab = () => {
         });
 
         await queryClient.invalidateQueries({
-          queryKey: ["services", selectedCategoriaId],
+          queryKey: [
+            SERVICE_QUERY_KEY,
+            selectedCategoriaId,
+            searchTerm,
+            currentPage,
+            pageSize,
+          ],
         });
       } catch (error) {
         const err = error as AxiosError<{ message: string }>;
@@ -98,7 +114,6 @@ export const ServicesTab = () => {
             err.response?.data?.message ??
             "Ocurrió un error inesperado al eliminar el servicio.",
         });
-        console.error("Error al eliminar servicio:", err);
       } finally {
         setServiceId("");
         setIsAlertOpen(false);
@@ -108,7 +123,17 @@ export const ServicesTab = () => {
 
   return (
     <>
-      <div className="space-y-6">
+      <AlertModal
+        description="Esta acción no se puede deshacer. Se eliminará permanentemente el servicio seleccionado."
+        isSubmitting={isPending}
+        open={isAlertOpen}
+        onSubmit={handleDelete}
+        onOpenChange={(open) => {
+          setServiceId("");
+          setIsAlertOpen(open);
+        }}
+      />
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-4">
@@ -142,15 +167,11 @@ export const ServicesTab = () => {
           <CardContent className="space-y-4">
             <div>
               <div className="flex justify-between pb-2">
-                <div className="flex items-center relative">
-                  <Search className="absolute left-2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar servicios..."
-                    className="pl-8 min-w-[300px]"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchInput
+                  placeholder="Buscar servicios..."
+                  value={searchTerm}
+                  onValueChange={(value) => setSearchTerm(value)}
+                />
                 <ServiceDialog
                   open={isDialogOpen}
                   categoryId={selectedCategoriaId}
@@ -174,36 +195,38 @@ export const ServicesTab = () => {
             <CardDescription>
               {isLoadingServices
                 ? "Loading services..."
-                : `${filteredServices.length} servicio(s) encontrado(s)`}
+                : `${services.length} servicio(s) encontrado(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingCategories ? (
               <TableSkeleton />
             ) : (
-              <ServiceTable
-                services={filteredServices}
-                onEdit={handleEdit}
-                onDelete={(id) => {
-                  setServiceId(id);
-                  setIsAlertOpen(true);
-                }}
-                isLoading={isLoadingServices}
-              />
+              <>
+                <ServiceTable
+                  services={services}
+                  onEdit={handleEdit}
+                  onDelete={(id) => {
+                    setServiceId(id);
+                    setIsAlertOpen(true);
+                  }}
+                  isLoading={isLoadingServices}
+                />
+                <Paginator
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  pageSize={pageSize}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setCurrentPage(1);
+                  }}
+                />
+              </>
             )}
           </CardContent>
         </Card>
       </div>
-      <AlertModal
-        description="Esta acción no se puede deshacer. Se eliminará permanentemente el servicio seleccionado."
-        isSubmitting={isPending}
-        open={isAlertOpen}
-        onSubmit={handleDelete}
-        onOpenChange={(open) => {
-          setServiceId("");
-          setIsAlertOpen(open);
-        }}
-      />
     </>
   );
 };

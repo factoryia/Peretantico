@@ -1,3 +1,5 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -6,88 +8,82 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Edit, Loader2, Trash2 } from "lucide-react";
-import type { Subservice } from "../../types";
+import type { Category } from "@/features/config/types";
 
-interface Props {
-  subservices: Subservice[];
-  onEdit: (sub: Subservice) => void;
+interface CategoriesTableProps {
+  categories: Category[];
+  isLoading: boolean;
+  onEdit: (category: Category) => void;
   onDelete: (id: string) => void;
-  isLoading?: boolean;
 }
 
-export function SubserviceTable({
-  subservices,
-  onEdit,
-  onDelete,
+export function CategoriesTable({
+  categories,
   isLoading,
-}: Props) {
+  onDelete,
+  onEdit,
+}: CategoriesTableProps) {
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
-            <TableHead>Servicio</TableHead>
-            <TableHead>Código</TableHead>
-            <TableHead>Valor</TableHead>
-            <TableHead>Valor Prioridad</TableHead>
+            <TableHead>Descripción</TableHead>
             <TableHead>Estado</TableHead>
+            <TableHead>Fecha Creación</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-6">
+              <TableCell colSpan={6} className="text-center py-6">
                 <div className="flex justify-center items-center gap-2 py-6">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   <span className="text-muted-foreground">
-                    Cargando subservicios...
+                    Cargando categorias...
                   </span>
                 </div>
               </TableCell>
             </TableRow>
-          ) : subservices.length === 0 ? (
+          ) : categories.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-6">
+              <TableCell colSpan={6} className="text-center py-6">
                 <span className="text-muted-foreground">
-                  No se encontraron subservicios.
+                  No se encontraron categorias.
                 </span>
               </TableCell>
             </TableRow>
           ) : (
-            subservices.map((sub) => (
-              <TableRow key={sub.id}>
-                <TableCell>{sub.nombre}</TableCell>
-                <TableCell>{sub.servicioNombre}</TableCell>
-                <TableCell>{sub.codigo}</TableCell>
-                <TableCell>${Number(sub.valor).toLocaleString()}</TableCell>
-                <TableCell>
-                  ${Number(sub.valorPrioridad).toLocaleString()}
-                </TableCell>
+            categories.map((category) => (
+              <TableRow key={category.uuid}>
+                <TableCell className="font-medium">{category.name}</TableCell>
+                <TableCell>{category.description || "-"}</TableCell>
                 <TableCell>
                   <Badge
-                    variant={sub.estado === "activo" ? "default" : "secondary"}
+                    variant={
+                      category.status === "activo" ? "default" : "secondary"
+                    }
                   >
-                    {sub.estado === "activo" ? "Activo" : "Inactivo"}
+                    {category.status === "activo" ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
+                <TableCell>{category.created}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onEdit(sub)}
+                      onClick={() => onEdit(category)}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
-                      variant="outline"
+                      variant={"outline"}
                       size="sm"
-                      onClick={() => onDelete(sub.id)}
+                      onClick={() => onDelete(category.uuid)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -96,6 +92,7 @@ export function SubserviceTable({
               </TableRow>
             ))
           )}
+          {}
         </TableBody>
       </Table>
     </div>

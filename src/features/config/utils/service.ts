@@ -33,22 +33,20 @@ interface ApiResponse {
       name: string;
     };
   }[];
+  meta: { count: number };
 }
 
 // Fetch function to get services by category UUID
-export const fetchServicesByCategory = async (
+export const fetchServicesByCategoryWithoutFilters = async (
   categoryUuid: string
 ): Promise<Service[]> => {
   try {
-    const response = await api.get<ApiResponse>(
-      "https://backoffice.peretantico.com.co/api/taxonomy_term/category",
-      {
-        params: {
-          "filter[parent.id]": categoryUuid,
-          include: "parent",
-        },
-      }
-    );
+    const response = await api.get<ApiResponse>("/api/taxonomy_term/category", {
+      params: {
+        "filter[parent.id]": categoryUuid,
+        include: "parent",
+      },
+    });
 
     const services: Service[] = response.data.data.map((item) => {
       const parentData = item.relationships.parent.data[0];
@@ -88,6 +86,74 @@ export const fetchServicesByCategory = async (
   }
 };
 
+export const fetchServicesByCategory = async (
+  categoryUuid: string,
+  searchTerm: string = "",
+  page: number = 1,
+  limit: number = 10
+): Promise<{ services: Service[]; totalPages: number }> => {
+  try {
+    const offset = (page - 1) * limit;
+
+    const params: Record<string, string | number> = {
+      "filter[parent.id]": categoryUuid,
+      include: "parent",
+      "page[limit]": limit,
+      "page[offset]": offset,
+    };
+
+    if (searchTerm) {
+      params["filter[name][condition][path]"] = "name";
+      params["filter[name][condition][operator]"] = "CONTAINS";
+      params["filter[name][condition][value]"] = searchTerm;
+    }
+
+    const response = await api.get<ApiResponse>(
+      "/api/taxonomy_term/category",
+      {
+        params,
+      }
+    );
+
+    const services: Service[] = response.data.data.map((item) => {
+      const parentData = item.relationships.parent.data[0];
+      let category: CategoryRef = { id: 0, name: "No Parent" };
+
+      if (parentData && parentData.id !== "virtual" && response.data.included) {
+        const parent = response.data.included.find(
+          (includedItem) =>
+            includedItem.type === "taxonomy_term--category" &&
+            includedItem.id === parentData.id
+        );
+        if (parent) {
+          category = {
+            id: parent.attributes.drupal_internal__tid,
+            name: parent.attributes.name,
+          };
+        }
+      }
+
+      return {
+        id: item.id,
+        categoryId: category.id,
+        categoryName: category.name,
+        name: item.attributes.name,
+        description: item.attributes.description?.value ?? undefined,
+        status: item.attributes.status ? "activo" : "inactivo",
+        creationDate: item.attributes.revision_created.split("T")[0],
+      };
+    });
+
+    const totalItems = response.data.meta?.count ?? services.length;
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return { services, totalPages };
+  } catch (error) {
+    console.error("Error fetching services:", error);
+    return { services: [], totalPages: 1 };
+  }
+};
+
 // Create a new service
 export async function createService(data: ServiceFormValues) {
   const payload = {
@@ -110,8 +176,6 @@ export async function createService(data: ServiceFormValues) {
       },
     },
   };
-
-  console.log(payload);
 
   const response = await api.post("/api/taxonomy_term/category", payload, {
     headers: {
@@ -137,8 +201,6 @@ export async function updateService(
       },
     },
   };
-
-  console.log("UPDATE PAYLOAD: ", payload);
 
   const response = await api.patch(
     `/api/taxonomy_term/category/${serviceId}`,
