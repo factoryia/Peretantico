@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsMobile } from "@/hooks/use-mobile";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,17 +46,26 @@ const menuItems = [
 export function ConfigSidebar({
   activeSection,
   onSectionChange,
-}: ConfigSidebarProps) {
-  return (
-    <div className="w-80 border-r bg-muted/10">
-      <Card className="size-full border-none rounded-none">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BarChart3 className="h-4 w-4" />
-            Panel de Configuración
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 py-0">
+  open, // <-- recibe este prop para controlar visibilidad en mobile
+  onClose, // <-- recibe este prop para cerrar en mobile
+}: ConfigSidebarProps & { open?: boolean; onClose?: () => void }) {
+  const isMobile = useIsMobile();
+
+  // Sidebar content
+  const sidebarContent = (
+    <Card className="size-full border-none rounded-none">
+      <CardHeader className="pb-3 flex items-center justify-between">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BarChart3 className="h-4 w-4" />
+          Panel de Configuración
+        </CardTitle>
+        {isMobile && (
+          <button onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-2 py-0">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -91,7 +102,26 @@ export function ConfigSidebar({
             );
           })}
         </CardContent>
-      </Card>
+    </Card>
+  );
+
+  if (isMobile) {
+    // Overlay modal en mobile
+    if (!open) return null;
+    return (
+      <div className="fixed inset-0 z-40 flex">
+        <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+        <div className="relative w-4/5 max-w-xs bg-white h-full shadow-lg z-50">
+          {sidebarContent}
+        </div>
+      </div>
+    );
+  }
+
+  // Sidebar fijo en desktop
+  return (
+    <div className="w-80 border-r bg-muted/10 h-full">
+      {sidebarContent}
     </div>
   );
 }

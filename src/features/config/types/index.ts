@@ -30,3 +30,13 @@ export interface Subservice {
   estado: "activo" | "inactivo";
   fechaCreacion: string;
 }
+
+export interface SpecialDate {
+  id: string;
+  title: string;
+  field_description?: string;
+  field_date: string; // ISO date
+  field_is_annual: boolean; // <-- IMPORTANTE, boolean
+  status: boolean; // <-- IMPORTANTE, boolean
+  created?: string; // puede ser 'created', 'revision_timestamp', etc.
+}

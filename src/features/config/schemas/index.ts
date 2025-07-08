@@ -37,3 +37,21 @@ export const categorySchema = z.object({
 });
 
 export type CategoryFormValues = z.infer<typeof categorySchema>;
+
+export const specialDateSchema = z.object({
+  title: z
+    .string()
+    .min(1, "El nombre es obligatorio")
+    .max(200, "Máximo 200 caracteres")
+    .regex(/^[a-zA-Z0-9\s]+$/, "Solo se permiten caracteres alfanuméricos"),
+  field_description: z.string().max(250, "Máximo 250 caracteres").optional(),
+  field_date: z.string().min(1, "La fecha es obligatoria"),
+  field_is_annual: z.enum(["si", "no"], {
+    required_error: "Debe seleccionar una opción",
+  }),
+  status: z.enum(["activo", "inactivo"], {
+    required_error: "Debe seleccionar un estado",
+  }),
+});
+
+export type SpecialDateFormValues = z.infer<typeof specialDateSchema>;

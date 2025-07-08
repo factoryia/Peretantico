@@ -1,15 +1,28 @@
 import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Button } from "../ui/button";
 import { Bell, User } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SidebarHeaderProps {
   title: string;
 }
 
 export function SidebarHeader({ title }: SidebarHeaderProps) {
+  const { open } = useSidebar();
+  const isMobile = useIsMobile();
+
+  // En móvil, el sidebar debe estar sobrepuesto, en desktop desplazado
+  const sidebarWidth = isMobile ? 0 : (open ? 256 : 0);
+
   return (
-    <header className="fixed top-0 left-0 right-0 md:ml-[256px] group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 flex shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear h-[64.8px] bg-background z-20">
+    <header
+      style={{
+        left: sidebarWidth,
+        width: isMobile ? "100%" : `calc(100% - ${sidebarWidth}px)`,
+      }}
+      className="fixed top-0 z-20 h-[64.8px] bg-background border-b flex items-center transition-all duration-300"
+    >
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
         <Separator
