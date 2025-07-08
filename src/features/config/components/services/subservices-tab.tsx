@@ -206,7 +206,7 @@ export function SubservicesTab() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
               <SearchInput
                 placeholder="Buscar subservicios..."
                 value={searchTerm}

@@ -100,7 +100,7 @@ export function CategoriesTab() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between space-y-2">
+            <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
               <SearchInput
                 placeholder="Buscar categorías..."
                 value={searchTerm}

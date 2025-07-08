@@ -1,7 +1,6 @@
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Button } from "../ui/button";
-import { Bell, User } from "lucide-react";
+import { User } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SidebarHeaderProps {
@@ -32,15 +31,10 @@ export function SidebarHeader({ title }: SidebarHeaderProps) {
         <div className="flex flex-1 items-center justify-between">
           <h1 className="text-xl font-semibold">{title}</h1>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>
-            </Button>
             <div className="flex items-center gap-2">
               <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full">
                 <User className="h-4 w-4" />
               </div>
-              <span className="font-medium">Admin</span>
             </div>
           </div>
         </div>

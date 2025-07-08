@@ -5,6 +5,7 @@ import { CategoriesTab } from "@/features/config/components/categories-tab";
 import { SubservicesTab } from "@/features/config/components/services/subservices-tab";
 import { ServicesTab } from "@/features/config/components/services-tab";
 import { SpecialDatesTab } from "../components/dates/especial-dates-tab";
+import { ConfigMobileTabs } from "../components/config-mobile-tabs";
 
 export function Configuration() {
   const [activeSection, setActiveSection] = useState("categorias");
@@ -25,9 +26,10 @@ export function Configuration() {
   };
 
   return (
-    <div className="h-full pt-[65px]">
+    <div className="h-dvh pt-[65px]">
       <SidebarHeader title="Configuración" />
-      <div className="flex flex-1 overflow-hidden h-full">
+      {/* Desktop view */}
+      <div className="hidden lg:flex flex-1 overflow-hidden h-full">
         <ConfigSidebar
           activeSection={activeSection}
           onSectionChange={setActiveSection}
@@ -35,6 +37,11 @@ export function Configuration() {
         <div className="flex-1 overflow-y-auto p-4 md:px-6">
           {renderContent()}
         </div>
+      </div>
+
+      {/* Mobile view */}
+      <div className="block lg:hidden h-full overflow-y-auto p-4 md:px-6">
+        <ConfigMobileTabs />
       </div>
     </div>
   );

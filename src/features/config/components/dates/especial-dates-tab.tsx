@@ -1,12 +1,22 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { SearchInput } from "@/components/common/search-input";
 import { Paginator } from "@/components/common/paginator";
 import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
 import type { SpecialDate } from "../../types";
-import { createSpecialDate, fetchSpecialDates, updateSpecialDate } from "../../utils/special.date";
+import {
+  createSpecialDate,
+  fetchSpecialDates,
+  updateSpecialDate,
+} from "../../utils/special.date";
 import type { SpecialDateFormValues } from "../../schemas";
 import { SpecialDateDialog } from "./special-date-dialog";
 import { SpecialDateDetailDialog } from "./special-date-detail-dialog";
@@ -85,18 +95,15 @@ export function SpecialDatesTab() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between space-y-2">
-              <div className="flex items-center space-x-2">
-                <SearchInput
-                  placeholder="Buscar fechas especiales..."
-                  value={searchTerm}
-                  onValueChange={setSearchTerm}
-                />
-              </div>
+            <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
+              <SearchInput
+                placeholder="Buscar fechas especiales..."
+                value={searchTerm}
+                onValueChange={setSearchTerm}
+              />
               <Button
-                className="btn btn-primary"
                 onClick={() => {
-                  setEditingDate(null); // <-- Limpia el estado de edición
+                  setEditingDate(null);
                   setIsDialogOpen(true);
                 }}
               >
@@ -109,7 +116,9 @@ export function SpecialDatesTab() {
           <CardHeader>
             <CardTitle>Lista de Fechas Especiales</CardTitle>
             <CardDescription>
-              {isLoading ? "Cargando..." : `${specialDates.length} fecha(s) encontrada(s)`}
+              {isLoading
+                ? "Cargando..."
+                : `${specialDates.length} fecha(s) encontrada(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -166,7 +166,7 @@ export const ServicesTab = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <div className="flex justify-between pb-2">
+              <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
                 <SearchInput
                   placeholder="Buscar servicios..."
                   value={searchTerm}
