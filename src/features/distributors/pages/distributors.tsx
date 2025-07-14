@@ -1,136 +1,274 @@
-import {
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Truck,
-  Edit,
-  Plus,
-  Search,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { initialRepartidores } from "@/constants";
-import { useState } from "react";
-import type { DeliveryDriver } from "../types";
-import { EditDeliveryDriverModal } from "../components/edit-delivery-driver-modal";
+import { useState, useTransition } from "react";
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
+import { useDistributorsQuery } from "../hooks/distributors";
+import {
+  useCoverageAreasQuery,
+  useDocumentTypesQuery,
+  useTransportationTypesQuery,
+} from "../hooks/taxonomies";
+import { FilterSelect } from "@/components/common/filter-select";
+import { DistributorCard } from "../components/distributor-card";
+import { SearchInput } from "@/components/common/search-input";
+import { DistributorDetailDialog } from "../components/distributor-detail-dialog";
+import type { Distributor } from "../types/distributors";
+import { DistributorDialog } from "../components/distributor-dialog";
+import { AlertModal } from "@/components/common/alert-modal";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { deleteDistributor } from "../utils/distributors";
+import { DISTRIBUTORS_QUERY_KEY } from "../constants/query-keys";
+import type { AxiosError } from "axios";
+import { DistributorCardSkeleton } from "../components/distributor-card-skeleton";
+
+interface DistributorFilters {
+  coverageAreaId: string;
+  status: string;
+  fullName: string;
+  documentNumber: string;
+  page: number;
+  limit: number;
+}
+
+const STATUS_OPTIONS = [
+  { name: "Todos", id: "all" },
+  { name: "Disponible", id: "true" },
+  { name: "No disponible", id: "false" },
+];
 
 export function Distributors() {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedDriver, setSelectedDriver] = useState<DeliveryDriver | null>(
-    null
-  );
+  const queryClient = useQueryClient();
+  const [isPending, startTransition] = useTransition();
 
-  const handleEditDriver = (driver: DeliveryDriver) => {
-    console.log(driver);
-    setSelectedDriver(driver);
-    setIsEditModalOpen(true);
+  const [distributorId, setDistributorId] = useState("");
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedDistributor, setSelectedDistributor] =
+    useState<Distributor | null>(null);
+
+  const [filters, setFilters] = useState<DistributorFilters>({
+    coverageAreaId: "all",
+    status: "all",
+    fullName: "",
+    documentNumber: "",
+    page: 1,
+    limit: 10,
+  });
+
+  const updateFilters = (newFilters: Partial<DistributorFilters>) => {
+    setFilters((prev) => ({
+      ...prev,
+      ...newFilters,
+      page: newFilters.page !== undefined ? newFilters.page : 1, // Reset to page 1 on filter change
+    }));
+  };
+
+  // Fetch coverage areas
+  const {
+    data: coverageAreaOptions = [{ id: "all", name: "Todos" }],
+    isLoading: isLoadingCoverageAreas,
+  } = useCoverageAreasQuery();
+
+  // Fetch document types and transportation types
+  const { data: documentTypesOptions = [{ id: "all", name: "Todos" }] } =
+    useDocumentTypesQuery();
+
+  const { data: transportationTypes = [{ id: "all", name: "Todos" }] } =
+    useTransportationTypesQuery();
+
+  const {
+    data,
+    isLoading: isLoadingDistributors,
+    error,
+  } = useDistributorsQuery({
+    coverageAreaId:
+      filters.coverageAreaId !== "all" ? filters.coverageAreaId : undefined,
+    status: filters.status !== "all" ? filters.status === "true" : undefined,
+    fullName: filters.fullName || undefined,
+    documentNumber: filters.documentNumber || undefined,
+    page: filters.page,
+    limit: filters.limit,
+  });
+
+  const handleViewDetail = (distributor: Distributor) => {
+    setSelectedDistributor(distributor);
+    setIsDetailDialogOpen(true);
+  };
+
+  const handleDelete = () => {
+    startTransition(async () => {
+      try {
+        await deleteDistributor(distributorId);
+
+        toast.success("Distribuidor eliminado", {
+          description: "El distribuidor fue eliminado correctamente.",
+        });
+
+        await queryClient.invalidateQueries({
+          queryKey: [DISTRIBUTORS_QUERY_KEY],
+          exact: false,
+        });
+      } catch (error) {
+        const err = error as AxiosError<{ message: string }>;
+        toast.error("Error al eliminar el distribuidor", {
+          description:
+            err.response?.data?.message ??
+            "Ocurrió un error inesperado al eliminar el distribuidor.",
+        });
+      } finally {
+        setDistributorId("");
+        setIsAlertOpen(false);
+      }
+    });
   };
 
   return (
-    <div className="pt-[65px] overflow-y-auto h-full">
-      <SidebarHeader title="Gestión de repartidores" />
-      <div className="flex flex-1 flex-col gap-6 p-6 bg-gray-50">
-        {/* Search and Add Button */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          <div className="relative w-full sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Buscar repartidores..."
-              className="pl-10 bg-white"
-            />
-          </div>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="mr-2 h-4 w-4" /> Nuevo Repartidor
-          </Button>
-        </div>
+    <>
+      <AlertModal
+        description="Esta acción no se puede deshacer. Se eliminará permanentemente el distribuidor seleccionado."
+        isSubmitting={isPending}
+        open={isAlertOpen}
+        onSubmit={handleDelete}
+        onOpenChange={(open) => {
+          setDistributorId("");
+          setIsAlertOpen(open);
+        }}
+      />
+      <div className="h-dvh pt-[65px]">
+        <SidebarHeader title="Configuración" />
+        <div className="h-full overflow-y-auto p-4 md:px-6">
+          {isLoadingDistributors && (
+            <div className="text-center">Cargando...</div>
+          )}
+          {error && (
+            <div className="text-center text-red-500">
+              Error: {error.message}
+            </div>
+          )}
 
-        {/* Delivery Drivers Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {initialRepartidores.map((repartidor) => (
-            <Card key={repartidor.id} className="overflow-hidden py-0">
-              <CardContent className="p-0">
-                <div className="p-6 space-y-4">
-                  {/* Header with avatar and status */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-10 h-10 bg-blue-100 text-blue-600 rounded-full">
-                        <User className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium">{repartidor.nombre}</h3>
-                        <p className="text-sm text-gray-500">
-                          {repartidor.identificacion}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={`
-                        ${
-                          repartidor.estado === "Disponible"
-                            ? "bg-green-100 text-green-800 border-green-200"
-                            : "bg-red-100 text-red-800 border-red-200"
-                        }
-                      `}
-                    >
-                      {repartidor.estado}
-                    </Badge>
-                  </div>
-
-                  {/* Contact and details */}
-                  <div className="space-y-2 py-3">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Phone className="h-4 w-4" />
-                      <span className="text-sm">{repartidor.telefono}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Mail className="h-4 w-4" />
-                      <span className="text-sm">{repartidor.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <MapPin className="h-4 w-4" />
-                      <span className="text-sm">{repartidor.zona}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Truck className="h-4 w-4" />
-                      <span className="text-sm">{repartidor.vehiculo}</span>
-                    </div>
-                  </div>
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg">Repartidores</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {data?.distributors.length} repartidor(es) encontrado(s)
+                  </p>
                 </div>
+                <Button
+                  onClick={() => setIsDialogOpen(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nuevo Repartidor
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+                <SearchInput
+                  placeholder="Buscar categorías..."
+                  value={filters.fullName}
+                  onValueChange={(value) => updateFilters({ fullName: value })}
+                />
+                <Input
+                  placeholder="Buscar por documento..."
+                  value={filters.documentNumber}
+                  onChange={(e) =>
+                    updateFilters({ documentNumber: e.target.value })
+                  }
+                  className="w-full"
+                />
+                <FilterSelect
+                  placeholder="Zona de cobertura"
+                  options={[
+                    { id: "all", name: "Todos" },
+                    ...coverageAreaOptions,
+                  ]}
+                  value={filters.coverageAreaId}
+                  onValueChange={(value) =>
+                    updateFilters({ coverageAreaId: value })
+                  }
+                  className={isLoadingCoverageAreas ? "opacity-50" : ""}
+                  disabled={isLoadingCoverageAreas}
+                />
+                <FilterSelect
+                  placeholder="Estado"
+                  options={STATUS_OPTIONS}
+                  value={filters.status}
+                  onValueChange={(value) => updateFilters({ status: value })}
+                />
+              </div>
 
-                {/* Footer with status and edit button */}
-                <div className="flex items-center justify-between border-t p-4 bg-gray-50">
-                  <Badge
-                    variant="outline"
-                    className="bg-green-50 text-green-700 border-green-100"
-                  >
-                    Activo
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-blue-600 hover:text-blue-700"
-                    onClick={() => handleEditDriver(repartidor)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
+              {/* Grid de Cards */}
+              {isLoadingDistributors ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {Array.from({ length: 8 }).map((_, index) => (
+                    <DistributorCardSkeleton key={index} />
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              ) : data?.distributors && data.distributors.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {data.distributors.map((distributor) => (
+                    <DistributorCard
+                      key={distributor.id}
+                      distributor={distributor}
+                      onEdit={(distributor) => {
+                        setSelectedDistributor(distributor);
+                        setIsDialogOpen(true);
+                      }}
+                      onViewDetail={handleViewDetail}
+                      onDelete={(distributor) => {
+                        setDistributorId(distributor.id);
+                        setIsAlertOpen(true);
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-semibold">
+                    No se encontraron repartidores
+                  </h3>
+                  <p className="text-muted-foreground">
+                    No hay repartidores que coincidan con los filtros aplicados.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <EditDeliveryDriverModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        driver={selectedDriver}
-        onSave={() => {}}
+      <DistributorDetailDialog
+        open={isDetailDialogOpen}
+        onOpenChange={(open) => {
+          setIsDetailDialogOpen(open);
+          if (!open) {
+            setSelectedDistributor(null);
+          }
+        }}
+        distributor={selectedDistributor}
       />
-    </div>
+
+      <DistributorDialog
+        coverageAreas={coverageAreaOptions}
+        documentTypes={documentTypesOptions}
+        transportationTypes={transportationTypes}
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open && selectedDistributor) {
+            setSelectedDistributor(null);
+          }
+        }}
+        distributor={selectedDistributor}
+      />
+    </>
   );
 }

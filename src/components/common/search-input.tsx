@@ -20,7 +20,7 @@ export function SearchInput({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
-        className="pl-8 min-w-full sm:min-w-[300px]"
+        className="pl-8 min-w-full"
       />
     </div>
   );
