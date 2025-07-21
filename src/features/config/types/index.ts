@@ -8,7 +8,7 @@ export interface Category {
 
 export interface Service {
   id: string;
-  categoryId: number;
+  categoryId: string;
   categoryName: string;
   name: string;
   description?: string;

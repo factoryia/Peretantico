@@ -170,52 +170,82 @@ export function SubservicesTab() {
                   Asocia subservicios a cada tipo de servicio principal.
                 </CardDescription>
               </div>
-              <div className="flex gap-2">
-                {/* Select de categorías principales */}
-                <Select
-                  value={selectedCategoriaId || undefined}
-                  onValueChange={setSelectedCategoriaId}
-                >
-                  <SelectTrigger className="min-w-fit h-auto">
-                    <SelectValue placeholder="Filtrar por categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((categorie) => (
-                      <SelectItem key={categorie.uuid} value={categorie.uuid}>
-                        {categorie.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedServiceId || undefined}
-                  onValueChange={setSelectedServiceId}
-                >
-                  <SelectTrigger className="min-w-fit h-auto">
-                    <SelectValue placeholder="Sin servicios" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
+            <div className="grid gap-4 rounded-lg border bg-muted border-dashed border-border p-4">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  Crear nuevo subservicio
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Selecciona una categoría y un servicio para asociar un nuevo
+                  subservicio.
+                </p>
+              </div>
+              <div className="grid items-end gap-4 md:grid-cols-3">
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="category-select"
+                    className="text-sm font-medium"
+                  >
+                    Categoría
+                  </label>
+                  <Select
+                    value={selectedCategoriaId || undefined}
+                    onValueChange={setSelectedCategoriaId}
+                  >
+                    <SelectTrigger className="min-w-fit w-full h-auto bg-white">
+                      <SelectValue placeholder="Filtrar por categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((categorie) => (
+                        <SelectItem key={categorie.uuid} value={categorie.uuid}>
+                          {categorie.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="service-select"
+                    className="text-sm font-medium"
+                  >
+                    Servicio
+                  </label>
+                  <Select
+                    value={selectedServiceId || undefined}
+                    onValueChange={setSelectedServiceId}
+                  >
+                    <SelectTrigger className="min-w-fit w-full h-auto bg-white">
+                      <SelectValue placeholder="Sin servicios" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {services.map((service) => (
+                        <SelectItem key={service.id} value={service.id}>
+                          {service.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={handleNew}
+                  disabled={!selectedServiceId}
+                  className="h-11"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear subservicio
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2 mt-4">
               <SearchInput
                 placeholder="Buscar subservicios..."
                 value={searchTerm}
                 onValueChange={(value) => setSearchTerm(value)}
               />
-              <Button onClick={handleNew} disabled={!selectedServiceId}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nuevo Subservicio
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -257,6 +287,21 @@ export function SubservicesTab() {
             )}
           </CardContent>
         </Card>
+        {/* <SubserviceDialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open && editingSubservice) {
+              setEditingSubservice(null);
+            }
+          }}
+          isEdit={!!editingSubservice}
+          editingSubservice={editingSubservice}
+          selectedCategoryId={selectedCategoriaId}
+          selectedServiceId={selectedServiceId}
+          setDialogOpen={setDialogOpen}
+          setEditingSubservice={setEditingSubservice}
+        /> */}
         <SubserviceDialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -269,6 +314,12 @@ export function SubservicesTab() {
           editingSubservice={editingSubservice}
           selectedCategoryId={selectedCategoriaId}
           selectedServiceId={selectedServiceId}
+          selectedCategoryName={
+            categories.find((c) => c.uuid === selectedCategoriaId)?.name || ""
+          }
+          selectedServiceName={
+            services.find((s) => s.id === selectedServiceId)?.name || ""
+          }
           setDialogOpen={setDialogOpen}
           setEditingSubservice={setEditingSubservice}
         />

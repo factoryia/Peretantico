@@ -37,6 +37,9 @@ import { isAxiosError, type AxiosError } from "axios";
 import { SUBSERVICE_QUERY_KEY } from "../../constants/query-keys";
 
 interface Props {
+  selectedCategoryName: string;
+  selectedServiceName: string;
+
   open: boolean;
   selectedServiceId: string;
   selectedCategoryId: string;
@@ -52,6 +55,8 @@ export function SubserviceDialog({
   isEdit,
   editingSubservice,
   selectedServiceId,
+  selectedCategoryName,
+  selectedServiceName,
   onOpenChange,
   setDialogOpen,
   setEditingSubservice,
@@ -150,6 +155,30 @@ export function SubserviceDialog({
             className="space-y-4"
             autoComplete="off"
           >
+            <div className="grid grid-cols-2 gap-4">
+              <FormItem>
+                <FormLabel>Categoría</FormLabel>
+                <FormControl>
+                  <Input
+                    value={selectedCategoryName}
+                    disabled
+                    className="bg-gray-100 cursor-not-allowed"
+                  />
+                </FormControl>
+                <FormDescription>Categoría principal asociada.</FormDescription>
+              </FormItem>
+              <FormItem>
+                <FormLabel>Servicio</FormLabel>
+                <FormControl>
+                  <Input
+                    value={selectedServiceName}
+                    disabled
+                    className="bg-gray-100 cursor-not-allowed"
+                  />
+                </FormControl>
+                <FormDescription>Servicio principal asociado.</FormDescription>
+              </FormItem>
+            </div>
             <FormField
               control={form.control}
               name="nombre"

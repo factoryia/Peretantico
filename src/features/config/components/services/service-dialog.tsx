@@ -27,20 +27,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { Service } from "../../types";
+import type { Category, Service } from "../../types";
 import { serviceSchema, type ServiceFormValues } from "../../schemas";
 import { Loader, Plus } from "lucide-react";
 import { RequiredDot } from "@/components/common/required-dot";
 import { toast } from "sonner";
 import { isAxiosError, type AxiosError } from "axios";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createService, updateService } from "../../utils/service";
 import { SERVICE_QUERY_KEY } from "../../constants/query-keys";
 
 interface Props {
   open: boolean;
   categoryId: string;
+  categories: Category[];
   editingService: Service | null;
   onOpenChange: (open: boolean) => void;
   setEditingService: (value: Service | null) => void;
@@ -50,6 +51,7 @@ interface Props {
 export const ServiceDialog = ({
   open,
   categoryId,
+  categories,
   editingService,
   onOpenChange,
   setIsDialogOpen,
@@ -86,6 +88,13 @@ export const ServiceDialog = ({
       });
     }
   }, [categoryId, editingService, form]);
+
+  // Estado local para la categoría seleccionada en creación
+  const [localCategoryId, setLocalCategoryId] = useState(categoryId);
+
+  useEffect(() => {
+    if (!editingService) setLocalCategoryId(categoryId);
+  }, [categoryId, editingService]);
 
   const onSubmit = async (data: ServiceFormValues) => {
     try {
@@ -146,6 +155,32 @@ export const ServiceDialog = ({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="mb-4">
+              <label className="block mb-1 font-medium">Categoría</label>
+              <Select
+                value={
+                  editingService
+                    ? String(editingService.categoryId) // o editingService.category.uuid
+                    : localCategoryId
+                    ? String(localCategoryId)
+                    : undefined
+                }
+                onValueChange={setLocalCategoryId}
+                disabled
+              >
+                <SelectTrigger className="min-w-full h-auto">
+                  <SelectValue placeholder="Selecciona una categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((categorie) => (
+                    <SelectItem key={categorie.uuid} value={categorie.uuid}>
+                      {categorie.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <FormField
               control={form.control}
               name="name"

@@ -10,6 +10,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AlertModal } from "@/components/common/alert-modal";
+import type { Category, Service } from "@/features/config/types";
+import { fetchAllActiveCategories } from "@/features/config/utils/category";
+import { ServiceTable } from "@/features/config/components/services/services-table";
+import { ServiceDialog } from "@/features/config/components/services/service-dialog";
+import { deleteService, fetchServices } from "@/features/config/utils/service";
+import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
+import { CATEGORY_QUERY_KEY, SERVICE_QUERY_KEY } from "../constants/query-keys";
+import { SearchInput } from "@/components/common/search-input";
+import { Paginator } from "@/components/common/paginator";
 import {
   Select,
   SelectContent,
@@ -17,19 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertModal } from "@/components/common/alert-modal";
-import type { Category, Service } from "@/features/config/types";
-import { fetchAllActiveCategories } from "@/features/config/utils/category";
-import { ServiceTable } from "@/features/config/components/services/services-table";
-import { ServiceDialog } from "@/features/config/components/services/service-dialog";
-import {
-  deleteService,
-  fetchServicesByCategory,
-} from "@/features/config/utils/service";
-import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
-import { CATEGORY_QUERY_KEY, SERVICE_QUERY_KEY } from "../constants/query-keys";
-import { SearchInput } from "@/components/common/search-input";
-import { Paginator } from "@/components/common/paginator";
 
 export const ServicesTab = () => {
   const queryClient = useQueryClient();
@@ -71,12 +68,7 @@ export const ServicesTab = () => {
       pageSize,
     ],
     queryFn: () =>
-      fetchServicesByCategory(
-        selectedCategoriaId,
-        searchTerm,
-        currentPage,
-        pageSize
-      ),
+      fetchServices(selectedCategoriaId, searchTerm, currentPage, pageSize),
     enabled: !!selectedCategoriaId,
     staleTime: 5 * 60 * 1000,
   });
@@ -145,45 +137,71 @@ export const ServicesTab = () => {
                   Mantén un catálogo actualizado de tipos de servicio.
                 </CardDescription>
               </div>
-              {selectedCategoriaId !== "" && (
-                <Select
-                  value={selectedCategoriaId || undefined}
-                  onValueChange={setSelectedCategoriaId}
-                >
-                  <SelectTrigger className="min-w-fit h-auto">
-                    <SelectValue placeholder="Filtrar por categoría" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((categorie) => (
-                      <SelectItem key={categorie.uuid} value={categorie.uuid}>
-                        {categorie.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="w-full grid items-end gap-4 ">
+              <div className="grid gap-4 rounded-lg border bg-muted border-dashed border-border p-4">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Crear nuevo servicio
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Selecciona una categoría para asociar un nuevo servicio.
+                  </p>
+                </div>
+                <div className="grid items-end gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label
+                      htmlFor="category-select"
+                      className="text-sm font-medium"
+                    >
+                      Categoría
+                    </label>
+                    {selectedCategoriaId !== "" && (
+                      <Select
+                        value={selectedCategoriaId || undefined}
+                        onValueChange={setSelectedCategoriaId}
+                      >
+                        <SelectTrigger className="min-w-fit w-full bg-white h-auto">
+                          <SelectValue placeholder="Filtrar por categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((categorie) => (
+                            <SelectItem
+                              key={categorie.uuid}
+                              value={categorie.uuid}
+                            >
+                              {categorie.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <ServiceDialog
+                    open={isDialogOpen}
+                    categories={categories}
+                    categoryId={selectedCategoriaId}
+                    onOpenChange={(open) => {
+                      setIsDialogOpen(open);
+                      if (!open && editingService) {
+                        setEditingService(null);
+                      }
+                    }}
+                    setEditingService={setEditingService}
+                    setIsDialogOpen={setIsDialogOpen}
+                    editingService={editingService}
+                  />
+                </div>
+              </div>
+            </div>
             <div>
               <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
                 <SearchInput
                   placeholder="Buscar servicios..."
                   value={searchTerm}
                   onValueChange={(value) => setSearchTerm(value)}
-                />
-                <ServiceDialog
-                  open={isDialogOpen}
-                  categoryId={selectedCategoriaId}
-                  onOpenChange={(open) => {
-                    setIsDialogOpen(open);
-                    if (!open && editingService) {
-                      setEditingService(null);
-                    }
-                  }}
-                  setEditingService={setEditingService}
-                  setIsDialogOpen={setIsDialogOpen}
-                  editingService={editingService}
                 />
               </div>
             </div>
