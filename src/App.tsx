@@ -10,6 +10,7 @@ import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 import { PrivateRoutes } from "@/features/auth/components/private-routes";
 import { Configuration } from "./features/config/pages/configuration";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Client from "./features/client/pages/client";
 
 export default function App() {
   const { isCheckingAuth, authUser, auth } = useAuthStore();
@@ -25,7 +26,6 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-
       <div className="size-full overflow-y-hidden">
         <Routes>
           {/* Rutas de autenticación */}
@@ -38,6 +38,7 @@ export default function App() {
               <Route path="/repartidores" element={<Distributors />} />
               <Route path="/reportes" element={<Reports />} />
               <Route path="/configuraciones" element={<Configuration />} />
+              <Route path="/clientes" element={<Client />} />
             </Route>
           </Route>
         </Routes>
