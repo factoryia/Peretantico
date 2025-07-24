@@ -1,5 +1,5 @@
 import type { DeliveryDriver } from "@/features/distributors/types";
-import { Cog, FileText, MessageSquare, Truck } from "lucide-react";
+import { Cog, FileText, MessageSquare, Truck, User } from "lucide-react";
 
 // Datos de navegación
 export const data = {
@@ -24,6 +24,11 @@ export const data = {
       title: "Configración",
       url: "/configuraciones",
       icon: Cog,
+    },
+    {
+      title: "Clientes",
+      url: "/clientes",
+      icon: User,
     },
   ],
 };
