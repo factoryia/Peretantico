@@ -30,7 +30,6 @@ export function SubserviceTable({
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
-            <TableHead>Servicio</TableHead>
             <TableHead>Código</TableHead>
             <TableHead>Valor</TableHead>
             <TableHead>Valor Prioridad</TableHead>
@@ -62,7 +61,6 @@ export function SubserviceTable({
             subservices.map((sub) => (
               <TableRow key={sub.id}>
                 <TableCell>{sub.nombre}</TableCell>
-                <TableCell>{sub.servicioNombre}</TableCell>
                 <TableCell>{sub.codigo}</TableCell>
                 <TableCell>${Number(sub.valor).toLocaleString()}</TableCell>
                 <TableCell>

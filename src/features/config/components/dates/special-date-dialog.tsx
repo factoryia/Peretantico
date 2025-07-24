@@ -30,6 +30,7 @@ import { useEffect } from "react";
 import { specialDateSchema, type SpecialDateFormValues } from "../../schemas";
 import type { SpecialDate } from "../../types";
 import { RequiredDot } from "@/components/common/required-dot";
+import { RequiredFormMessage } from "@/components/common/form-message";
 
 interface Props {
   open: boolean;
@@ -188,6 +189,9 @@ export function SpecialDateDialog({
                 </FormItem>
               )}
             />
+
+            <RequiredFormMessage />
+
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"

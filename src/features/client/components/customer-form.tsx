@@ -1,11 +1,9 @@
-// components/customer-form.tsx
 "use client";
+
 import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,13 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
 import {
   Form,
   FormControl,
@@ -51,6 +42,8 @@ import {
   PARENT_TYPE_TAXONOMY_KEY,
   PROFILE_QUERY_KEY,
 } from "../constants";
+import { RequiredDot } from "@/components/common/required-dot";
+import { RequiredFormMessage } from "@/components/common/form-message";
 
 interface CustomerFormProps {
   customer?: Customer;
@@ -68,12 +61,12 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
       documentType: "",
       documentNumber: "",
       phoneNumber: "",
-      email: "",
+      email: undefined,
       department: "",
       municipality: "",
       birthDate: undefined, // Changed from dateOfBirth to birthDate
-      gender: "",
-      parentStatus: "",
+      gender: undefined,
+      parentStatus: undefined,
     },
   });
 
@@ -94,7 +87,6 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
   const handleSubmit = async (values: z.infer<typeof customerSchema>) => {
     try {
       if (mode === "create") {
-        console.log("Enviando datos:", values);
         await createProfile(values);
         toast.success("Cliente creado correctamente");
       } else if (mode === "edit" && customer?.id) {
@@ -106,7 +98,6 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
       onCancel();
       form.reset();
     } catch (error) {
-      console.error("Error al enviar el formulario:", error);
       toast.error("Ocurrió un error al enviar el formulario");
     }
   };
@@ -116,10 +107,12 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
     queryKey: [GENDER_TAXONOMY_KEY],
     queryFn: fetchGenderTaxonomy,
   });
+
   const { data: parentTypeOptions = [] } = useQuery({
     queryKey: [PARENT_TYPE_TAXONOMY_KEY],
     queryFn: fetchParentTypeTaxonomy,
   });
+
   const { data: documentTypeOptions = [] } = useQuery({
     queryKey: [DOCUMENT_TYPE_TAXONOMY_KEY],
     queryFn: fetchDocumentTypeTaxonomy,
@@ -137,7 +130,9 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           disabled={isFieldDisabled("fullName")}
           render={({ field }) => (
             <FormItem className="space-y-2">
-              <FormLabel htmlFor="fullName">Nombre completo</FormLabel>
+              <FormLabel htmlFor="fullName">
+                Nombre completo <RequiredDot />
+              </FormLabel>
               <FormControl>
                 <Input
                   id="fullName"
@@ -156,7 +151,9 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           disabled={isFieldDisabled("documentType")}
           render={({ field }) => (
             <FormItem className="space-y-2">
-              <FormLabel htmlFor="documentType">Tipo de documento</FormLabel>
+              <FormLabel htmlFor="documentType">
+                Tipo de documento <RequiredDot />
+              </FormLabel>
               <Select
                 onValueChange={field.onChange}
                 value={field.value}
@@ -186,7 +183,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           render={({ field }) => (
             <FormItem className="space-y-2">
               <FormLabel htmlFor="documentNumber">
-                Número de documento
+                Número de documento <RequiredDot />
               </FormLabel>
               <FormControl>
                 <Input
@@ -209,7 +206,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           render={({ field }) => (
             <FormItem className="space-y-2">
               <FormLabel htmlFor="birthDate">Fecha de nacimiento</FormLabel>
-              <Popover>
+              {/* <Popover>
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button
@@ -244,7 +241,8 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
                     toYear={new Date().getFullYear()}
                   />
                 </PopoverContent>
-              </Popover>
+              </Popover> */}
+              <Input type="date" {...field} />
               <FormMessage />
             </FormItem>
           )}
@@ -284,7 +282,9 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           disabled={isFieldDisabled("phoneNumber")}
           render={({ field }) => (
             <FormItem className="space-y-2">
-              <FormLabel htmlFor="phoneNumber">Teléfono de contacto</FormLabel>
+              <FormLabel htmlFor="phoneNumber">
+                Teléfono de contacto <RequiredDot />
+              </FormLabel>
               <FormControl>
                 <Input
                   id="phoneNumber"
@@ -326,7 +326,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           render={({ field }) => (
             <FormItem className="space-y-2">
               <FormLabel htmlFor="department">
-                Departamento de residencia
+                Departamento de residencia <RequiredDot />
               </FormLabel>
               <FormControl>
                 <Input
@@ -347,7 +347,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           render={({ field }) => (
             <FormItem className="space-y-2">
               <FormLabel htmlFor="municipality">
-                Municipio de residencia
+                Municipio de residencia <RequiredDot />
               </FormLabel>
               <FormControl>
                 <Input
@@ -396,7 +396,9 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           disabled={isFieldDisabled("address")}
           render={({ field }) => (
             <FormItem className="space-y-2 md:col-span-2">
-              <FormLabel htmlFor="address">Dirección residencia</FormLabel>
+              <FormLabel htmlFor="address">
+                Dirección residencia <RequiredDot />
+              </FormLabel>
               <FormControl>
                 <Input
                   id="address"
@@ -409,6 +411,12 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {mode !== "view" && (
+          <div className="col-span-2">
+            <RequiredFormMessage />
+          </div>
+        )}
 
         {mode !== "view" && (
           <div className="md:col-span-2 flex justify-end gap-2 mt-4">

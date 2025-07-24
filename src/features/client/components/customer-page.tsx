@@ -95,7 +95,7 @@ export default function CustomerManagementPage() {
               </Button>
             </div>
             <CardDescription className="text-base">
-              Filtra los clientes por nombre, departamento o municipio.
+              Filtrar los clientes por nombre, departamento o municipio.
             </CardDescription>
           </CardHeader>
           <CardContent>

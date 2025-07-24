@@ -139,14 +139,14 @@ export interface CustomerFormValues {
   fullName: string
   documentType: string // Value (e.g., "CC")
   documentNumber: string
-  birthDate: string // YYYY-MM-DD
-  gender: string // Value (e.g., "masculino")
+  birthDate?: string // YYYY-MM-DD
+  gender?: string // Value (e.g., "masculino")
   phoneNumber: string
-  email: string
+  email?: string
   department: string
   municipality: string
   address: string
-  parentStatus: string // Value (e.g., "si")
+  parentStatus?: string // Value (e.g., "si")
 }
 
 // Constants for select options

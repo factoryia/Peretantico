@@ -30,7 +30,6 @@ export const ServiceTable = ({
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
-            <TableHead>Categoría</TableHead>
             <TableHead>Descripción</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Fecha Creación</TableHead>
@@ -61,7 +60,6 @@ export const ServiceTable = ({
             services.map((service) => (
               <TableRow key={service.id}>
                 <TableCell>{service.name}</TableCell>
-                <TableCell>{service.categoryName}</TableCell>
                 <TableCell className="max-w-[400px] text-wrap line-clamp-4 truncate overflow-hidden">
                   {service.description || "-"}
                 </TableCell>

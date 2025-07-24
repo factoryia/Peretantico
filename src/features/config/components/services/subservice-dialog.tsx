@@ -36,6 +36,7 @@ import type { Subservice } from "../../types";
 import { isAxiosError, type AxiosError } from "axios";
 import { SUBSERVICE_QUERY_KEY } from "../../constants/query-keys";
 import { RequiredDot } from "@/components/common/required-dot";
+import { RequiredFormMessage } from "@/components/common/form-message";
 
 interface Props {
   selectedCategoryName: string;
@@ -300,6 +301,9 @@ export function SubserviceDialog({
                 )}
               />
             </div>
+
+            <RequiredFormMessage />
+
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"

@@ -1,4 +1,3 @@
-// schema.ts
 import { z } from "zod";
 
 export const customerSchema = z.object({
@@ -11,8 +10,10 @@ export const customerSchema = z.object({
     .string()
     .min(1, "El número de documento es requerido")
     .max(15, "Máximo 15 caracteres"),
-  birthDate: z.string().min(1, "La fecha de nacimiento es requerida"), // YYYY-MM-DD format
-  gender: z.string().min(1, "El sexo es requerido"),
+  birthDate: z
+    .string()
+    .optional(), // YYYY-MM-DD format
+  gender: z.string().optional(),
   phoneNumber: z
     .string()
     .min(1, "El teléfono es requerido")
@@ -20,13 +21,13 @@ export const customerSchema = z.object({
   email: z
     .string()
     .email("Correo electrónico inválido")
-    .min(1, "El correo electrónico es requerido")
-    .max(100, "Máximo 100 caracteres"),
+    .max(100, "Máximo 100 caracteres")
+    .optional(),
   department: z.string().min(1, "El departamento es requerido"),
   municipality: z.string().min(1, "El municipio es requerido"),
   address: z
     .string()
     .min(1, "La dirección es requerida")
     .max(200, "Máximo 200 caracteres"),
-  parentStatus: z.string().min(1, "¿Es padre o madre? es requerido"),
+  parentStatus: z.string().optional(),
 });

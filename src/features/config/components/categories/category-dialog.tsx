@@ -44,6 +44,7 @@ import {
 } from "@/features/config/utils/category";
 import { CATEGORY_QUERY_KEY } from "@/features/config/constants/query-keys";
 import { RequiredDot } from "@/components/common/required-dot";
+import { RequiredFormMessage } from "@/components/common/form-message";
 
 interface CategoryDialogProps {
   open: boolean;
@@ -214,6 +215,9 @@ export function CategoryDialog({
                 </FormItem>
               )}
             />
+
+            <RequiredFormMessage />
+
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"

@@ -37,6 +37,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { createService, updateService } from "../../utils/service";
 import { SERVICE_QUERY_KEY } from "../../constants/query-keys";
+import { RequiredFormMessage } from "@/components/common/form-message";
 
 interface Props {
   open: boolean;
@@ -252,6 +253,9 @@ export const ServiceDialog = ({
                 </FormItem>
               )}
             />
+
+            <RequiredFormMessage />
+
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"

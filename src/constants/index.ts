@@ -11,6 +11,11 @@ export const data = {
       isActive: true,
     },
     {
+      title: "Clientes",
+      url: "/clientes",
+      icon: User,
+    },
+    {
       title: "Repartidores",
       url: "/repartidores",
       icon: Truck,
@@ -21,14 +26,9 @@ export const data = {
       icon: FileText,
     },
     {
-      title: "Configración",
+      title: "Configuración",
       url: "/configuraciones",
       icon: Cog,
-    },
-    {
-      title: "Clientes",
-      url: "/clientes",
-      icon: User,
     },
   ],
 };

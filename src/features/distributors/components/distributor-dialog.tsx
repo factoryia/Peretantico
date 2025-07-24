@@ -37,6 +37,7 @@ import { Loader } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DISTRIBUTORS_QUERY_KEY } from "../constants/query-keys";
 import { RequiredDot } from "@/components/common/required-dot";
+import { RequiredFormMessage } from "@/components/common/form-message";
 
 interface DistributorDialogProps {
   open: boolean;
@@ -436,6 +437,8 @@ export function DistributorDialog({
                 </FormItem>
               )}
             />
+
+            <RequiredFormMessage />
 
             <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
               <Button
