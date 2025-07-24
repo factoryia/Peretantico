@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import type { AxiosError } from "axios";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -51,13 +51,6 @@ export const ServicesTab = () => {
     queryFn: fetchAllActiveCategories,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
-
-  // Set the first category as default when categories load
-  useEffect(() => {
-    if (categories.length > 0 && selectedCategoriaId === "") {
-      setSelectedCategoriaId(categories[0].uuid);
-    }
-  }, [categories]);
 
   const { data: servicesData, isLoading: isLoadingServices } = useQuery({
     queryKey: [
@@ -158,26 +151,24 @@ export const ServicesTab = () => {
                     >
                       Categoría
                     </label>
-                    {selectedCategoriaId !== "" && (
-                      <Select
-                        value={selectedCategoriaId || undefined}
-                        onValueChange={setSelectedCategoriaId}
-                      >
-                        <SelectTrigger className="min-w-fit w-full bg-white h-auto">
-                          <SelectValue placeholder="Filtrar por categoría" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((categorie) => (
-                            <SelectItem
-                              key={categorie.uuid}
-                              value={categorie.uuid}
-                            >
-                              {categorie.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <Select
+                      value={selectedCategoriaId || undefined}
+                      onValueChange={setSelectedCategoriaId}
+                    >
+                      <SelectTrigger className="min-w-fit w-full bg-white h-auto">
+                        <SelectValue placeholder="Seleccione una categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((categorie) => (
+                          <SelectItem
+                            key={categorie.uuid}
+                            value={categorie.uuid}
+                          >
+                            {categorie.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <ServiceDialog
                     open={isDialogOpen}

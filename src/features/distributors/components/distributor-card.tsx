@@ -5,13 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  MoreVertical,
   Eye,
   Edit,
   Trash2,
@@ -100,34 +93,6 @@ export function DistributorCard({
               </div>
             </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => onViewDetail(distributor)}>
-                <Eye className="mr-2 h-4 w-4" />
-                Ver Detalles
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(distributor)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Editar
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onDelete(distributor)}
-                className="text-red-600 focus:text-red-600"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </CardHeader>
 
@@ -180,14 +145,33 @@ export function DistributorCard({
           <span>Ingreso: {formatDate(distributor.entryDate)}</span>
         </div>
 
-        {/* Observaciones (si existen) */}
-        {/* {distributor.observations && (
-          <div className="bg-muted/50 rounded-md p-2 mt-3">
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {distributor.observations}
-            </p>
-          </div>
-        )} */}
+        <div className="flex gap-2 bg-muted rounded-md p-1 justify-evenly">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Ver detalles"
+            onClick={() => onViewDetail(distributor)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Editar"
+            onClick={() => onEdit(distributor)}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Eliminar"
+            onClick={() => onDelete(distributor)}
+            className="text-red-600 hover:bg-red-100"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

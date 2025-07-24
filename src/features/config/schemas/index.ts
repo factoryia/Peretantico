@@ -42,8 +42,7 @@ export const specialDateSchema = z.object({
   title: z
     .string()
     .min(1, "El nombre es obligatorio")
-    .max(200, "Máximo 200 caracteres")
-    .regex(/^[a-zA-Z0-9\s]+$/, "Solo se permiten caracteres alfanuméricos"),
+    .max(200, "Máximo 200 caracteres"),
   field_description: z.string().max(250, "Máximo 250 caracteres").optional(),
   field_date: z.string().min(1, "La fecha es obligatoria"),
   field_is_annual: z.enum(["si", "no"], {

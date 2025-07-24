@@ -62,7 +62,9 @@ export const ServiceTable = ({
               <TableRow key={service.id}>
                 <TableCell>{service.name}</TableCell>
                 <TableCell>{service.categoryName}</TableCell>
-                <TableCell>{service.description || "-"}</TableCell>
+                <TableCell className="max-w-[400px] text-wrap line-clamp-4 truncate overflow-hidden">
+                  {service.description || "-"}
+                </TableCell>
                 <TableCell>
                   <Badge
                     variant={

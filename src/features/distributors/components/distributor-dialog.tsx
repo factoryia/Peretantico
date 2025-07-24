@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { Loader } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DISTRIBUTORS_QUERY_KEY } from "../constants/query-keys";
+import { RequiredDot } from "@/components/common/required-dot";
 
 interface DistributorDialogProps {
   open: boolean;
@@ -165,7 +166,9 @@ export function DistributorDialog({
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre Completo</FormLabel>
+                  <FormLabel>
+                    Nombre Completo <RequiredDot />
+                  </FormLabel>
                   <FormControl>
                     <Input placeholder="Ej: Juan Carlos Pérez" {...field} />
                   </FormControl>
@@ -180,7 +183,9 @@ export function DistributorDialog({
                 name="documentTypeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tipo de Documento</FormLabel>
+                    <FormLabel>
+                      Tipo de Documento <RequiredDot />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -205,9 +210,21 @@ export function DistributorDialog({
                 name="documentNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Número de Documento</FormLabel>
+                    <FormLabel>
+                      Número de Documento <RequiredDot />
+                    </FormLabel>
                     <FormControl>
-                      <Input placeholder="12345678" {...field} />
+                      <Input
+                        placeholder="12345678"
+                        {...field}
+                        onInput={(e) => {
+                          e.currentTarget.value = e.currentTarget.value.replace(
+                            /\D/g,
+                            ""
+                          );
+                          field.onChange(e); // mantén react-hook-form sincronizado
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -239,9 +256,21 @@ export function DistributorDialog({
                 name="phoneNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
+                    <FormLabel>
+                      Teléfono <RequiredDot />
+                    </FormLabel>
                     <FormControl>
-                      <Input placeholder="+57 300 123 4567" {...field} />
+                      <Input
+                        placeholder="300 123 4567"
+                        {...field}
+                        onInput={(e) => {
+                          e.currentTarget.value = e.currentTarget.value.replace(
+                            /\D/g,
+                            ""
+                          );
+                          field.onChange(e);
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -255,7 +284,9 @@ export function DistributorDialog({
                 name="entryDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Fecha de Ingreso</FormLabel>
+                    <FormLabel>
+                      Fecha de Ingreso <RequiredDot />
+                    </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -288,7 +319,9 @@ export function DistributorDialog({
                 name="coverageAreaId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Zona de Cobertura</FormLabel>
+                    <FormLabel>
+                      Zona de Cobertura <RequiredDot />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -313,7 +346,9 @@ export function DistributorDialog({
                 name="transportationTypeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tipo de Transporte</FormLabel>
+                    <FormLabel>
+                      Tipo de Transporte <RequiredDot />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -362,7 +397,9 @@ export function DistributorDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                   <div className="space-y-0.5">
-                    <FormLabel>Disponibilidad</FormLabel>
+                    <FormLabel>
+                      Disponibilidad <RequiredDot />
+                    </FormLabel>
                     <FormDescription className="text-xs">
                       ¿Está disponible para entregas?
                     </FormDescription>
@@ -383,7 +420,9 @@ export function DistributorDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                   <div className="space-y-0.5">
-                    <FormLabel>Estado</FormLabel>
+                    <FormLabel>
+                      Estado <RequiredDot />
+                    </FormLabel>
                     <FormDescription className="text-xs">
                       Activo / Inactivo
                     </FormDescription>

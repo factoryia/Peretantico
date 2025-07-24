@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import type { AxiosError } from "axios";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -79,7 +79,7 @@ export function SubservicesTab() {
     ],
     queryFn: () =>
       fetchSubservicesByService(
-        selectedServiceId,
+        selectedServiceId ?? "",
         searchTerm,
         currentPage,
         pageSize
@@ -90,21 +90,6 @@ export function SubservicesTab() {
 
   const subservices = subservicesData?.subservices ?? [];
   const totalPages = subservicesData?.totalPages ?? 1;
-  // Setear la primera categoría por defecto
-  useEffect(() => {
-    if (categories.length > 0 && !selectedCategoriaId) {
-      setSelectedCategoriaId(categories[0].uuid);
-    }
-  }, [categories]);
-
-  // Setear el primer servicio por defecto cuando cambia la categoría
-  useEffect(() => {
-    if (services.length > 0 && !selectedServiceId) {
-      setSelectedServiceId(String(services[0].id));
-    } else if (services.length === 0) {
-      setSelectedServiceId("");
-    }
-  }, [services]);
 
   // Acciones
   const handleEdit = (sub: Subservice) => {
@@ -193,10 +178,13 @@ export function SubservicesTab() {
                   </label>
                   <Select
                     value={selectedCategoriaId || undefined}
-                    onValueChange={setSelectedCategoriaId}
+                    onValueChange={(value) => {
+                      setSelectedCategoriaId(value);
+                      setSelectedServiceId("undefined");
+                    }}
                   >
                     <SelectTrigger className="min-w-fit w-full h-auto bg-white">
-                      <SelectValue placeholder="Filtrar por categoría" />
+                      <SelectValue placeholder="Seleccione una categoría" />
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map((categorie) => (
@@ -215,13 +203,27 @@ export function SubservicesTab() {
                     Servicio
                   </label>
                   <Select
+                    disabled={
+                      !categories ||
+                      categories.length === 0 ||
+                      !selectedCategoriaId
+                    }
                     value={selectedServiceId || undefined}
                     onValueChange={setSelectedServiceId}
                   >
                     <SelectTrigger className="min-w-fit w-full h-auto bg-white">
-                      <SelectValue placeholder="Sin servicios" />
+                      <SelectValue
+                        placeholder={
+                          services.length === 0 && categories.length > 0
+                            ? "Categoría sin servicios"
+                            : "Seleccione un servicio"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem className="hidden" value="undefined">
+                        Seleccione un servicio
+                      </SelectItem>
                       {services.map((service) => (
                         <SelectItem key={service.id} value={service.id}>
                           {service.name}
@@ -287,21 +289,6 @@ export function SubservicesTab() {
             )}
           </CardContent>
         </Card>
-        {/* <SubserviceDialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open && editingSubservice) {
-              setEditingSubservice(null);
-            }
-          }}
-          isEdit={!!editingSubservice}
-          editingSubservice={editingSubservice}
-          selectedCategoryId={selectedCategoriaId}
-          selectedServiceId={selectedServiceId}
-          setDialogOpen={setDialogOpen}
-          setEditingSubservice={setEditingSubservice}
-        /> */}
         <SubserviceDialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -313,7 +300,7 @@ export function SubservicesTab() {
           isEdit={!!editingSubservice}
           editingSubservice={editingSubservice}
           selectedCategoryId={selectedCategoriaId}
-          selectedServiceId={selectedServiceId}
+          selectedServiceId={selectedServiceId!}
           selectedCategoryName={
             categories.find((c) => c.uuid === selectedCategoriaId)?.name || ""
           }

@@ -60,7 +60,9 @@ export function CategoriesTable({
             categories.map((category) => (
               <TableRow key={category.uuid}>
                 <TableCell className="font-medium">{category.name}</TableCell>
-                <TableCell>{category.description || "-"}</TableCell>
+                <TableCell className="max-w-[400px] text-wrap line-clamp-4 truncate overflow-hidden">
+                  {category.description || "-"}
+                </TableCell>
                 <TableCell>
                   <Badge
                     variant={

@@ -4,12 +4,6 @@ import {
   fetchDocumentTypes,
   fetchTransportationTypes,
 } from "../utils/taxonomies";
-import type { TaxonomyTerm } from "@/types/global";
-
-interface FilterOption {
-  value: string;
-  label: string;
-}
 
 export const useCoverageAreasQuery = () => {
   return useQuery({

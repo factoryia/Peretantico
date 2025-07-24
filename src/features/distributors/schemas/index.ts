@@ -2,9 +2,17 @@ import z from "zod";
 
 export const distributorSchema = z.object({
   title: z.string().min(1, "El nombre es obligatorio").max(100),
-  documentNumber: z.string().min(1).max(15),
+  documentNumber: z
+    .string()
+    .min(1)
+    .max(15)
+    .regex(/^\d+$/, "Solo se permiten números"),
   documentTypeId: z.string().min(1),
-  phoneNumber: z.string().min(1).max(15),
+  phoneNumber: z
+    .string()
+    .min(1)
+    .max(15)
+    .regex(/^\d+$/, "Solo se permiten números"),
   email: z.string().max(100).email().optional().or(z.literal("")),
   coverageAreaId: z.string().min(1),
   transportationTypeId: z.string().min(1),

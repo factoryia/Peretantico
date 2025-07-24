@@ -43,6 +43,7 @@ import {
   updateCategory,
 } from "@/features/config/utils/category";
 import { CATEGORY_QUERY_KEY } from "@/features/config/constants/query-keys";
+import { RequiredDot } from "@/components/common/required-dot";
 
 interface CategoryDialogProps {
   open: boolean;
@@ -149,7 +150,9 @@ export function CategoryDialog({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre de la categoría</FormLabel>
+                  <FormLabel>
+                    Nombre de la categoría <RequiredDot />
+                  </FormLabel>
                   <FormControl>
                     <Input placeholder="Ingrese el nombre" {...field} />
                   </FormControl>
@@ -186,7 +189,9 @@ export function CategoryDialog({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Estado</FormLabel>
+                  <FormLabel>
+                    Estado <RequiredDot />
+                  </FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}

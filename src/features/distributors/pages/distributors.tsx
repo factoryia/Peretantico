@@ -1,7 +1,6 @@
 import { Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useState, useTransition } from "react";
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
 import { useDistributorsQuery } from "../hooks/distributors";
@@ -34,7 +33,7 @@ interface DistributorFilters {
 }
 
 const STATUS_OPTIONS = [
-  { name: "Todos", id: "all" },
+  { name: "Todos los estados", id: "all" },
   { name: "Disponible", id: "true" },
   { name: "No disponible", id: "false" },
 ];
@@ -174,19 +173,21 @@ export function Distributors() {
                   placeholder="Buscar categorías..."
                   value={filters.fullName}
                   onValueChange={(value) => updateFilters({ fullName: value })}
+                  className="md:min-w-full"
                 />
-                <Input
+                <SearchInput
                   placeholder="Buscar por documento..."
                   value={filters.documentNumber}
-                  onChange={(e) =>
-                    updateFilters({ documentNumber: e.target.value })
+                  onValueChange={(value) =>
+                    updateFilters({ documentNumber: value })
                   }
-                  className="w-full"
+                  className="md:min-w-full"
                 />
+
                 <FilterSelect
                   placeholder="Zona de cobertura"
                   options={[
-                    { id: "all", name: "Todos" },
+                    { id: "all", name: "Todas las zonas" },
                     ...coverageAreaOptions,
                   ]}
                   value={filters.coverageAreaId}

@@ -35,6 +35,7 @@ import { createSubservice, updateSubservice } from "../../utils/subservice";
 import type { Subservice } from "../../types";
 import { isAxiosError, type AxiosError } from "axios";
 import { SUBSERVICE_QUERY_KEY } from "../../constants/query-keys";
+import { RequiredDot } from "@/components/common/required-dot";
 
 interface Props {
   selectedCategoryName: string;
@@ -85,7 +86,7 @@ export function SubserviceDialog({
         codigo: editingSubservice.codigo,
         estado: editingSubservice.estado,
         valor: editingSubservice.valor,
-        valorPrioridad: editingSubservice.valor,
+        valorPrioridad: editingSubservice.valorPrioridad,
       });
     } else {
       form.reset({
@@ -184,7 +185,9 @@ export function SubserviceDialog({
               name="nombre"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre del Subservicio</FormLabel>
+                  <FormLabel>
+                    Nombre del Subservicio <RequiredDot />
+                  </FormLabel>
                   <FormControl>
                     <Input
                       placeholder="Ej: Solicitud registros civiles"
@@ -220,7 +223,9 @@ export function SubserviceDialog({
                 name="codigo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Código</FormLabel>
+                    <FormLabel>
+                      Código <RequiredDot />
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="Ej: SC-123" {...field} />
                     </FormControl>
@@ -236,7 +241,9 @@ export function SubserviceDialog({
                 name="estado"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estado</FormLabel>
+                    <FormLabel>
+                      Estado <RequiredDot />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className="data-[size=default]:h-11">
@@ -262,7 +269,9 @@ export function SubserviceDialog({
                 name="valor"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valor</FormLabel>
+                    <FormLabel>
+                      Valor <RequiredDot />
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="15000" {...field} />
                     </FormControl>
@@ -276,7 +285,9 @@ export function SubserviceDialog({
                 name="valorPrioridad"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valor Prioridad</FormLabel>
+                    <FormLabel>
+                      Valor Prioridad <RequiredDot />
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="25000" {...field} />
                     </FormControl>
