@@ -1,12 +1,10 @@
-// app/customer-management/page.tsx
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query"; // Assuming @tanstack/react-query is installed
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 import {
   Card,
   CardContent,
@@ -14,6 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { type Customer, type FormMode } from "../types";
 import { fetchProfiles } from "../utils/customer";
 import { CustomerTable } from "./customer-table";
@@ -22,6 +27,7 @@ import { Paginator } from "@/components/common/paginator";
 import { Plus } from "lucide-react";
 import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
 import { PROFILE_QUERY_KEY } from "../constants";
+import { departamento } from "../constants/colombia";
 
 export default function CustomerManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,12 +36,11 @@ export default function CustomerManagementPage() {
   );
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [filterName, setFilterName] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState("");
-  const [filterMunicipality, setFilterMunicipality] = useState("");
+  const [filterDepartment, setFilterDepartment] = useState("Todos");
+  const [filterMunicipality, setFilterMunicipality] = useState("Todos");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Fetch profiles using useQuery
   const { data, isLoading: isLoadingCustomers } = useQuery({
     queryKey: [
       PROFILE_QUERY_KEY,
@@ -48,8 +53,8 @@ export default function CustomerManagementPage() {
     queryFn: () =>
       fetchProfiles(
         filterName,
-        filterDepartment,
-        filterMunicipality,
+        filterDepartment === "Todos" ? "" : filterDepartment,
+        filterMunicipality === "Todos" ? "" : filterMunicipality,
         currentPage,
         pageSize
       ),
@@ -77,6 +82,12 @@ export default function CustomerManagementPage() {
     setIsModalOpen(true);
   };
 
+  const filteredMunicipalities =
+    filterDepartment === "Todos"
+      ? []
+      : departamento.find((d) => d.departamento === filterDepartment)
+          ?.ciudades || [];
+
   return (
     <>
       <div className="space-y-4">
@@ -99,7 +110,7 @@ export default function CustomerManagementPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="filterName">Nombre completo</Label>
                 <Input
@@ -111,28 +122,52 @@ export default function CustomerManagementPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="filterDepartment">Departamento</Label>
-                <Input
-                  id="filterDepartment"
-                  placeholder="Filtrar por departamento"
+                <Select
+                  onValueChange={(value) => {
+                    setFilterDepartment(value);
+                    setFilterMunicipality("Todos");
+                  }}
                   value={filterDepartment}
-                  onChange={(e) => setFilterDepartment(e.target.value)}
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los departamentos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Todos">Todos</SelectItem>
+                    {departamento.map((d) => (
+                      <SelectItem key={d.id} value={d.departamento}>
+                        {d.departamento}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="filterMunicipality">Municipio</Label>
-                <Input
-                  id="filterMunicipality"
-                  placeholder="Filtrar por municipio"
+                <Select
+                  onValueChange={(value) => setFilterMunicipality(value)}
                   value={filterMunicipality}
-                  onChange={(e) => setFilterMunicipality(e.target.value)}
-                />
+                  disabled={filterDepartment === "Todos"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los municipios" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Todos">Todos</SelectItem>
+                    {filteredMunicipalities.map((municipio) => (
+                      <SelectItem key={municipio} value={municipio}>
+                        {municipio}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle> Listado de Clientes</CardTitle>
+            <CardTitle>Listado de Clientes</CardTitle>
             <CardDescription>
               {isLoadingCustomers
                 ? "Cargando clientes..."

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { departamento as departamentos } from "../constants/colombia";
+
 import {
   Form,
   FormControl,
@@ -25,9 +27,9 @@ import {
   type Customer,
   type FormMode,
   type CustomerFormValues,
-} from "../types"; // Updated imports
-import { customerSchema } from "../schema"; // Updated import
-import { useQueryClient } from "@tanstack/react-query"; // New import
+} from "../types";
+import { customerSchema } from "../schema";
+import { useQueryClient } from "@tanstack/react-query";
 import { createProfile, updateProfile } from "../utils/customer";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -35,7 +37,7 @@ import {
   fetchParentTypeTaxonomy,
   fetchDocumentTypeTaxonomy,
 } from "../utils/customer";
-import { toast } from "sonner"; // o tu sistema de notificaciones
+import { toast } from "sonner";
 import {
   DOCUMENT_TYPE_TAXONOMY_KEY,
   GENDER_TAXONOMY_KEY,
@@ -45,6 +47,19 @@ import {
 import { RequiredDot } from "@/components/common/required-dot";
 import { RequiredFormMessage } from "@/components/common/form-message";
 
+// --- FUNCIÓN CLAVE PARA SANEAR CAMPOS OPCIONALES ---
+function normalizeCustomerData(customer?: Customer) {
+  if (!customer) return undefined;
+  return {
+    ...customer,
+    birthDate: customer.birthDate || "",
+    email: customer.email || "",
+    gender: customer.gender || "",
+    parentStatus: customer.parentStatus || "",
+    // Agrega aquí otros campos opcionales si en el futuro los hay
+  };
+}
+
 interface CustomerFormProps {
   customer?: Customer;
   mode: FormMode;
@@ -53,29 +68,35 @@ interface CustomerFormProps {
 
 export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
   const queryClient = useQueryClient();
+  const [selectedDepto, setSelectedDepto] = useState<string>("");
 
   const form = useForm<z.infer<typeof customerSchema>>({
     resolver: zodResolver(customerSchema),
-    defaultValues: customer || {
-      fullName: "",
-      documentType: "",
-      documentNumber: "",
-      phoneNumber: "",
-      email: undefined,
-      department: "",
-      municipality: "",
-      birthDate: undefined, // Changed from dateOfBirth to birthDate
-      gender: undefined,
-      parentStatus: undefined,
-    },
+    defaultValues: customer
+      ? normalizeCustomerData(customer)
+      : {
+          fullName: "",
+          documentType: "",
+          documentNumber: "",
+          phoneNumber: "",
+          email: "",
+          department: "",
+          municipality: "",
+          birthDate: "",
+          gender: "",
+          parentStatus: "",
+          address: "",
+        },
   });
 
-  // Set form data when customer prop changes (for edit/view mode)
+  // Efecto para setear datos y limpiar campos al editar/ver
   useEffect(() => {
     if (customer && mode !== "create") {
-      form.reset(customer);
+      form.reset(normalizeCustomerData(customer));
+      setSelectedDepto(customer.department || "");
     } else if (mode === "create") {
       form.reset();
+      setSelectedDepto("");
     }
   }, [customer, mode, form]);
 
@@ -84,23 +105,39 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
     if (mode === "edit" && fieldName === "documentNumber") return true;
     return false;
   };
+
   const handleSubmit = async (values: z.infer<typeof customerSchema>) => {
+    const cleanValues = { ...values };
+
+    ["gender", "parentStatus", "email", "birthDate"].forEach((key) => {
+      if (
+        cleanValues[key as keyof typeof cleanValues] === "" ||
+        cleanValues[key as keyof typeof cleanValues] == null
+      ) {
+        delete cleanValues[key as keyof typeof cleanValues]; // <-- BORRAR, NO poner null
+      }
+    });
+
     try {
       if (mode === "create") {
-        await createProfile(values);
+        await createProfile(cleanValues);
         toast.success("Cliente creado correctamente");
       } else if (mode === "edit" && customer?.id) {
-        await updateProfile(customer.id, values);
+        await updateProfile(customer.id, cleanValues);
         toast.success("Cliente actualizado correctamente");
       }
 
-      queryClient.invalidateQueries({ queryKey: [PROFILE_QUERY_KEY] });
+      queryClient.invalidateQueries({
+        queryKey: [PROFILE_QUERY_KEY],
+        exact: false,
+      });
       onCancel();
       form.reset();
     } catch (error) {
       toast.error("Ocurrió un error al enviar el formulario");
     }
   };
+
   const { isSubmitting, isValid } = form.formState;
 
   const { data: genderOptions = [] } = useQuery({
@@ -124,6 +161,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
         onSubmit={form.handleSubmit(handleSubmit)}
         className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4x"
       >
+        {/* Nombre */}
         <FormField
           control={form.control}
           name="fullName"
@@ -145,6 +183,8 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Tipo de documento */}
         <FormField
           control={form.control}
           name="documentType"
@@ -176,6 +216,8 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Número de documento */}
         <FormField
           control={form.control}
           name="documentNumber"
@@ -199,54 +241,29 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Fecha de nacimiento */}
         <FormField
           control={form.control}
-          name="birthDate" // Changed from dateOfBirth
+          name="birthDate"
           disabled={isFieldDisabled("birthDate")}
           render={({ field }) => (
             <FormItem className="space-y-2">
               <FormLabel htmlFor="birthDate">Fecha de nacimiento</FormLabel>
-              {/* <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full h-10 justify-start text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                      disabled={field.disabled}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? (
-                        format(new Date(field.value), "dd/MM/yyyy")
-                      ) : (
-                        <span>DD/MM/AAAA</span>
-                      )}
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={field.value ? new Date(field.value) : undefined}
-                    onSelect={(date) =>
-                      field.onChange(
-                        date ? format(date, "yyyy-MM-dd") : undefined
-                      )
-                    }
-                    initialFocus
-                    captionLayout="dropdown-buttons"
-                    fromYear={1900}
-                    toYear={new Date().getFullYear()}
-                  />
-                </PopoverContent>
-              </Popover> */}
-              <Input type="date" {...field} />
+              <Input
+                type="date"
+                id="birthDate"
+                value={typeof field.value === "string" ? field.value : ""}
+                onChange={(e) => field.onChange(e.target.value || "")}
+                max={new Date().toISOString().split("T")[0]}
+                disabled={isFieldDisabled("birthDate")}
+              />
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* Sexo */}
         <FormField
           control={form.control}
           name="gender"
@@ -276,6 +293,8 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Teléfono */}
         <FormField
           control={form.control}
           name="phoneNumber"
@@ -299,6 +318,8 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Correo electrónico */}
         <FormField
           control={form.control}
           name="email"
@@ -319,48 +340,78 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Departamento */}
         <FormField
           control={form.control}
           name="department"
-          disabled={isFieldDisabled("department")}
           render={({ field }) => (
-            <FormItem className="space-y-2">
-              <FormLabel htmlFor="department">
-                Departamento de residencia <RequiredDot />
+            <FormItem>
+              <FormLabel>
+                Departamento <RequiredDot />
               </FormLabel>
-              <FormControl>
-                <Input
-                  id="department"
-                  placeholder="Ej: Cundinamarca"
-                  maxLength={100}
-                  {...field}
-                />
-              </FormControl>
+              <Select
+                value={field.value}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  setSelectedDepto(value);
+                  form.setValue("municipality", ""); // Reinicia municipio si cambia dpto
+                }}
+                disabled={isFieldDisabled("department")}
+              >
+                <FormControl>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Seleccione un departamento" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {departamentos.map((d) => (
+                    <SelectItem key={d.id} value={d.departamento}>
+                      {d.departamento}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* Municipio */}
         <FormField
           control={form.control}
           name="municipality"
-          disabled={isFieldDisabled("municipality")}
           render={({ field }) => (
-            <FormItem className="space-y-2">
-              <FormLabel htmlFor="municipality">
-                Municipio de residencia <RequiredDot />
+            <FormItem>
+              <FormLabel>
+                Municipio <RequiredDot />
               </FormLabel>
-              <FormControl>
-                <Input
-                  id="municipality"
-                  placeholder="Ej: Bogotá"
-                  maxLength={100}
-                  {...field}
-                />
-              </FormControl>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={!selectedDepto || isFieldDisabled("municipality")}
+              >
+                <FormControl>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Seleccione un municipio" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {departamentos
+                    .find((d) => d.departamento === selectedDepto)
+                    ?.ciudades.map((ciudad) => (
+                      <SelectItem key={ciudad} value={ciudad}>
+                        {ciudad}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* ¿Padre o madre? */}
         <FormField
           control={form.control}
           name="parentStatus"
@@ -390,6 +441,8 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             </FormItem>
           )}
         />
+
+        {/* Dirección */}
         <FormField
           control={form.control}
           name="address"
@@ -412,6 +465,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           )}
         />
 
+        {/* Mensaje obligatorio y botones */}
         {mode !== "view" && (
           <div className="col-span-2">
             <RequiredFormMessage />

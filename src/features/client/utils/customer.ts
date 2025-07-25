@@ -140,9 +140,9 @@ export async function updateProfile(id: string, data: CustomerFormValues) {
         title: data.fullName,
         field_full_name: data.fullName,
         field_document_number: data.documentNumber,
-        field_birth_date: data.birthDate,
+        field_birth_date: data.birthDate ?? null, // ensure birthDate is sent as empty string if null
         field_phone_number: data.phoneNumber,
-        field_mail: data.email,
+        field_mail: data.email ?? null, // ensure email is sent as empty string if null
         field_department: data.department,
         field_municipality_residence: data.municipality,
         field_address: data.address, // ensure address is sent

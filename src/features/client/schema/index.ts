@@ -12,8 +12,19 @@ export const customerSchema = z.object({
     .max(15, "Máximo 15 caracteres"),
   birthDate: z
     .string()
-    .optional(), // YYYY-MM-DD format
-  gender: z.string().optional(),
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      (val) => {
+        if (!val) return true;
+        const inputDate = new Date(val);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return inputDate <= today;
+      },
+      { message: "La fecha de nacimiento no puede ser mayor al día actual" }
+    ),
+  gender: z.string().optional().or(z.literal("")),
   phoneNumber: z
     .string()
     .min(1, "El teléfono es requerido")
@@ -22,12 +33,14 @@ export const customerSchema = z.object({
     .string()
     .email("Correo electrónico inválido")
     .max(100, "Máximo 100 caracteres")
-    .optional(),
+    .or(z.literal(""))
+    .optional()
+    .transform((val) => (val === "" ? undefined : val)),
   department: z.string().min(1, "El departamento es requerido"),
   municipality: z.string().min(1, "El municipio es requerido"),
   address: z
     .string()
     .min(1, "La dirección es requerida")
     .max(200, "Máximo 200 caracteres"),
-  parentStatus: z.string().optional(),
+  parentStatus: z.string().optional().or(z.literal("")),
 });
