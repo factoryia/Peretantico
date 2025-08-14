@@ -1,18 +1,13 @@
-import { useEffect } from "react";
-import { Navigate, Outlet, useNavigate } from "react-router";
-
+import { Navigate, Outlet } from "react-router";
 import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 
 export function PrivateRoutes() {
-  const navigate = useNavigate();
-
   const { isAuthorized } = useAuthStore();
 
-  useEffect(() => {
-    if (!isAuthorized) {
-      navigate("/iniciar-sesion");
-    }
-  }, [isAuthorized, navigate]);
+  // Si no está autorizado, redirigir al login
+  if (!isAuthorized) {
+    return <Navigate to="/iniciar-sesion" replace />;
+  }
 
-  return isAuthorized ? <Outlet /> : <Navigate to="/iniciar-sesion" replace />;
+  return <Outlet />;
 }

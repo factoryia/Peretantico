@@ -63,7 +63,7 @@ export const fetchProfiles = async (
       params,
     });
 
-    const customers: Customer[] = response.data.data.map((item) => ({
+    const customers: Customer[] = response.data.data.map((item:any) => ({
       id: item.id,
       fullName: item.attributes.field_full_name,
       documentNumber: item.attributes.field_document_number,

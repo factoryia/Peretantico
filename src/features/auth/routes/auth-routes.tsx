@@ -9,11 +9,14 @@ import { NewPassword } from "@/features/auth/pages/new-password";
 export function AuthRoutes() {
   const { isAuthorized } = useAuthStore();
 
+  // Si está autorizado, redirigir al dashboard
+  if (isAuthorized) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <Routes>
-      <Route
-        element={isAuthorized ? <Navigate to="/" replace /> : <AuthLayout />}
-      >
+      <Route element={<AuthLayout />}>
         <Route path="iniciar-sesion" element={<Login />} />
         <Route path="restablecer-contraseña" element={<ResetPassword />} />
         <Route path="nueva-contraseña" element={<NewPassword />} />

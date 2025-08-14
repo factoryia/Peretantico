@@ -2,16 +2,13 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { ACCESS_TOKEN } from "@/features/auth/constants";
 import type { CurrentUser } from "@/features/auth/types";
 
 interface AuthState {
   authUser: CurrentUser | null;
   isAuthorized: boolean;
-  isCheckingAuth: boolean;
-  setIsAuthorized: (value: boolean) => void;
   setAuthUser: (value: CurrentUser | null) => void;
-  auth: () => void;
+  setIsAuthorized: (value: boolean) => void;
   logout: () => void;
 }
 
@@ -20,25 +17,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       authUser: null,
       isAuthorized: false,
-      isCheckingAuth: false,
 
-      setIsAuthorized: (value) => set({ isAuthorized: value }),
       setAuthUser: (value) => set({ authUser: value }),
+      setIsAuthorized: (value) => set({ isAuthorized: value }),
 
-      auth: async () => {
-        set({ isCheckingAuth: true });
-
-        const token = localStorage.getItem(ACCESS_TOKEN);
-
-        if (!token) {
-          set({ authUser: null, isAuthorized: false, isCheckingAuth: false });
-          return;
-        }
-
-        set({ isAuthorized: true, isCheckingAuth: false });
-      },
-
-      logout: async () => {
+      logout: () => {
         try {
           localStorage.clear();
           set({
