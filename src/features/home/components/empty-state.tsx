@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Search, Plus, RefreshCw } from "lucide-react"
+import { Search, Plus } from "lucide-react"
 
 interface EmptyStateProps {
   title?: string
@@ -14,9 +14,7 @@ interface EmptyStateProps {
 export function EmptyState({
   title = "No se encontraron resultados",
   description = "No hay solicitudes que coincidan con los filtros aplicados",
-  showRefreshButton = true,
   showCreateButton = true,
-  onRefresh,
   onCreateNew
 }: EmptyStateProps) {
   return (
@@ -30,16 +28,7 @@ export function EmptyState({
       </CardHeader>
       <CardContent className="text-center">
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          {showRefreshButton && onRefresh && (
-            <Button
-              variant="outline"
-              onClick={onRefresh}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Actualizar
-            </Button>
-          )}
+        
           {showCreateButton && onCreateNew && (
             <Button
               onClick={onCreateNew}

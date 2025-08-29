@@ -10,299 +10,283 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { 
   Calendar, 
-  Clock, 
-  DollarSign, 
-  Star, 
   User, 
   Truck, 
   Package, 
   FileText,
-  X
+  FileCheck,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { Request } from "../types/request";
+import api from "@/api";
 
 // Interfaces para los tipos de entidades
 interface ProfileInfo {
+  id: string;
   name: string;
   email: string;
   phone: string;
   documentNumber: string;
+  documentType: string;
+  birthDate: string;
+  gender: string;
   address: string;
 }
 
 interface DistributorInfo {
+  id: string;
   name: string;
   email: string;
   phone: string;
   documentNumber: string;
-  vehicle: string;
+  documentType: string;
   status: string;
 }
 
 interface TaxonomyInfo {
+  id: string;
   name: string;
   description: string;
+}
+
+interface ServiceInfo {
+  id: string;
+  name: string;
+  code: string;
+  value: number;
+  priorityValue: number;
 }
 
 interface RequestDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   request: Request | null;
-  included?: Array<{
-    id: string;
-    type: string;
-    attributes: {
-      name?: string;
-      title?: string;
-      [key: string]: any;
-    };
-  }>;
 }
 
 export function RequestDetailModal({
   isOpen,
   onClose,
   request,
-  included,
 }: RequestDetailModalProps) {
+  const [applicantInfo, setApplicantInfo] = useState<ProfileInfo | null>(null);
+  const [distributorInfo, setDistributorInfo] = useState<DistributorInfo | null>(null);
+  const [subserviceInfo, setSubserviceInfo] = useState<TaxonomyInfo | null>(null);
+  const [applicationStatusInfo, setApplicationStatusInfo] = useState<TaxonomyInfo | null>(null);
+  const [serviceStatusInfo, setServiceStatusInfo] = useState<TaxonomyInfo | null>(null);
+  const [paymentStatusInfo, setPaymentStatusInfo] = useState<TaxonomyInfo | null>(null);
+  const [usedChannelInfo, setUsedChannelInfo] = useState<TaxonomyInfo | null>(null);
+  const [infoServiceInfo, setInfoServiceInfo] = useState<ServiceInfo | null>(null);
+  const [loading, setLoading] = useState(false);
 
+  // Función para obtener información de un perfil
+  const fetchProfileInfo = async (profileId: string) => {
+    try {
+      const response = await api.get(`/api/node/profile/${profileId}?include=field_type_document,field_gender`);
+      const profile = response.data.data;
+      
+      // Obtener información de las taxonomías relacionadas
+      let documentType = "";
+      let gender = "";
+      
+      if (response.data.included) {
+        const documentTypeEntity = response.data.included.find(
+          (item: any) => item.type === "taxonomy_term--document_type"
+        );
+        if (documentTypeEntity) {
+          documentType = documentTypeEntity.attributes.name;
+        }
+        
+        const genderEntity = response.data.included.find(
+          (item: any) => item.type === "taxonomy_term--gender"
+        );
+        if (genderEntity) {
+          gender = genderEntity.attributes.name;
+        }
+      }
+      
+      return {
+        id: profile.id,
+        name: profile.attributes.field_full_name || profile.attributes.title || "",
+        email: profile.attributes.field_mail || profile.attributes.field_email || "",
+        phone: profile.attributes.field_phone_number || profile.attributes.field_phone || "",
+        documentNumber: profile.attributes.field_document_number || "",
+        documentType,
+        birthDate: profile.attributes.field_birth_date || "",
+        gender,
+        address: profile.attributes.field_address || ""
+      };
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      return null;
+    }
+  };
 
+  // Función para obtener información de un distribuidor
+  const fetchDistributorInfo = async (distributorId: string) => {
+    try {
+      const response = await api.get(`/api/node/distributor/${distributorId}?include=field_type_document`);
+      const distributor = response.data.data;
+      
+      let documentType = "";
+      if (response.data.included) {
+        const documentTypeEntity = response.data.included.find(
+          (item: any) => item.type === "taxonomy_term--document_type"
+        );
+        if (documentTypeEntity) {
+          documentType = documentTypeEntity.attributes.name;
+        }
+      }
+      
+      return {
+        id: distributor.id,
+        name: distributor.attributes.title || distributor.attributes.name || "",
+        email: distributor.attributes.field_mail || distributor.attributes.field_email || "",
+        phone: distributor.attributes.field_phone || distributor.attributes.field_phone_number || "",
+        documentNumber: distributor.attributes.field_document_number || "",
+        documentType,
+        status: distributor.attributes.status ? "Activo" : "Inactivo"
+      };
+    } catch (error) {
+      console.error("Error fetching distributor:", error);
+      return null;
+    }
+  };
+
+  // Función para obtener información de una taxonomía
+  const fetchTaxonomyInfo = async (taxonomyId: string, taxonomyType: string) => {
+    try {
+      const response = await api.get(`/api/taxonomy_term/${taxonomyType}/${taxonomyId}`);
+      const taxonomy = response.data.data;
+      
+      return {
+        id: taxonomy.id,
+        name: taxonomy.attributes.name || taxonomy.attributes.title || "",
+        description: taxonomy.attributes.description || ""
+      };
+    } catch (error) {
+      console.error(`Error fetching taxonomy ${taxonomyType}:`, error);
+      return null;
+    }
+  };
+
+  // Función para obtener información del servicio
+  const fetchServiceInfo = async (serviceId: string) => {
+    try {
+      const response = await api.get(`/api/node/pharmacy_claims/${serviceId}`);
+      const service = response.data.data;
+      
+      return {
+        id: service.id,
+        name: service.attributes.title || service.attributes.name || "",
+        code: service.attributes.field_code || "",
+        value: service.attributes.field_value || 0,
+        priorityValue: service.attributes.field_priority_value || 0
+      };
+    } catch (error) {
+      console.error("Error fetching service info:", error);
+      return null;
+    }
+  };
+
+  // Cargar toda la información cuando se abre el modal
+  useEffect(() => {
+    if (!isOpen || !request) return;
+
+    const loadAllInfo = async () => {
+      setLoading(true);
+      
+      try {
+        // Obtener información del solicitante
+        if (request.relationships?.field_applicant?.data?.id) {
+          const applicant = await fetchProfileInfo(request.relationships.field_applicant.data.id);
+          setApplicantInfo(applicant);
+        }
+        
+        // Obtener información del distribuidor
+        if (request.relationships?.field_distributor_data?.data?.id) {
+          const distributor = await fetchDistributorInfo(request.relationships.field_distributor_data.data.id);
+          setDistributorInfo(distributor);
+        }
+        
+        // Obtener información de las taxonomías
+        if (request.relationships?.field_subservice?.data?.id) {
+          const subservice = await fetchTaxonomyInfo(
+            request.relationships.field_subservice.data.id,
+            "category"
+          );
+          setSubserviceInfo(subservice);
+        }
+        
+        if (request.relationships?.field_application_statuses?.data?.id) {
+          const status = await fetchTaxonomyInfo(
+            request.relationships.field_application_statuses.data.id,
+            "application_statuses"
+          );
+          setApplicationStatusInfo(status);
+        }
+        
+        if (request.relationships?.field_service_status?.data?.id) {
+          const serviceStatus = await fetchTaxonomyInfo(
+            request.relationships.field_service_status.data.id,
+            "application_statuses"
+          );
+          setServiceStatusInfo(serviceStatus);
+        }
+        
+        if (request.relationships?.field_payment_status?.data?.id) {
+          const paymentStatus = await fetchTaxonomyInfo(
+            request.relationships.field_payment_status.data.id,
+            "payment_status"
+          );
+          setPaymentStatusInfo(paymentStatus);
+        }
+        
+        if (request.relationships?.field_used_channel?.data?.id) {
+          const usedChannel = await fetchTaxonomyInfo(
+            request.relationships.field_used_channel.data.id,
+            "used_channel"
+          );
+          setUsedChannelInfo(usedChannel);
+        }
+        
+        // Obtener información del servicio
+        if (request.relationships?.field_info_service?.data?.id) {
+          const service = await fetchServiceInfo(request.relationships.field_info_service.data.id);
+          setInfoServiceInfo(service);
+        }
+        
+      } catch (error) {
+        console.error("Error loading request details:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAllInfo();
+  }, [isOpen, request]);
 
   if (!request) return null;
 
-  // Función helper para extraer email de atributos
-  const extractEmail = (attributes: any) => {
-    if (!attributes) return "Sin email";
-    
-    // Debug: mostrar todos los atributos disponibles
-    console.log('=== EXTRACTING EMAIL ===');
-    console.log('Atributos disponibles para email:', Object.keys(attributes));
-    console.log('Valores de atributos:', attributes);
-    
-    // Buscar en campos específicos primero
-    const emailFields = [
-      'field_email',
-      'email', 
-      'mail',
-      'correo',
-      'field_mail',
-      'field_correo',
-      'field_correo_electronico',
-      'correo_electronico',
-      'field_correo_electronico_cliente',
-      'field_email_cliente',
-      'field_mail_cliente',
-      'field_correo_cliente',
-      'field_email_solicitante',
-      'field_mail_solicitante',
-      'field_correo_solicitante'
-    ];
-    
-    console.log('Buscando en campos específicos:', emailFields);
-    
-    for (const field of emailFields) {
-      console.log(`Verificando campo: ${field} = ${attributes[field]}`);
-      if (attributes[field] && typeof attributes[field] === 'string' && attributes[field].trim()) {
-        console.log(`✅ Email encontrado en campo: ${field} = ${attributes[field]}`);
-        return attributes[field].trim();
-      }
+
+
+  // Función helper para mostrar campo o mensaje de "Sin datos"
+  const showFieldOrEmpty = (value: string | number | undefined, fieldName: string = "Sin datos") => {
+    if (value === undefined || value === null || value === "") {
+      return fieldName;
     }
-    
-    // Si no se encuentra, buscar en todos los atributos que contengan 'email'
-    const allAttributes = Object.keys(attributes);
-    const emailLikeFields = allAttributes.filter(attr => 
-      attr.toLowerCase().includes('email') || 
-      attr.toLowerCase().includes('mail') ||
-      attr.toLowerCase().includes('correo') ||
-      attr.toLowerCase().includes('cliente') ||
-      attr.toLowerCase().includes('solicitante')
-    );
-    
-    console.log('Campos similares a email encontrados:', emailLikeFields);
-    
-    for (const field of emailLikeFields) {
-      console.log(`Verificando campo similar: ${field} = ${attributes[field]}`);
-      if (attributes[field] && typeof attributes[field] === 'string' && attributes[field].trim()) {
-        console.log(`✅ Email encontrado en campo similar: ${field} = ${attributes[field]}`);
-        return attributes[field].trim();
-      }
-    }
-    
-    console.log('❌ No se encontró email en ningún campo');
-    console.log('=== END EXTRACTING EMAIL ===');
-    return "Sin email";
+    return String(value);
   };
 
-  // Función helper para extraer teléfono de atributos
-  const extractPhone = (attributes: any) => {
-    if (!attributes) return "Sin teléfono";
-    
-    // Debug: mostrar todos los atributos disponibles
-    console.log('=== EXTRACTING PHONE ===');
-    console.log('Atributos disponibles para teléfono:', Object.keys(attributes));
-    console.log('Valores de atributos:', attributes);
-    
-    // Buscar en campos específicos primero
-    const phoneFields = [
-      'field_phone',
-      'phone',
-      'telephone',
-      'telefono',
-      'field_telephone',
-      'field_telefono',
-      'mobile',
-      'celular',
-      'field_mobile',
-      'field_celular',
-      'field_celular_contacto',
-      'celular_contacto',
-      'field_telefono_cliente',
-      'field_phone_cliente',
-      'field_mobile_cliente',
-      'field_celular_cliente',
-      'field_telefono_solicitante',
-      'field_phone_solicitante',
-      'field_mobile_solicitante',
-      'field_celular_solicitante'
-    ];
-    
-    console.log('Buscando en campos específicos:', phoneFields);
-    
-    for (const field of phoneFields) {
-      console.log(`Verificando campo: ${field} = ${attributes[field]}`);
-      if (attributes[field] && typeof attributes[field] === 'string' && attributes[field].trim()) {
-        console.log(`✅ Teléfono encontrado en campo: ${field} = ${attributes[field]}`);
-        return attributes[field].trim();
-      }
+  // Función helper para mostrar campo con mejor formato
+  const showFieldOrDash = (value: string | number | undefined) => {
+    if (value === undefined || value === null || value === "") {
+      return "—";
     }
-    
-    // Si no se encuentra, buscar en todos los atributos que contengan 'phone' o 'telefono'
-    const allAttributes = Object.keys(attributes);
-    const phoneLikeFields = allAttributes.filter(attr => 
-      attr.toLowerCase().includes('phone') || 
-      attr.toLowerCase().includes('telephone') ||
-      attr.toLowerCase().includes('telefono') ||
-      attr.toLowerCase().includes('mobile') ||
-      attr.toLowerCase().includes('celular') ||
-      attr.toLowerCase().includes('cliente') ||
-      attr.toLowerCase().includes('solicitante')
-    );
-    
-    console.log('Campos similares a teléfono encontrados:', phoneLikeFields);
-    
-    for (const field of phoneLikeFields) {
-      console.log(`Verificando campo similar: ${field} = ${attributes[field]}`);
-      if (attributes[field] && typeof attributes[field] === 'string' && attributes[field].trim()) {
-        console.log(`✅ Teléfono encontrado en campo similar: ${field} = ${attributes[field]}`);
-        return attributes[field].trim();
-      }
-    }
-    
-    console.log('❌ No se encontró teléfono en ningún campo');
-    console.log('=== END EXTRACTING PHONE ===');
-    return "Sin teléfono";
+    return String(value);
   };
-
-  // Función helper para obtener información completa de entidades relacionadas
-  const getIncludedEntityInfo = (entityId: string, entityType: string): ProfileInfo | DistributorInfo | TaxonomyInfo | null => {
-    if (!included || !entityId) {
-      console.log(`No hay included data o entityId para ${entityType}:`, { included, entityId });
-      return null;
-    }
-    
-    const entity = included.find(
-      (item) => item.id === entityId && item.type === entityType
-    );
-    
-    if (!entity) {
-      console.log(`No se encontró entidad ${entityType} con ID ${entityId}`);
-      console.log('Entidades disponibles:', included.map(item => ({ id: item.id, type: item.type })));
-      return null;
-    }
-    
-    console.log(`Entidad encontrada ${entityType}:`, entity);
-    console.log(`Atributos de ${entityType}:`, entity.attributes);
-    
-    // Retornar información completa según el tipo de entidad
-    if (entityType === "node--profile") {
-      const profileInfo: ProfileInfo = {
-        name: entity.attributes?.field_full_name || entity.attributes?.title || entity.attributes?.name || "Sin nombre",
-        email: extractEmail(entity.attributes),
-        phone: extractPhone(entity.attributes),
-        documentNumber: entity.attributes?.field_document_number || entity.attributes?.document_number || entity.attributes?.dni || "Sin documento",
-        address: entity.attributes?.field_address || entity.attributes?.address || entity.attributes?.direccion || "Sin dirección"
-      };
-      console.log('Profile info extraída:', profileInfo);
-      return profileInfo;
-    } else if (entityType === "node--distributor") {
-      const distributorInfo: DistributorInfo = {
-        name: entity.attributes?.title || entity.attributes?.name || entity.attributes?.field_name || "Sin nombre",
-        email: extractEmail(entity.attributes),
-        phone: extractPhone(entity.attributes),
-        documentNumber: entity.attributes?.field_document_number || entity.attributes?.document_number || entity.attributes?.dni || "Sin documento",
-        vehicle: entity.attributes?.field_vehicle || entity.attributes?.vehicle || entity.attributes?.vehiculo || "Sin vehículo",
-        status: entity.attributes?.status ? "Activo" : "Inactivo"
-      };
-      console.log('Distributor info extraída:', distributorInfo);
-      return distributorInfo;
-    } else if (entityType.startsWith("taxonomy_term--")) {
-      const taxonomyInfo: TaxonomyInfo = {
-        name: entity.attributes?.name || entity.attributes?.title || entity.attributes?.field_name || "Sin nombre",
-        description: entity.attributes?.description || entity.attributes?.field_description || entity.attributes?.descripcion || "Sin descripción"
-      };
-      return taxonomyInfo;
-    }
-    
-    return null;
-  };
-
-  // Obtener información de entidades relacionadas con verificación de seguridad
-  const applicantId = request.relationships?.field_applicant?.data?.id;
-  const distributorId = request.relationships?.field_distributor_data?.data?.id;
-  const subserviceId = request.relationships?.field_subservice?.data?.id;
-  const applicationStatusId = request.relationships?.field_application_statuses?.data?.id;
-  const serviceStatusId = request.relationships?.field_service_status?.data?.id;
-
-  const applicantInfo = getIncludedEntityInfo(applicantId || "", "node--profile");
-  const distributorInfo = getIncludedEntityInfo(distributorId || "", "node--distributor");
-  const subserviceInfo = getIncludedEntityInfo(subserviceId || "", "taxonomy_term--category");
-  const applicationStatusInfo = getIncludedEntityInfo(applicationStatusId || "", "taxonomy_term--application_statuses");
-  const serviceStatusInfo = getIncludedEntityInfo(serviceStatusId || "", "taxonomy_term--application_statuses");
-
-  // Debug: mostrar información de entidades encontradas
-  console.log('=== DEBUG INFO ===');
-  console.log('Applicant ID:', applicantId);
-  console.log('Distributor ID:', distributorId);
-  console.log('Applicant Info:', applicantInfo);
-  console.log('Distributor Info:', distributorInfo);
-  console.log('Included data:', included);
-  
-  // Mostrar todos los atributos disponibles para debugging
-  if (included) {
-    included.forEach((item, index) => {
-      console.log(`Entidad ${index}:`, {
-        id: item.id,
-        type: item.type,
-        attributes: item.attributes,
-        attributeKeys: Object.keys(item.attributes || {})
-      });
-    });
-  }
-  console.log('==================');
-
-  // Type guards para verificar el tipo de entidad
-  const isProfileInfo = (info: any): info is ProfileInfo => {
-    return info && 'address' in info;
-  };
-
-  const isDistributorInfo = (info: any): info is DistributorInfo => {
-    return info && 'vehicle' in info;
-  };
-
-
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return "No disponible";
+    if (!dateString) return "";
     try {
       return new Date(dateString).toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -312,22 +296,20 @@ export function RequestDetailModal({
         minute: '2-digit'
       });
     } catch (error) {
-      return "Fecha inválida";
+      return "";
     }
   };
 
-  const formatCurrency = (amount: any) => {
-    if (!amount || typeof amount !== 'number') return "Sin especificar";
-    try {
-      return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0
-      }).format(amount);
-    } catch (error) {
-      return "Sin especificar";
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
   };
+
+
 
   // Verificar que request tenga los datos necesarios
   if (!request || !request.attributes || !request.relationships) {
@@ -339,9 +321,6 @@ export function RequestDetailModal({
               <DialogTitle className="text-lg font-semibold text-red-600">
                 Error al cargar la solicitud
               </DialogTitle>
-              <Button variant="ghost" size="sm" onClick={onClose} className="hover:bg-gray-100">
-                <X className="h-4 w-4" />
-              </Button>
             </div>
           </DialogHeader>
           <div className="px-6 py-4">
@@ -357,34 +336,35 @@ export function RequestDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[800px] p-0 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[1000px] p-0 max-h-[90vh] overflow-y-auto">
         <DialogHeader className="px-6 py-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <FileText className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <FileText className="h-5 w-5 text-gray-600" />
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold">
                   Detalle de Solicitud
                 </DialogTitle>
                 <DialogDescription>
-                  Información detallada de la solicitud seleccionada
+                  {loading ? "Cargando información..." : "Información completa de la solicitud seleccionada"}
                 </DialogDescription>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={onClose} className="hover:bg-gray-100">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            {loading && (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <span className="text-sm text-gray-600">Cargando...</span>
+              </div>
+            )}
           </div>
         </DialogHeader>
 
         <div className="px-6 py-4 space-y-6">
           {/* Información Principal */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-blue-600 border-b-2 border-blue-200 pb-2">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
               <FileText className="h-5 w-5" />
               Información Principal
             </h3>
@@ -393,67 +373,103 @@ export function RequestDetailModal({
                 <Label className="text-sm font-medium text-gray-600">
                   Número de Solicitud
                 </Label>
-                                  <p className="text-base font-medium bg-gray-50 p-2 rounded border">
-                    {String(request.attributes.field_application_number || "No disponible")}
-                  </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-600">Título</Label>
-                                  <p className="text-base font-medium bg-gray-50 p-2 rounded border">
-                    {String(request.attributes.title || "No disponible")}
-                  </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-600">Fecha de Entrada</Label>
-                <p className="text-base bg-gray-50 p-2 rounded border">
-                  {formatDate(request.attributes.field_entry_date || "")}
+                <p className="text-base font-medium bg-gray-50 p-2 rounded border">
+                  {showFieldOrEmpty(request.attributes.field_application_number)}
                 </p>
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-600">Estado</Label>
+                <Label className="text-sm font-medium text-gray-600">Título</Label>
+                <p className="text-base font-medium bg-gray-50 p-2 rounded border">
+                  {showFieldOrEmpty(request.attributes.title)}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Fecha de Recepción</Label>
+                <p className="text-base bg-gray-50 p-2 rounded border">
+                  {showFieldOrEmpty(formatDate(request.attributes.field_entry_date || ""))}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Estado de Solicitud</Label>
                 <div className="mt-1">
-                  <Badge className="bg-blue-100 text-blue-800 text-sm">
-                    {String(applicationStatusInfo?.name || "Sin estado")}
+                  <Badge variant="outline" className="text-sm">
+                    {showFieldOrEmpty(applicationStatusInfo?.name)}
                   </Badge>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Calificación</Label>
+                <p className="text-base font-medium bg-gray-50 p-2 rounded border">
+                  {showFieldOrEmpty(request.attributes.field_application_score ? `${String(request.attributes.field_application_score)}/5` : undefined)}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Valor Priorizado</Label>
+                <p className="text-base font-medium p-2 rounded border ">
+                  {request.attributes.field_prioritized_value ? formatCurrency(request.attributes.field_prioritized_value) : "Sin datos"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Tiempo Priorizado (horas)</Label>
+                <p className={`text-base font-medium p-2 rounded border `}>
+                  {request.attributes.field_estimated_prioritized_hour ? `${String(request.attributes.field_estimated_prioritized_hour)}h` : "Sin datos"}
+                </p>
               </div>
             </div>
           </div>
 
           {/* Datos del Solicitante */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-green-600 border-b-2 border-green-200 pb-2">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
               <User className="h-5 w-5" />
               Datos del Solicitante
             </h3>
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="p-4 bg-gray-50 rounded-lg border">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Nombre</Label>
-                  <p className="text-base font-medium">{String(applicantInfo?.name || "Sin asignar")}</p>
+                  <Label className="text-sm font-medium text-gray-600">Nombre Solicitante</Label>
+                  <p className="text-base font-medium">{showFieldOrEmpty(applicantInfo?.name)}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Email</Label>
+                  <Label className="text-sm font-medium text-gray-600">Tipo de Documento</Label>
                   <p className="text-base bg-white p-2 rounded border">
-                    {String(isProfileInfo(applicantInfo) ? applicantInfo.email : "Sin email")}
+                    {showFieldOrDash(applicantInfo?.documentType)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Número de Documento</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrEmpty(applicantInfo?.documentNumber)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Fecha de Nacimiento</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrDash(applicantInfo?.birthDate)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Tipo de Sexo</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrEmpty(applicantInfo?.gender)}
                   </p>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-600">Teléfono</Label>
                   <p className="text-base bg-white p-2 rounded border">
-                    {String(isProfileInfo(applicantInfo) ? applicantInfo.phone : "Sin teléfono")}
+                    {showFieldOrEmpty(applicantInfo?.phone)}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Documento</Label>
+                  <Label className="text-sm font-medium text-gray-600">Correo Electrónico</Label>
                   <p className="text-base bg-white p-2 rounded border">
-                    {String(isProfileInfo(applicantInfo) ? applicantInfo.documentNumber : "Sin documento")}
+                    {showFieldOrEmpty(applicantInfo?.email)}
                   </p>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label className="text-sm font-medium text-gray-600">Dirección</Label>
                   <p className="text-base bg-white p-2 rounded border">
-                    {String(isProfileInfo(applicantInfo) ? applicantInfo.address : "Sin dirección")}
+                    {showFieldOrEmpty(applicantInfo?.address)}
                   </p>
                 </div>
               </div>
@@ -462,7 +478,7 @@ export function RequestDetailModal({
 
           {/* Detalle del Servicio */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-purple-600 border-b-2 border-purple-200 pb-2">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
               <Package className="h-5 w-5" />
               Detalle del Servicio
             </h3>
@@ -470,110 +486,165 @@ export function RequestDetailModal({
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-600">Subservicio</Label>
                 <p className="text-base font-medium bg-gray-50 p-2 rounded border">
-                  {String(subserviceInfo?.name || "Sin especificar")}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-600">Estado del Servicio</Label>
-                <div className="mt-1">
-                  <Badge className="bg-purple-100 text-purple-800 text-sm">
-                    {String(serviceStatusInfo?.name || "Sin estado")}
-                  </Badge>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Repartidor Asignado */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-orange-600 border-b-2 border-orange-200 pb-2">
-              <Truck className="h-5 w-5" />
-              Repartidor Asignado
-            </h3>
-            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Nombre</Label>
-                  <p className="text-base font-medium">{String(distributorInfo?.name || "Sin asignar")}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Email</Label>
-                  <p className="text-base bg-white p-2 rounded border">
-                    {String(isDistributorInfo(distributorInfo) ? distributorInfo.email : "Sin email")}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Teléfono</Label>
-                  <p className="text-base bg-white p-2 rounded border">
-                    {String(isDistributorInfo(distributorInfo) ? distributorInfo.phone : "Sin teléfono")}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Documento</Label>
-                  <p className="text-base bg-white p-2 rounded border">
-                    {String(isDistributorInfo(distributorInfo) ? distributorInfo.documentNumber : "Sin documento")}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Vehículo</Label>
-                  <p className="text-base bg-white p-2 rounded border">
-                    {String(isDistributorInfo(distributorInfo) ? distributorInfo.vehicle : "Sin vehículo")}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Estado</Label>
-                  <p className="text-base bg-white p-2 rounded border">
-                    {String(isDistributorInfo(distributorInfo) ? distributorInfo.status : "Sin estado")}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Métricas y Costos */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-yellow-600 border-b-2 border-yellow-200 pb-2">
-              <DollarSign className="h-5 w-5" />
-              Métricas y Costos
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <Star className="h-5 w-5 text-yellow-500" />
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium text-gray-600">Calificación</Label>
-                  <p className="text-base font-medium">
-                    {request.attributes.field_application_score ? `${String(request.attributes.field_application_score)}/5` : "Sin calificar"}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <Clock className="h-5 w-5 text-blue-500" />
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium text-gray-600">Horas Estimadas</Label>
-                  <p className="text-base font-medium">
-                    {request.attributes.field_estimated_application_hour ? `${String(request.attributes.field_estimated_application_hour)}h` : "Sin especificar"}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-gray-600">Costos de Logística</Label>
-                <p className="text-base font-medium bg-gray-50 p-2 rounded border">
-                  {formatCurrency(request.attributes.field_logistics_costs || 0)}
+                  {showFieldOrEmpty(subserviceInfo?.name)}
                 </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-600">Valor del Servicio</Label>
                 <p className="text-base font-medium bg-gray-50 p-2 rounded border">
-                  {formatCurrency(request.attributes.field_service_value || 0)}
+                  {showFieldOrEmpty(formatCurrency(request.attributes.field_service_value || 0))}
                 </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Valor Priorizado</Label>
+                <p className={`text-base font-medium p-2 rounded border `}>
+                  {request.attributes.field_prioritized_value ? formatCurrency(request.attributes.field_prioritized_value) : "Sin datos"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Estado de Pago</Label>
+                <div className="mt-1">
+                  <Badge variant="outline" className="text-sm">
+                    {showFieldOrEmpty(paymentStatusInfo?.name)}
+                  </Badge>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Canal Usado</Label>
+                <div className="mt-1">
+                  <Badge variant="outline" className="text-sm">
+                    {showFieldOrEmpty(usedChannelInfo?.name)}
+                  </Badge>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Tiempo Estimado (horas)</Label>
+                <p className="text-base font-medium bg-gray-50 p-2 rounded border">
+                  {showFieldOrEmpty(request.attributes.field_estimated_application_hour ? `${String(request.attributes.field_estimated_application_hour)}h` : undefined)}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Tiempo Priorizado (horas)</Label>
+                <p className={`text-base font-medium p-2 rounded border `}>
+                  {request.attributes.field_estimated_prioritized_hour ? `${String(request.attributes.field_estimated_prioritized_hour)}h` : "Sin datos"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Costos Logísticos</Label>
+                <p className="text-base font-medium bg-gray-50 p-2 rounded border">
+                  {showFieldOrEmpty(formatCurrency(request.attributes.field_logistics_costs || 0))}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Estado del Servicio</Label>
+                <div className="mt-1">
+                  <Badge variant="outline" className="text-sm">
+                    {showFieldOrEmpty(serviceStatusInfo?.name)}
+                  </Badge>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">Recurrente</Label>
+                <div className="mt-1">
+                  <Badge variant="outline" className="text-sm">
+                    {request.attributes.field_is_recurring ? "Sí" : "No"}
+                  </Badge>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Información Adicional del Servicio */}
+          {infoServiceInfo && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
+                <FileCheck className="h-5 w-5" />
+                Información Adicional del Servicio
+              </h3>
+              <div className="p-4 bg-gray-50 rounded-lg border">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Nombre del Servicio</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.name)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Código de Servicio</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.code)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Valor del Servicio</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(formatCurrency(infoServiceInfo.value))}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Valor Priorizado</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(formatCurrency(infoServiceInfo.priorityValue))}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+
+          {/* Repartidor Asignado */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
+              <Truck className="h-5 w-5" />
+              Repartidor Asignado
+            </h3>
+            <div className="p-4 bg-gray-50 rounded-lg border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Nombre Completo</Label>
+                  <p className="text-base font-medium">{showFieldOrEmpty(distributorInfo?.name)}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Tipo de Documento</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrDash(distributorInfo?.documentType)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Número de Documento</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrEmpty(distributorInfo?.documentNumber)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Teléfono</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrEmpty(distributorInfo?.phone)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Correo Electrónico</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrEmpty(distributorInfo?.email)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Estado Actual</Label>
+                  <p className="text-base bg-white p-2 rounded border">
+                    {showFieldOrEmpty(distributorInfo?.status)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+
           {/* Fechas del Sistema */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-600 border-b-2 border-gray-200 pb-2">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
               <Calendar className="h-5 w-5" />
               Fechas del Sistema
             </h3>
@@ -581,13 +652,13 @@ export function RequestDetailModal({
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-600">Creado</Label>
                 <p className="text-base bg-gray-50 p-2 rounded border">
-                  {formatDate(request.attributes.created || "")}
+                  {showFieldOrEmpty(formatDate(request.attributes.created || ""))}
                 </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-600">Última Modificación</Label>
                 <p className="text-base bg-gray-50 p-2 rounded border">
-                  {formatDate(request.attributes.changed || "")}
+                  {showFieldOrEmpty(formatDate(request.attributes.changed || ""))}
                 </p>
               </div>
             </div>
@@ -595,14 +666,22 @@ export function RequestDetailModal({
 
           {/* Información del Sistema */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-indigo-600 border-b-2 border-indigo-200 pb-2">Información del Sistema</h3>
-            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Información del Sistema</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-600">
                   Estado del Sistema
                 </Label>
                 <p className="text-base bg-gray-50 p-2 rounded border">
                   {request.attributes.status ? "Activo" : "Inactivo"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-600">
+                  ID de la Solicitud
+                </Label>
+                <p className=" bg-gray-50 p-2 rounded border font-mono text-sm">
+                  {request.id}
                 </p>
               </div>
             </div>

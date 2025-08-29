@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Eye, Trash2, AlertCircle, Edit, Star, User, Truck } from "lucide-react"
+import { Eye, Trash2, AlertCircle, Edit, Star, Truck } from "lucide-react"
 import { transformRequestForDisplay, assignDistributorToRequest, assignApplicantToRequest } from "../utils/request"
 import type { RequestFilters, Request, AssignmentModalData } from "../types/request"
 import { useRequestsQuery } from "../hooks/use-request-query"
@@ -152,17 +152,6 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
     }, 0)
   }, [clearAllModalStates])
 
-  const handleAssignApplicant = useCallback((request: Request) => {
-    clearAllModalStates()
-    setTimeout(() => {
-      setAssignmentData({
-        requestId: request.id,
-        requestNumber: request.attributes?.field_application_number || "Sin número",
-        currentApplicant: request.relationships?.field_applicant?.data?.id,
-      })
-      setModals(prev => ({ ...prev, assignApplicant: true }))
-    }, 0)
-  }, [clearAllModalStates])
 
   const handleEditRequest = useCallback((request: Request) => {
     clearAllModalStates()
@@ -359,14 +348,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleAssignApplicant(request)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <User className="h-4 w-4" />
-                      </Button>
+                   
                       <Button
                         variant="ghost"
                         size="sm"
@@ -424,7 +406,6 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
         isOpen={modals.detail}
         onClose={() => handleCloseModal('detail')}
         request={selectedRequest}
-        included={data?.included}
       />
 
       <AssignDistributorModal

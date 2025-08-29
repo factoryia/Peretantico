@@ -7,11 +7,21 @@ export interface Request {
     field_application_score?: number
     field_entry_date: string
     field_estimated_application_hour?: number
+    field_estimated_prioritized_hour?: number
+    field_priority_estimated_hours?: number
     field_logistics_costs?: number
     field_service_value?: number
+    field_prioritized_value?: number
+    field_priority_value?: number
+    field_is_recurring?: boolean
+    field_service_status?: string
+    field_request_status?: string
+    field_observations?: string
+    field_payment_status?: string
+    field_used_channel?: string
     status: boolean
     promote?: boolean
-    sticky?: boolean
+    sticky: boolean
     created: string
     changed: string
   }
@@ -34,6 +44,18 @@ export interface Request {
         type: string
       }
     }
+    field_category?: {
+      data?: {
+        id: string
+        type: string
+      }
+    }
+    field_service?: {
+      data?: {
+        id: string
+        type: string
+      }
+    }
     field_application_statuses?: {
       data?: {
         id: string
@@ -41,6 +63,24 @@ export interface Request {
       }
     }
     field_service_status?: {
+      data?: {
+        id: string
+        type: string
+      }
+    }
+    field_payment_status?: {
+      data?: {
+        id: string
+        type: string
+      }
+    }
+    field_used_channel?: {
+      data?: {
+        id: string
+        type: string
+      }
+    }
+    field_info_service?: {
       data?: {
         id: string
         type: string
@@ -121,8 +161,16 @@ export interface CreateRequestPayload {
       field_application_score: number
       field_entry_date: string
       field_estimated_application_hour: number
+      field_estimated_prioritized_hour?: number
       field_logistics_costs: number
       field_service_value: number
+      field_prioritized_value?: number
+      field_is_recurring?: boolean
+      field_service_status?: string
+      field_request_status?: string
+      field_observations?: string
+      field_payment_status?: string
+      field_used_channel?: string
       status: boolean
       promote: boolean
       sticky: boolean
@@ -143,19 +191,34 @@ export interface CreateRequestPayload {
       field_service_status: {
         data: { type: "taxonomy_term--application_statuses"; id: string }
       }
+      field_payment_status?: {
+        data: { type: "taxonomy_term--payment_status"; id: string }
+      }
+      field_used_channel?: {
+        data: { type: "taxonomy_term--used_channel"; id: string }
+      }
+      field_info_service?: {
+        data: { type: "node"; id: string }
+      }
+      field_category?: {
+        data: { type: "taxonomy_term--category"; id: string }
+      }
+      field_service?: {
+        data: { type: "taxonomy_term--category"; id: string }
+      }
     }
   }
 }
 
 // Helper types for related entities
-export interface Applicant {
+export interface ApplicantBasic {
   id: string
   name: string
   email?: string
   phone?: string
 }
 
-export interface Distributor {
+export interface DistributorBasic {
   id: string
   name: string
   email?: string
@@ -163,7 +226,7 @@ export interface Distributor {
   status?: string
 }
 
-export interface Subservice {
+export interface SubserviceBasic {
   id: string
   name: string
   code?: string
@@ -171,7 +234,7 @@ export interface Subservice {
   priorityValue?: string
 }
 
-export interface ApplicationStatus {
+export interface ApplicationStatusBasic {
   id: string
   name: string
 }
@@ -207,4 +270,101 @@ export interface AssignmentModalData {
   requestNumber: string
   currentDistributor?: string
   currentApplicant?: string
+}
+
+export interface EditRequestFormData {
+  // Campos del solicitante
+  applicantId: string;
+  
+  // Campos de la solicitud
+  title: string;
+  applicationNumber: string;
+  applicationScore: number;
+  entryDate: string;
+  categoryId: string;
+  serviceId: string;
+  subserviceId: string;
+  serviceCode: string;
+  serviceValue: number;
+  priorityValue: number;
+  paymentStatus: string;
+  usedChannel: string;
+  estimatedHours: number;
+  priorityEstimatedHours: number;
+  logisticsCosts: number;
+  isRecurring: boolean;
+  
+  // Campos del repartidor
+  distributorId: string;
+  
+  // Gestión de solicitud
+  serviceStatus: string;
+  requestStatus: string;
+  observations: string;
+  
+  // Configuración
+  status: boolean;
+  promote: boolean;
+  sticky: boolean;
+}
+
+export interface Category {
+  uuid: string;
+  name: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  categoryId: string;
+}
+
+export interface Subservice {
+  id: string;
+  name: string;
+  serviceId: string;
+}
+
+export interface Applicant {
+  id: string;
+  fullName: string;
+  documentNumber: string;
+  documentType: string;
+  birthDate: string;
+  gender: string;
+  phone: string;
+  email: string;
+}
+
+export interface Distributor {
+  id: string;
+  title: string;
+  documentNumber: string;
+  documentType: string;
+  phone: string;
+  email: string;
+  status: string;
+}
+
+// Nuevos tipos para taxonomías
+export interface TaxonomyTerm {
+  id: string
+  type: string
+  attributes: {
+    name: string
+    description?: string
+    [key: string]: any
+  }
+}
+
+export interface PaymentStatus extends TaxonomyTerm {
+  type: "taxonomy_term--payment_status"
+}
+
+export interface UsedChannel extends TaxonomyTerm {
+  type: "taxonomy_term--used_channel"
+}
+
+export interface ApplicationStatus extends TaxonomyTerm {
+  type: "taxonomy_term--application_statuses"
 }
