@@ -309,7 +309,7 @@ export function RequestDetailModal({
         }
         
         // Obtener información del servicio o subservicio
-        if (request.relationships?.field_info_service?.data?.meta?.drupal_internal__target_id) {
+        if (request.relationships?.field_info_service?.data && request.relationships.field_info_service.data.meta?.drupal_internal__target_id) {
           const serviceId = String(request.relationships.field_info_service.data.meta.drupal_internal__target_id);
           const serviceType = request.relationships.field_info_service.data.type;
           
@@ -322,6 +322,9 @@ export function RequestDetailModal({
             const service = await fetchServiceInfo(serviceId);
             setInfoServiceInfo(service);
           }
+        } else {
+          // Si field_info_service es null, no hay servicio asociado
+          setInfoServiceInfo(null);
         }
 
 
@@ -346,7 +349,7 @@ export function RequestDetailModal({
         let subserviceId = null;
         
         // Intentar obtener desde field_info_service (que es el nodo real del subservicio)
-        if (request?.relationships?.field_info_service?.data?.meta?.drupal_internal__target_id) {
+        if (request?.relationships?.field_info_service?.data && request.relationships.field_info_service.data.meta?.drupal_internal__target_id) {
           const serviceId = String(request.relationships.field_info_service.data.meta.drupal_internal__target_id);
           const serviceType = request.relationships.field_info_service.data.type;
           
@@ -390,7 +393,7 @@ export function RequestDetailModal({
     };
 
     // Solo ejecutar si tenemos field_info_service y es un subservicio
-    const hasInfoService = request?.relationships?.field_info_service?.data?.meta?.drupal_internal__target_id;
+    const hasInfoService = request?.relationships?.field_info_service?.data && request.relationships.field_info_service.data.meta?.drupal_internal__target_id;
     const isPropertyCertification = request?.relationships?.field_info_service?.data?.type?.includes('property_certification');
     
     console.log("🔍 Condiciones para ejecutar:", { hasInfoService, isPropertyCertification });
@@ -400,6 +403,9 @@ export function RequestDetailModal({
       loadSubserviceSchema();
     } else {
       console.log("❌ No se cumplen las condiciones para ejecutar");
+      // Limpiar el estado si no hay subservicio
+      setSubserviceSchema(null);
+      setSubserviceFields({});
     }
   }, [request]);
 
@@ -688,7 +694,7 @@ export function RequestDetailModal({
           </div>
 
           {/* Información del Servicio Médico - Solo si existe y es realmente un servicio médico */}
-          {infoServiceInfo && infoServiceInfo.name && infoServiceInfo.eps && (
+          {infoServiceInfo && infoServiceInfo.name && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
                 <FileCheck className="h-5 w-5" />
