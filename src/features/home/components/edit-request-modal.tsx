@@ -25,8 +25,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { updateRequest, fetchApplicants} from "@/features/home/utils/request";
-import { useSubservicesQuery, useDistributorsQuery, useCategoriesQuery, useServicesByCategoryQuery } from "@/features/home/hooks/use-request-query";
+import { updateRequest, fetchApplicants, fetchSubserviceWithHierarchy} from "@/features/home/utils/request";
+import {  useDistributorsQuery, useCategoriesQuery, useServicesByCategoryQuery, useSubservicesByServiceQuery } from "@/features/home/hooks/use-request-query";
 import type { Request, EditRequestFormData, Category, Service, Subservice, Applicant, Distributor } from "@/features/home/types/request";
 
 interface EditRequestModalProps {
@@ -52,7 +52,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
   
   // Get subservices based on selected service
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
-  const { data: filteredSubservicesData } = useSubservicesQuery();
+  const { data: filteredSubservicesData } = useSubservicesByServiceQuery(selectedServiceId);
   
   // Handle category change
   const handleCategoryChange = (categoryId: string) => {
@@ -80,21 +80,10 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
   })) : [];
 
   const categories: Category[] = categoriesData || [];
-  const services: Service[] = servicesData || [];
+  const services: Service[] = servicesData?.services || [];
   
-  // Filter subservices based on selected service
-  const subservices: Subservice[] = Array.isArray(filteredSubservicesData?.data) 
-    ? filteredSubservicesData.data
-        .filter((item: any) => {
-          if (!selectedServiceId) return true;
-          return item.relationships?.parent?.data?.some((parent: any) => parent.id === selectedServiceId);
-        })
-        .map((item: any) => ({
-          id: item.id,
-          name: item.attributes?.name || "",
-          serviceId: item.relationships?.parent?.data?.[0]?.id || "",
-        }))
-    : [];
+  // Get subservices from the hook
+  const subservices: Subservice[] = filteredSubservicesData?.subservices || [];
 
   // Load applicants when modal opens
   useEffect(() => {
@@ -169,51 +158,65 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
   });
 
   useEffect(() => {
-    if (request && isOpen) {
-      const subserviceId = request.relationships?.field_subservice?.data?.id || "";
-      
-      form.reset({
-        // Campos del solicitante
-        applicantId: request.relationships?.field_applicant?.data?.id || "",
+    const loadRequestData = async () => {
+      if (request && isOpen) {
+        const subserviceId = request.relationships?.field_subservice?.data?.id || "";
         
-        // Campos de la solicitud
-        title: request.attributes?.title || "",
-        applicationNumber: request.attributes?.field_application_number || "",
-        applicationScore: request.attributes?.field_application_score || 4,
-        entryDate: request.attributes?.field_entry_date || "",
-        categoryId: "", // Se determinará basado en el subservicio
-        serviceId: "", // Se determinará basado en el subservicio
-        subserviceId: subserviceId,
-        serviceCode: "", // TODO: Implementar cuando esté disponible en la API
-        serviceValue: request.attributes?.field_service_value || 0,
-        priorityValue: 0, // TODO: Implementar cuando esté disponible en la API
-        paymentStatus: "", // TODO: Implementar cuando esté disponible en la API
-        usedChannel: "", // TODO: Implementar cuando esté disponible en la API
-        estimatedHours: request.attributes?.field_estimated_application_hour || 0,
-        priorityEstimatedHours: 0, // TODO: Implementar cuando esté disponible en la API
-        logisticsCosts: request.attributes?.field_logistics_costs || 0,
-        isRecurring: false, // TODO: Implementar cuando esté disponible en la API
+        form.reset({
+          // Campos del solicitante
+          applicantId: request.relationships?.field_applicant?.data?.id || "",
+          
+          // Campos de la solicitud
+          title: request.attributes?.title || "",
+          applicationNumber: request.attributes?.field_application_number || "",
+          applicationScore: request.attributes?.field_application_score || 4,
+          entryDate: request.attributes?.field_entry_date || "",
+          categoryId: "", // Se determinará basado en el subservicio
+          serviceId: "", // Se determinará basado en el subservicio
+          subserviceId: subserviceId,
+          serviceCode: "", // TODO: Implementar cuando esté disponible en la API
+          serviceValue: request.attributes?.field_service_value || 0,
+          priorityValue: 0, // TODO: Implementar cuando esté disponible en la API
+          paymentStatus: "", // TODO: Implementar cuando esté disponible en la API
+          usedChannel: "", // TODO: Implementar cuando esté disponible en la API
+          estimatedHours: request.attributes?.field_estimated_application_hour || 0,
+          priorityEstimatedHours: 0, // TODO: Implementar cuando esté disponible en la API
+          logisticsCosts: request.attributes?.field_logistics_costs || 0,
+          isRecurring: false, // TODO: Implementar cuando esté disponible en la API
+          
+          // Campos del repartidor
+          distributorId: request.relationships?.field_distributor_data?.data?.id || "",
+          
+          // Gestión de solicitud
+          serviceStatus: "", // TODO: Implementar cuando esté disponible en la API
+          requestStatus: "", // TODO: Implementar cuando esté disponible en la API
+          observations: "", // TODO: Implementar cuando esté disponible en la API
+          
+          // Configuración
+          status: request.attributes?.status ?? true,
+          promote: request.attributes?.promote ?? false,
+          sticky: request.attributes?.sticky ?? false,
+        });
         
-        // Campos del repartidor
-        distributorId: request.relationships?.field_distributor_data?.data?.id || "",
-        
-        // Gestión de solicitud
-        serviceStatus: "", // TODO: Implementar cuando esté disponible en la API
-        requestStatus: "", // TODO: Implementar cuando esté disponible en la API
-        observations: "", // TODO: Implementar cuando esté disponible en la API
-        
-        // Configuración
-        status: request.attributes?.status ?? true,
-        promote: request.attributes?.promote ?? false,
-        sticky: request.attributes?.sticky ?? false,
-      });
-      
-      // Si hay subservicio, determinar categoría y servicio
-      if (subserviceId) {
-        // TODO: Implementar lógica para determinar categoría y servicio basado en subservicio
+        // Si hay subservicio, determinar categoría y servicio
+        if (subserviceId) {
+          try {
+            const hierarchy = await fetchSubserviceWithHierarchy(subserviceId);
+            if (hierarchy?.category && hierarchy?.service) {
+              setSelectedCategoryId(hierarchy.category.uuid);
+              setSelectedServiceId(hierarchy.service.id);
+              form.setValue("categoryId", hierarchy.category.uuid);
+              form.setValue("serviceId", hierarchy.service.id);
+            }
+          } catch (error) {
+            console.error("Error fetching subservice hierarchy:", error);
+          }
+        }
       }
-    }
-    }, [request, isOpen, form]);
+    };
+    
+    loadRequestData();
+  }, [request, isOpen, form]);
   
   // Sync form values when selections change
   useEffect(() => {

@@ -84,6 +84,9 @@ export interface Request {
       data?: {
         id: string
         type: string
+        meta?: {
+          drupal_internal__target_id: number
+        }
       }
     }
   }

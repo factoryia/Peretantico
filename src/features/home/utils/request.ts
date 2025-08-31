@@ -211,14 +211,128 @@ export const createRequest = async (payload: CreateRequestPayload) => {
   try {
     console.log("Creating request with payload:", JSON.stringify(payload, null, 2));
     
-    const response = await api.post("/api/node/request", payload, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-      },
-    });
+    let response;
     
-    console.log("Request created successfully:", response.data);
-    return response;
+    // Try JSON:API first
+    try {
+      console.log("Trying JSON:API endpoint: /api/node/request");
+      response = await api.post("/api/node/request", payload, {
+        headers: {
+          "Content-Type": "application/vnd.api+json",
+        },
+      });
+      console.log("Request created successfully via JSON:API:", response.data);
+      return response;
+    } catch (jsonApiError: any) {
+      console.log("JSON:API failed:", jsonApiError.message);
+      
+      if (jsonApiError.response?.status === 404) {
+        console.log("JSON:API endpoint not found, trying alternative endpoints...");
+        
+        // Try alternative JSON:API endpoints
+        const alternativeEndpoints = [
+          "/api/node/requests",
+          "/api/node/application",
+          "/api/node/applications"
+        ];
+        
+        for (const endpoint of alternativeEndpoints) {
+          try {
+            console.log(`Trying alternative endpoint: ${endpoint}`);
+            response = await api.post(endpoint, payload, {
+              headers: {
+                "Content-Type": "application/vnd.api+json",
+              },
+            });
+            console.log(`Request created successfully via ${endpoint}:`, response.data);
+            return response;
+          } catch (altError: any) {
+            console.log(`${endpoint} failed:`, altError.message);
+            continue;
+          }
+        }
+        
+        // If all JSON:API endpoints fail, try Drupal REST API
+        console.log("All JSON:API endpoints failed, trying Drupal REST API...");
+        
+        // Convert JSON:API payload to Drupal REST API format
+        const drupalPayload: Record<string, any> = {
+          type: [{ target_id: "request_medication" }], // Use the correct content type that exists
+          title: [{ value: payload.data.attributes.title }],
+          field_application_number: [{ value: payload.data.attributes.field_application_number }],
+          field_application_score: [{ value: payload.data.attributes.field_application_score }],
+          field_entry_date: [{ value: payload.data.attributes.field_entry_date }],
+          field_estimated_application_hour: [{ value: payload.data.attributes.field_estimated_application_hour }],
+          field_logistics_costs: [{ value: payload.data.attributes.field_logistics_costs }],
+          field_service_value: [{ value: payload.data.attributes.field_service_value }],
+          status: [{ value: payload.data.attributes.status ? 1 : 0 }],
+          promote: [{ value: payload.data.attributes.promote ? 1 : 0 }],
+          sticky: [{ value: payload.data.attributes.sticky ? 1 : 0 }],
+        };
+        
+        // Add optional fields if they exist
+        if (payload.data.attributes.field_estimated_prioritized_hour) {
+          drupalPayload.field_estimated_prioritized_hour = [{ value: payload.data.attributes.field_estimated_prioritized_hour }];
+        }
+        if (payload.data.attributes.field_prioritized_value) {
+          drupalPayload.field_prioritized_value = [{ value: payload.data.attributes.field_prioritized_value }];
+        }
+        if (payload.data.attributes.field_is_recurring !== undefined) {
+          drupalPayload.field_is_recurring = [{ value: payload.data.attributes.field_is_recurring ? 1 : 0 }];
+        }
+        if (payload.data.attributes.field_observations) {
+          drupalPayload.field_observations = [{ value: payload.data.attributes.field_observations }];
+        }
+        
+        // Add relationships - convert to Drupal format
+        if (payload.data.relationships) {
+          if (payload.data.relationships.field_applicant?.data?.id) {
+            drupalPayload.field_applicant = [{ target_id: payload.data.relationships.field_applicant.data.id }];
+          }
+          if (payload.data.relationships.field_distributor_data?.data?.id) {
+            drupalPayload.field_distributor_data = [{ target_id: payload.data.relationships.field_distributor_data.data.id }];
+          }
+          if (payload.data.relationships.field_category?.data?.id) {
+            drupalPayload.field_category = [{ target_id: payload.data.relationships.field_category.data.id }];
+          }
+          if (payload.data.relationships.field_service?.data?.id) {
+            drupalPayload.field_service = [{ target_id: payload.data.relationships.field_service.data.id }];
+          }
+          if (payload.data.relationships.field_subservice?.data?.id) {
+            drupalPayload.field_subservice = [{ target_id: payload.data.relationships.field_subservice.data.id }];
+          }
+          if (payload.data.relationships.field_info_service?.data?.id) {
+            drupalPayload.field_info_service = [{ target_id: payload.data.relationships.field_info_service.data.id }];
+          }
+          if (payload.data.relationships.field_application_statuses?.data?.id) {
+            drupalPayload.field_application_statuses = [{ target_id: payload.data.relationships.field_application_statuses.data.id }];
+          }
+          if (payload.data.relationships.field_service_status?.data?.id) {
+            drupalPayload.field_service_status = [{ target_id: payload.data.relationships.field_service_status.data.id }];
+          }
+          if (payload.data.relationships.field_payment_status?.data?.id) {
+            drupalPayload.field_payment_status = [{ target_id: payload.data.relationships.field_payment_status.data.id }];
+          }
+          if (payload.data.relationships.field_used_channel?.data?.id) {
+            drupalPayload.field_used_channel = [{ target_id: payload.data.relationships.field_used_channel.data.id }];
+          }
+        }
+        
+        console.log("Drupal REST API payload with request_medication:", drupalPayload);
+        
+        response = await api.post("/node?_format=json", drupalPayload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        
+        console.log("Request created successfully via Drupal REST API with request_medication:", response.data);
+        return response;
+      }
+      
+      // Re-throw the original error if it's not a 404
+      throw jsonApiError;
+    }
   } catch (error: any) {
     console.error("Error creating request:", error);
     
@@ -558,16 +672,21 @@ export const fetchServicesByCategory = async (categoryId: string) => {
   try {
     const response = await api.get("/api/taxonomy_term/category", {
       params: {
-        "filter[parent.id][condition][path]": "parent.id",
-        "filter[parent.id][condition][operator]": "=",
-        "filter[parent.id][condition][value]": categoryId,
+        "filter[parent.id]": categoryId,
         "page[limit]": 100,
       },
     });
-    return response.data;
+    
+    const services = response.data.data.map((item: any) => ({
+      id: item.id,
+      name: item.attributes?.name || "",
+      categoryId: categoryId,
+    }));
+    
+    return { services, totalPages: 1 };
   } catch (error) {
     console.error("Error fetching services by category:", error);
-    return null;
+    return { services: [], totalPages: 1 };
   }
 };
 
@@ -575,15 +694,60 @@ export const fetchSubservicesByService = async (serviceId: string) => {
   try {
     const response = await api.get("/api/taxonomy_term/category", {
       params: {
-        "filter[parent.id][condition][path]": "parent.id",
-        "filter[parent.id][condition][operator]": "=",
-        "filter[parent.id][condition][value]": serviceId,
+        "filter[parent.id]": serviceId,
         "page[limit]": 100,
       },
     });
-    return response.data;
+    
+    const subservices = response.data.data.map((item: any) => ({
+      id: item.id,
+      name: item.attributes?.name || "",
+      serviceId: serviceId,
+    }));
+    
+    return { subservices, totalPages: 1 };
   } catch (error) {
     console.error("Error fetching subservices by service:", error);
+    return { subservices: [], totalPages: 1 };
+  }
+};
+
+// Function to get subservice with its parent service and category information
+export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
+  try {
+    const response = await api.get(`/api/taxonomy_term/category/${subserviceId}`, {
+      params: {
+        include: "parent,parent.parent",
+      },
+    });
+    
+    const subservice = response.data.data;
+    const parentService = response.data.included?.find(
+      (item: any) => item.type === "taxonomy_term--category" && item.id === subservice.relationships?.parent?.data?.[0]?.id
+    );
+    const parentCategory = response.data.included?.find(
+      (item: any) => item.type === "taxonomy_term--category" && item.id === parentService?.relationships?.parent?.data?.[0]?.id
+    );
+    
+    return {
+      subservice: {
+        id: subservice.id,
+        name: subservice.attributes?.name || "",
+        serviceId: parentService?.id || "",
+        categoryId: parentCategory?.id || "",
+      },
+      service: parentService ? {
+        id: parentService.id,
+        name: parentService.attributes?.name || "",
+        categoryId: parentCategory?.id || "",
+      } : null,
+      category: parentCategory ? {
+        uuid: parentCategory.id,
+        name: parentCategory.attributes?.name || "",
+      } : null,
+    };
+  } catch (error) {
+    console.error("Error fetching subservice hierarchy:", error);
     return null;
   }
 };

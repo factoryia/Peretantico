@@ -33,8 +33,11 @@ export const useRequestsQuery = (filters: RequestFilters = {}) => {
   return useQuery({
     queryKey: [REQUESTS_QUERY_KEY, validFilters],
     queryFn: () => fetchRequests(validFilters),
-    staleTime: 30000, // 30 segundos
-    refetchOnWindowFocus: false,
+    staleTime: 10000, // 10 segundos - datos considerados frescos por 10 segundos
+    refetchInterval: 10000, // Refetch automático cada 10 segundos
+    refetchIntervalInBackground: true, // Continuar refetching incluso cuando la pestaña no está activa
+    refetchOnWindowFocus: true, // Refetch cuando la ventana vuelve a tener foco
+    refetchOnMount: true, // Refetch al montar el componente
   })
 }
 

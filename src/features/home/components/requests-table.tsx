@@ -47,7 +47,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
   const [assignmentData, setAssignmentData] = useState<AssignmentModalData | null>(null)
   const [editingRequest, setEditingRequest] = useState<Request | null>(null)
 
-  const { data, isLoading, error, refetch } = useRequestsQuery({
+  const { data, isLoading, error, refetch, isFetching } = useRequestsQuery({
     ...filters,
     page: currentPage, limit: 10,
   })
@@ -337,6 +337,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                         size="sm"
                         onClick={() => handleViewDetail(request)}
                         className="h-8 w-8 p-0"
+                        disabled={isFetching}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -345,6 +346,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                         size="sm"
                         onClick={() => handleEditRequest(request)}
                         className="h-8 w-8 p-0"
+                        disabled={isFetching}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -354,6 +356,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                         size="sm"
                         onClick={() => handleAssignDistributor(request)}
                         className="h-8 w-8 p-0"
+                        disabled={isFetching}
                       >
                         <Truck className="h-4 w-4" />
                       </Button>
@@ -362,6 +365,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                         size="sm"
                         onClick={() => setDeleteRequestId(request.id)}
                         className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                        disabled={isFetching}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -384,7 +388,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                 variant="outline"
                 size="sm"
                 onClick={handlePreviousPage}
-                disabled={currentPage === 1}
+                disabled={currentPage === 1 || isFetching}
               >
                 Anterior
               </Button>
@@ -392,7 +396,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                 variant="outline"
                 size="sm"
                 onClick={handleNextPage}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || isFetching}
               >
                 Siguiente
               </Button>

@@ -53,9 +53,32 @@ interface ServiceInfo {
   id: string;
   name: string;
   code: string;
-  value: number;
-  priorityValue: number;
+  eps?: string;
+  deliveryAddress?: string;
+  authorizationNumber?: string;
+  claimLocation?: string;
+  ipsName?: string;
+  ipsAddress?: string;
+  isRecurring?: boolean;
+  priority?: string;
+  path?: string;
+  relativeLocation?: string;
 }
+
+interface SubserviceSchema {
+  bundle: string;
+  label: string;
+  description: string;
+  schema: Record<string, {
+    label: string;
+    description: string | null;
+    required: boolean;
+    multiple: boolean;
+    type: string;
+  }>;
+}
+
+
 
 interface RequestDetailModalProps {
   isOpen: boolean;
@@ -76,6 +99,8 @@ export function RequestDetailModal({
   const [paymentStatusInfo, setPaymentStatusInfo] = useState<TaxonomyInfo | null>(null);
   const [usedChannelInfo, setUsedChannelInfo] = useState<TaxonomyInfo | null>(null);
   const [infoServiceInfo, setInfoServiceInfo] = useState<ServiceInfo | null>(null);
+  const [subserviceSchema, setSubserviceSchema] = useState<SubserviceSchema | null>(null);
+  const [subserviceFields, setSubserviceFields] = useState<any>({});
   const [loading, setLoading] = useState(false);
 
   // Función para obtener información de un perfil
@@ -169,26 +194,60 @@ export function RequestDetailModal({
     }
   };
 
-  // Función para obtener información del servicio
   const fetchServiceInfo = async (serviceId: string) => {
     try {
-      const response = await api.get(`/api/node/pharmacy_claims/${serviceId}`);
-      const service = response.data.data;
+      // Usar el endpoint correcto con el target_id
+      const response = await api.get(`/node/${serviceId}?_format=json`);
+      const service = response.data;
       
-      return {
-        id: service.id,
-        name: service.attributes.title || service.attributes.name || "",
-        code: service.attributes.field_code || "",
-        value: service.attributes.field_value || 0,
-        priorityValue: service.attributes.field_priority_value || 0
+      const serviceInfo = {
+        id: service.uuid?.[0]?.value || serviceId,
+        name: service.title?.[0]?.value || "",
+        code: service.field_med_order_number?.[0]?.value || "",
+        eps: service.field_eps?.[0]?.value || "",
+        deliveryAddress: service.field_delivery_address?.[0]?.value || "",
+        authorizationNumber: service.field_authorization_number?.[0]?.value || "",
+        claimLocation: service.field_claim_location?.[0]?.value || "",
+        ipsName: service.field_ips_name?.[0]?.value || "",
+        ipsAddress: service.field_ips_address?.[0]?.value || "",
+        isRecurring: service.field_is_recurring?.[0]?.value || false,
+        priority: service.field_priority?.[0]?.value || "",
+        path: service.field_path?.[0]?.uri || "",
+        relativeLocation: service.field_relative_location?.[0]?.target_id ? String(service.field_relative_location[0].target_id) : ""
       };
+      
+      return serviceInfo;
     } catch (error) {
       console.error("Error fetching service info:", error);
       return null;
     }
   };
 
-  // Cargar toda la información cuando se abre el modal
+  // Función para obtener el schema del subservicio
+  const fetchSubserviceSchema = async (subserviceType: string) => {
+    try {
+      const response = await api.get(`/api/node-type-schema/${subserviceType}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching subservice schema for ${subserviceType}:`, error);
+      return null;
+    }
+  };
+
+  // Función para obtener los campos específicos del subservicio
+  const fetchSubserviceFields = async (subserviceId: string, subserviceType: string) => {
+    try {
+      const response = await api.get(`/node/${subserviceId}?_format=json`);
+      const subservice = response.data;
+      
+      // Devolver todos los campos del subservicio
+      return subservice;
+    } catch (error) {
+      console.error(`Error fetching subservice fields for ${subserviceType}:`, error);
+      return {};
+    }
+  };
+
   useEffect(() => {
     if (!isOpen || !request) return;
 
@@ -249,11 +308,23 @@ export function RequestDetailModal({
           setUsedChannelInfo(usedChannel);
         }
         
-        // Obtener información del servicio
-        if (request.relationships?.field_info_service?.data?.id) {
-          const service = await fetchServiceInfo(request.relationships.field_info_service.data.id);
-          setInfoServiceInfo(service);
+        // Obtener información del servicio o subservicio
+        if (request.relationships?.field_info_service?.data?.meta?.drupal_internal__target_id) {
+          const serviceId = String(request.relationships.field_info_service.data.meta.drupal_internal__target_id);
+          const serviceType = request.relationships.field_info_service.data.type;
+          
+          // Si es un subservicio (no un servicio médico), no lo procesamos aquí
+          if (serviceType && serviceType.includes('property_certification')) {
+            // Es un subservicio, no un servicio médico
+            setInfoServiceInfo(null);
+          } else {
+            // Es un servicio médico real
+            const service = await fetchServiceInfo(serviceId);
+            setInfoServiceInfo(service);
+          }
         }
+
+
         
       } catch (error) {
         console.error("Error loading request details:", error);
@@ -264,6 +335,73 @@ export function RequestDetailModal({
 
     loadAllInfo();
   }, [isOpen, request]);
+
+  // useEffect separado para obtener el schema del subservicio
+  useEffect(() => {
+    const loadSubserviceSchema = async () => {
+      try {
+        console.log("🔍 Iniciando carga del schema del subservicio...");
+        
+        let subserviceData = null;
+        let subserviceId = null;
+        
+        // Intentar obtener desde field_info_service (que es el nodo real del subservicio)
+        if (request?.relationships?.field_info_service?.data?.meta?.drupal_internal__target_id) {
+          const serviceId = String(request.relationships.field_info_service.data.meta.drupal_internal__target_id);
+          const serviceType = request.relationships.field_info_service.data.type;
+          
+          console.log("🔍 Service ID desde field_info_service:", serviceId);
+          console.log("🔍 Service Type:", serviceType);
+          
+          // Solo procesar si es un subservicio (no un servicio médico)
+          if (serviceType && serviceType.includes('property_certification')) {
+            console.log("✅ Es un subservicio property_certification, obteniendo datos...");
+            subserviceData = await fetchSubserviceFields(serviceId, '');
+            subserviceId = serviceId;
+            console.log("📋 Datos del subservicio desde field_info_service:", subserviceData);
+          } else {
+            console.log("❌ No es un subservicio property_certification");
+          }
+        }
+        
+        if (subserviceData && subserviceId) {
+          // Buscar el tipo en los datos del subservicio
+          const subserviceType = subserviceData.type?.[0]?.target_id;
+          console.log("🎯 Tipo del subservicio encontrado:", subserviceType);
+          
+          if (subserviceType) {
+            // Ahora obtener el schema usando el tipo correcto
+            console.log("📚 Obteniendo schema para:", subserviceType);
+            const schema = await fetchSubserviceSchema(subserviceType);
+            console.log("📚 Schema obtenido:", schema);
+            
+            if (schema) {
+              setSubserviceSchema(schema);
+              setSubserviceFields(subserviceData);
+              console.log("✅ Schema y campos establecidos correctamente");
+            }
+          }
+        } else {
+          console.log("❌ No se pudieron obtener datos del subservicio");
+        }
+      } catch (error) {
+        console.error("Error loading subservice schema:", error);
+      }
+    };
+
+    // Solo ejecutar si tenemos field_info_service y es un subservicio
+    const hasInfoService = request?.relationships?.field_info_service?.data?.meta?.drupal_internal__target_id;
+    const isPropertyCertification = request?.relationships?.field_info_service?.data?.type?.includes('property_certification');
+    
+    console.log("🔍 Condiciones para ejecutar:", { hasInfoService, isPropertyCertification });
+    
+    if (hasInfoService && isPropertyCertification) {
+      console.log("✅ Ejecutando loadSubserviceSchema");
+      loadSubserviceSchema();
+    } else {
+      console.log("❌ No se cumplen las condiciones para ejecutar");
+    }
+  }, [request]);
 
   if (!request) return null;
 
@@ -352,12 +490,7 @@ export function RequestDetailModal({
                 </DialogDescription>
               </div>
             </div>
-            {loading && (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                <span className="text-sm text-gray-600">Cargando...</span>
-              </div>
-            )}
+           
           </div>
         </DialogHeader>
 
@@ -554,12 +687,12 @@ export function RequestDetailModal({
             </div>
           </div>
 
-          {/* Información Adicional del Servicio */}
-          {infoServiceInfo && (
+          {/* Información del Servicio Médico - Solo si existe y es realmente un servicio médico */}
+          {infoServiceInfo && infoServiceInfo.name && infoServiceInfo.eps && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
                 <FileCheck className="h-5 w-5" />
-                Información Adicional del Servicio
+                Información del Servicio Médico
               </h3>
               <div className="p-4 bg-gray-50 rounded-lg border">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -570,22 +703,200 @@ export function RequestDetailModal({
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-600">Código de Servicio</Label>
+                    <Label className="text-sm font-medium text-gray-600">Número de Orden Médica</Label>
                     <p className="text-base bg-white p-2 rounded border">
                       {showFieldOrEmpty(infoServiceInfo.code)}
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-600">Valor del Servicio</Label>
+                    <Label className="text-sm font-medium text-gray-600">Número de Autorización</Label>
                     <p className="text-base bg-white p-2 rounded border">
-                      {showFieldOrEmpty(formatCurrency(infoServiceInfo.value))}
+                      {showFieldOrEmpty(infoServiceInfo.authorizationNumber)}
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-600">Valor Priorizado</Label>
+                    <Label className="text-sm font-medium text-gray-600">EPS</Label>
                     <p className="text-base bg-white p-2 rounded border">
-                      {showFieldOrEmpty(formatCurrency(infoServiceInfo.priorityValue))}
+                      {showFieldOrEmpty(infoServiceInfo.eps)}
                     </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Dirección de Entrega</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.deliveryAddress)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Ubicación del Reclamo</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.claimLocation)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Nombre de la IPS</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.ipsName)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Dirección de la IPS</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.ipsAddress)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Es Recurrente</Label>
+                    <div className="mt-1">
+                      <Badge variant="outline" className="text-sm">
+                        {infoServiceInfo.isRecurring ? "Sí" : "No"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Prioridad</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.priority)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-600">Ubicación Relativa</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {showFieldOrEmpty(infoServiceInfo.relativeLocation)}
+                    </p>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-sm font-medium text-gray-600">Archivo Adjunto</Label>
+                    <p className="text-base bg-white p-2 rounded border">
+                      {infoServiceInfo.path ? (
+                        <a 
+                          href={infoServiceInfo.path} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Ver archivo
+                        </a>
+                      ) : (
+                        "Sin archivo"
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Campos Específicos del Subservicio */}
+          {subserviceSchema && subserviceFields && (() => {
+            // Contar solo los campos que empiecen con "field_" y tengan valores
+            const fieldCount = Object.entries(subserviceFields).filter(([fieldKey, fieldValues]) => {
+              return fieldKey.startsWith('field_') && fieldValues && Array.isArray(fieldValues) && fieldValues.length > 0;
+            }).length;
+            
+            return fieldCount > 0;
+          })() && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
+                <Package className="h-5 w-5" />
+                Campos Específicos del Subservicio: {subserviceSchema.label}
+              </h3>
+              <div className="p-4 bg-gray-50 rounded-lg border">
+                <p className="text-sm text-gray-600 mb-4">
+                  {subserviceSchema.description}
+                </p>
+                
+                {/* Información General del Subservicio */}
+                <div className="mb-6 p-4 bg-white rounded-lg border">
+                  <h4 className="text-md font-medium text-gray-700 mb-3">Información General</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-600">Título</Label>
+                      <p className="text-base bg-gray-50 p-2 rounded border">
+                        {subserviceFields.title?.[0]?.value || "Sin título"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-600">Estado</Label>
+                      <div className="mt-1">
+                        <Badge variant="outline" className="text-sm">
+                          {subserviceFields.status?.[0]?.value ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-600">Creado</Label>
+                      <p className="text-base bg-gray-50 p-2 rounded border">
+                        {subserviceFields.created?.[0]?.value ? formatDate(subserviceFields.created[0].value) : "Sin fecha"}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-600">Última Modificación</Label>
+                      <p className="text-base bg-gray-50 p-2 rounded border">
+                        {subserviceFields.changed?.[0]?.value ? formatDate(subserviceFields.changed[0].value) : "Sin fecha"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Campos Específicos del Schema */}
+                <div>
+                  <h4 className="text-md font-medium text-gray-700 mb-3">Campos Específicos</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Object.entries(subserviceFields).map(([fieldKey, fieldValues]: [string, any]) => {
+                      // Solo mostrar campos que empiecen con "field_" y tengan valores
+                      if (!fieldKey.startsWith('field_') || !fieldValues || !Array.isArray(fieldValues) || fieldValues.length === 0) return null;
+                      
+                      const fieldSchema = subserviceSchema.schema[fieldKey];
+                      const fieldLabel = fieldSchema?.label || fieldKey.replace('field_', '').replace(/_/g, ' ');
+                      
+                      return (
+                        <div key={fieldKey} className="space-y-2">
+                          <Label className="text-sm font-medium text-gray-600">
+                            {fieldLabel}
+                            {fieldSchema?.required && <span className="text-red-500 ml-1">*</span>}
+                          </Label>
+                          <div className="bg-white p-2 rounded border">
+                            {fieldValues.map((fieldValue: any, index: number) => {
+                              if (fieldValue.uri) {
+                                // Campo de tipo archivo/enlace
+                                return (
+                                  <div key={index} className="mb-2">
+                                    <a 
+                                      href={fieldValue.uri} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 underline text-sm"
+                                    >
+                                      {fieldValue.title || 'Ver archivo'}
+                                    </a>
+                                  </div>
+                                );
+                              } else if (typeof fieldValue.value === 'boolean') {
+                                // Campo booleano
+                                return (
+                                  <Badge key={index} variant="outline" className="text-sm">
+                                    {fieldValue.value ? "Sí" : "No"}
+                                  </Badge>
+                                );
+                              } else if (fieldValue.value) {
+                                // Campo de texto/número
+                                return (
+                                  <p key={index} className="text-base">
+                                    {String(fieldValue.value)}
+                                  </p>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+                          {fieldSchema?.description && (
+                            <p className="text-xs text-gray-500 italic">
+                              {fieldSchema.description}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
