@@ -63,7 +63,7 @@ export const fetchRequests = async (
     // Obtener entidades relacionadas si no están incluidas
     if (response.data.data && (!response.data.included || response.data.included.length === 0)) {
       const requests = response.data.data;
-      const allIncluded: any[] = [];
+      const allIncluded: Array<{ id: string; type: string; attributes: Record<string, unknown> }> = [];
       
       const applicantIds = new Set<string>();
       const distributorIds = new Set<string>();
@@ -101,11 +101,11 @@ export const fetchRequests = async (
           });
           
           if (applicantsResponse.data?.data) {
-            applicantsResponse.data.data.forEach((item: any) => {
+            applicantsResponse.data.data.forEach((item: Record<string, unknown>) => {
               allIncluded.push({
-                id: item.id,
+                id: item.id as string,
                 type: "node--profile",
-                attributes: { name: item.attributes.field_full_name }
+                attributes: { name: (item.attributes as Record<string, unknown>)?.field_full_name as string || "" }
               });
             });
           }
@@ -123,11 +123,11 @@ export const fetchRequests = async (
           });
           
           if (distributorsResponse.data?.data) {
-            distributorsResponse.data.data.forEach((item: any) => {
+            distributorsResponse.data.data.forEach((item: Record<string, unknown>) => {
               allIncluded.push({
-                id: item.id,
+                id: item.id as string,
                 type: "node--distributor",
-                attributes: { name: item.attributes.title }
+                attributes: { name: (item.attributes as Record<string, unknown>)?.title as string || "" }
               });
             });
           }
@@ -145,11 +145,11 @@ export const fetchRequests = async (
           });
           
           if (subservicesResponse.data?.data) {
-            subservicesResponse.data.data.forEach((item: any) => {
+            subservicesResponse.data.data.forEach((item: Record<string, unknown>) => {
               allIncluded.push({
-                id: item.id,
+                id: item.id as string,
                 type: "taxonomy_term--category",
-                attributes: { name: item.attributes.name }
+                attributes: { name: (item.attributes as Record<string, unknown>)?.name as string || "" }
               });
             });
           }
@@ -167,11 +167,11 @@ export const fetchRequests = async (
           });
           
           if (statusResponse.data?.data) {
-            statusResponse.data.data.forEach((item: any) => {
+            statusResponse.data.data.forEach((item: Record<string, unknown>) => {
               allIncluded.push({
-                id: item.id,
+                id: item.id as string,
                 type: "taxonomy_term--application_statuses",
-                attributes: { name: item.attributes.name }
+                attributes: { name: (item.attributes as Record<string, unknown>)?.name as string || "" }
               });
             });
           }
@@ -209,27 +209,19 @@ export const updateRequest = async (
 
 export const createRequest = async (payload: CreateRequestPayload) => {
   try {
-    console.log("Creating request with payload:", JSON.stringify(payload, null, 2));
-    
     let response;
     
-    // Try JSON:API first
+    // Intentar JSON:API primero
     try {
-      console.log("Trying JSON:API endpoint: /api/node/request");
       response = await api.post("/api/node/request", payload, {
         headers: {
           "Content-Type": "application/vnd.api+json",
         },
       });
-      console.log("Request created successfully via JSON:API:", response.data);
       return response;
-    } catch (jsonApiError: any) {
-      console.log("JSON:API failed:", jsonApiError.message);
-      
-      if (jsonApiError.response?.status === 404) {
-        console.log("JSON:API endpoint not found, trying alternative endpoints...");
-        
-        // Try alternative JSON:API endpoints
+    } catch (jsonApiError: unknown) {
+      if ((jsonApiError as { response?: { status?: number } })?.response?.status === 404) {
+        // Intentar endpoints JSON:API alternativos
         const alternativeEndpoints = [
           "/api/node/requests",
           "/api/node/application",
@@ -238,26 +230,21 @@ export const createRequest = async (payload: CreateRequestPayload) => {
         
         for (const endpoint of alternativeEndpoints) {
           try {
-            console.log(`Trying alternative endpoint: ${endpoint}`);
             response = await api.post(endpoint, payload, {
               headers: {
                 "Content-Type": "application/vnd.api+json",
               },
             });
-            console.log(`Request created successfully via ${endpoint}:`, response.data);
             return response;
-          } catch (altError: any) {
-            console.log(`${endpoint} failed:`, altError.message);
+          } catch {
             continue;
           }
         }
         
-        // If all JSON:API endpoints fail, try Drupal REST API
-        console.log("All JSON:API endpoints failed, trying Drupal REST API...");
-        
-        // Convert JSON:API payload to Drupal REST API format
-        const drupalPayload: Record<string, any> = {
-          type: [{ target_id: "request_medication" }], // Use the correct content type that exists
+        // Si todos los endpoints JSON:API fallan, intentar Drupal REST API
+        // Convertir payload JSON:API al formato Drupal REST API
+        const drupalPayload: Record<string, unknown> = {
+          type: [{ target_id: "request_medication" }], // Usar el tipo de contenido correcto que existe
           title: [{ value: payload.data.attributes.title }],
           field_application_number: [{ value: payload.data.attributes.field_application_number }],
           field_application_score: [{ value: payload.data.attributes.field_application_score }],
@@ -270,7 +257,7 @@ export const createRequest = async (payload: CreateRequestPayload) => {
           sticky: [{ value: payload.data.attributes.sticky ? 1 : 0 }],
         };
         
-        // Add optional fields if they exist
+        // Agregar campos opcionales si existen
         if (payload.data.attributes.field_estimated_prioritized_hour) {
           drupalPayload.field_estimated_prioritized_hour = [{ value: payload.data.attributes.field_estimated_prioritized_hour }];
         }
@@ -284,7 +271,7 @@ export const createRequest = async (payload: CreateRequestPayload) => {
           drupalPayload.field_observations = [{ value: payload.data.attributes.field_observations }];
         }
         
-        // Add relationships - convert to Drupal format
+        // Agregar relaciones - convertir al formato Drupal
         if (payload.data.relationships) {
           if (payload.data.relationships.field_applicant?.data?.id) {
             drupalPayload.field_applicant = [{ target_id: payload.data.relationships.field_applicant.data.id }];
@@ -318,31 +305,28 @@ export const createRequest = async (payload: CreateRequestPayload) => {
           }
         }
         
-        console.log("Drupal REST API payload with request_medication:", drupalPayload);
-        
         response = await api.post("/node?_format=json", drupalPayload, {
           headers: {
             "Content-Type": "application/json",
           },
         });
         
-        console.log("Request created successfully via Drupal REST API with request_medication:", response.data);
         return response;
       }
       
-      // Re-throw the original error if it's not a 404
+      // Re-lanzar el error original si no es un 404
       throw jsonApiError;
     }
-  } catch (error: any) {
-    console.error("Error creating request:", error);
+  } catch (error: unknown) {
     
-    if (error.response?.status === 403) {
+    if ((error as { response?: { status?: number } })?.response?.status === 403) {
       throw new Error("Error de permisos: No tienes autorización para crear solicitudes. Verifica tu autenticación.");
     }
     
-    if (error.response?.status === 422) {
-      const validationErrors = error.response.data?.errors || [];
-      const errorMessages = validationErrors.map((err: any) => err.detail || err.title).join(", ");
+    if ((error as { response?: { status?: number; data?: { errors?: Array<{ detail?: string; title?: string }> } } })?.response?.status === 422) {
+      const errorObj = error as { response?: { data?: { errors?: Array<{ detail?: string; title?: string }> } } };
+      const validationErrors = errorObj.response?.data?.errors || [];
+      const errorMessages = validationErrors.map((err) => err.detail || err.title).join(", ");
       
       if (errorMessages) {
         throw new Error(`Error de validación: ${errorMessages}`);
@@ -351,11 +335,12 @@ export const createRequest = async (payload: CreateRequestPayload) => {
       }
     }
     
-    if (error.response?.status === 400) {
-      const errorData = error.response.data;
+    if ((error as { response?: { status?: number; data?: { errors?: Array<{ detail?: string; title?: string }>; message?: string; error?: string } } })?.response?.status === 400) {
+      const errorObj = error as { response?: { data?: { errors?: Array<{ detail?: string; title?: string }>; message?: string; error?: string } } };
+      const errorData = errorObj.response?.data;
       
       if (errorData?.errors && Array.isArray(errorData.errors)) {
-        const errorMessages = errorData.errors.map((err: any) => err.detail || err.title).join(", ");
+        const errorMessages = errorData.errors.map((err) => err.detail || err.title).join(", ");
         throw new Error(`Error en la solicitud: ${errorMessages}`);
       } else if (errorData?.message) {
         throw new Error(`Error en la solicitud: ${errorData.message}`);
@@ -453,15 +438,16 @@ export const transformRequestForDisplay = (
         (item) => item.id === entityId && item.type === entityType
       );
       
-      if (entity) {
+      if (entity && entity.attributes) {
+        const attrs = entity.attributes as Record<string, unknown>;
         if (entityType === "node--profile") {
-          return entity.attributes?.field_full_name || entity.attributes?.title || "";
+          return (attrs?.field_full_name as string) || (attrs?.title as string) || "";
         } else if (entityType === "node--distributor") {
-          return entity.attributes?.title || entity.attributes?.name || "";
+          return (attrs?.title as string) || (attrs?.name as string) || "";
         } else if (entityType.startsWith("taxonomy_term--")) {
-          return entity.attributes?.name || entity.attributes?.title || "";
+          return (attrs?.name as string) || (attrs?.title as string) || "";
         }
-        return entity.attributes?.name || entity.attributes?.title || "";
+        return (attrs?.name as string) || (attrs?.title as string) || "";
       }
       return "";
     };
@@ -677,9 +663,9 @@ export const fetchServicesByCategory = async (categoryId: string) => {
       },
     });
     
-    const services = response.data.data.map((item: any) => ({
-      id: item.id,
-      name: item.attributes?.name || "",
+    const services = response.data.data.map((item: Record<string, unknown>) => ({
+      id: item.id as string,
+      name: (item.attributes as Record<string, unknown>)?.name as string || "",
       categoryId: categoryId,
     }));
     
@@ -699,9 +685,9 @@ export const fetchSubservicesByService = async (serviceId: string) => {
       },
     });
     
-    const subservices = response.data.data.map((item: any) => ({
-      id: item.id,
-      name: item.attributes?.name || "",
+    const subservices = response.data.data.map((item: Record<string, unknown>) => ({
+      id: item.id as string,
+      name: (item.attributes as Record<string, unknown>)?.name as string || "",
       serviceId: serviceId,
     }));
     
@@ -712,7 +698,7 @@ export const fetchSubservicesByService = async (serviceId: string) => {
   }
 };
 
-// Function to get subservice with its parent service and category information
+// Función para obtener subservicio con información de servicio padre y categoría
 export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
   try {
     const response = await api.get(`/api/taxonomy_term/category/${subserviceId}`, {
@@ -723,10 +709,10 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
     
     const subservice = response.data.data;
     const parentService = response.data.included?.find(
-      (item: any) => item.type === "taxonomy_term--category" && item.id === subservice.relationships?.parent?.data?.[0]?.id
+      (item: Record<string, unknown>) => item.type === "taxonomy_term--category" && item.id === subservice.relationships?.parent?.data?.[0]?.id
     );
     const parentCategory = response.data.included?.find(
-      (item: any) => item.type === "taxonomy_term--category" && item.id === parentService?.relationships?.parent?.data?.[0]?.id
+      (item: Record<string, unknown>) => item.type === "taxonomy_term--category" && item.id === parentService?.relationships?.parent?.data?.[0]?.id
     );
     
     return {
@@ -749,6 +735,28 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
   } catch (error) {
     console.error("Error fetching subservice hierarchy:", error);
     return null;
+  }
+};
+
+// Función para obtener áreas de cobertura
+export const fetchCoverageAreas = async () => {
+  try {
+    const accessToken = localStorage.getItem("peretantico_access_token");
+    if (!accessToken) {
+      return { coverageAreas: [] };
+    }
+
+    const response = await api.get("/jsonapi/taxonomy_term/coverage_area", {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Accept": "application/vnd.api+json",
+      },
+    });
+
+    return response.data;
+  } catch {
+    // Retornar datos vacíos en lugar de lanzar error
+    return { coverageAreas: [] };
   }
 };
 

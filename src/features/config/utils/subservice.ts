@@ -247,7 +247,6 @@ export async function createSubservice(data: SubserviceFormValues, servicioId: s
       attributes: {
         name: data.nombre,
         description: data.descripcion ?? "",
-        field_code: data.codigo,
         field_value: data.valor,
         field_priority_value: data.valorPrioridad,
         status: data.estado === "activo",
@@ -283,7 +282,6 @@ export async function updateSubservice(
       attributes: {
         name: data.nombre,
         description: data.descripcion ?? "",
-        field_code: data.codigo,
         field_value: data.valor,
         field_priority_value: data.valorPrioridad,
         status: data.estado === "activo",

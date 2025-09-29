@@ -26,6 +26,7 @@ export interface ProfileAttribute {
   field_mail: string;
   field_municipality_residence: string | null;
   field_phone_number: string;
+  field_photo_document: File | null;
 }
 
 export interface RelationshipData {
@@ -122,14 +123,12 @@ export interface Customer {
   fullName: string;
   documentType: string; // This will be the label, e.g., "Cédula de Ciudadanía"
   documentNumber: string;
-  birthDate: string; // YYYY-MM-DD
-  gender: string; // This will be the label, e.g., "Masculino"
   phoneNumber: string;
   email: string;
   department: string;
   municipality: string;
   address: string;
-  parentStatus: string; // This will be the label, e.g., "Sí"
+  photo_document: File | null;
 }
 
 export type FormMode = "create" | "view" | "edit";
@@ -139,11 +138,9 @@ export interface CustomerFormValues {
   documentType: string;
   documentNumber: string;
   phoneNumber: string;
+  email?: string;
   department: string;
   municipality: string;
   address: string;
-  birthDate?: string;
-  gender?: string;
-  email?: string;
-  parentStatus?: string;
+  photo_document?: File | null;
 }

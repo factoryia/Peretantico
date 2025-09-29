@@ -1,9 +1,22 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,46 +26,59 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Eye, Trash2, AlertCircle, Edit, Star, Truck } from "lucide-react"
-import { transformRequestForDisplay, assignDistributorToRequest, assignApplicantToRequest } from "../utils/request"
-import type { RequestFilters, Request, AssignmentModalData } from "../types/request"
-import { useRequestsQuery } from "../hooks/use-request-query"
-import { useDeleteRequestMutation } from "../hooks/use-request-mutations"
-import { RequestDetailModal } from "./request-detail-modal"
-import { AssignDistributorModal } from "./assign-distributor-modal"
-import { AssignApplicantModal } from "./assign-applicant-modal"
-import { EditRequestModal } from "./edit-request-modal"
-import { TableSkeleton } from "./skeletons/table-skeleton"
-import { EmptyState } from "./empty-state"
+} from "@/components/ui/alert-dialog";
+import { Eye, Trash2, AlertCircle, Edit,  Truck } from "lucide-react";
+import {
+  transformRequestForDisplay,
+  assignDistributorToRequest,
+  assignApplicantToRequest,
+} from "../utils/request";
+import type {
+  RequestFilters,
+  Request,
+  AssignmentModalData,
+} from "../types/request";
+import { useRequestsQuery } from "../hooks/use-request-query";
+import { useDeleteRequestMutation } from "../hooks/use-request-mutations";
+import { RequestDetailModal } from "./request-detail-modal";
+import { AssignDistributorModal } from "./assign-distributor-modal";
+import { AssignApplicantModal } from "./assign-applicant-modal";
+import { EditRequestModal } from "./edit-request-modal";
+import { TableSkeleton } from "./skeletons/table-skeleton";
+import { EmptyState } from "./empty-state";
 
 interface RequestsTableProps {
-  filters?: RequestFilters
-  onRefresh?: () => void
-  onCreateNew?: () => void
+  filters?: RequestFilters;
+  onRefresh?: () => void;
+  onCreateNew?: () => void;
 }
 
-export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps) {
-  const [deleteRequestId, setDeleteRequestId] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  
+export function RequestsTable({
+  filters = {},
+  onCreateNew,
+}: RequestsTableProps) {
+  const [deleteRequestId, setDeleteRequestId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Estados para los modales - inicializados como false
   const [modals, setModals] = useState({
     detail: false,
     assignDistributor: false,
     assignApplicant: false,
-    edit: false
-  })
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null)
-  const [assignmentData, setAssignmentData] = useState<AssignmentModalData | null>(null)
-  const [editingRequest, setEditingRequest] = useState<Request | null>(null)
+    edit: false,
+  });
+  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
+  const [assignmentData, setAssignmentData] =
+    useState<AssignmentModalData | null>(null);
+  const [editingRequest, setEditingRequest] = useState<Request | null>(null);
 
   const { data, isLoading, error, refetch, isFetching } = useRequestsQuery({
     ...filters,
-    page: currentPage, limit: 10,
-  })
+    page: currentPage,
+    limit: 10,
+  });
 
-  const deleteRequestMutation = useDeleteRequestMutation()
+  const deleteRequestMutation = useDeleteRequestMutation();
 
   // Función para limpiar todos los estados de modales
   const clearAllModalStates = useCallback(() => {
@@ -60,37 +86,37 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
       detail: false,
       assignDistributor: false,
       assignApplicant: false,
-      edit: false
-    })
-    setSelectedRequest(null)
-    setAssignmentData(null)
-    setEditingRequest(null)
-    setDeleteRequestId(null)
-  }, [])
+      edit: false,
+    });
+    setSelectedRequest(null);
+    setAssignmentData(null);
+    setEditingRequest(null);
+    setDeleteRequestId(null);
+  }, []);
 
   // Limpiar estados cuando cambie la página
   useEffect(() => {
-    clearAllModalStates()
-  }, [currentPage, clearAllModalStates])
+    clearAllModalStates();
+  }, [currentPage, clearAllModalStates]);
 
   // Limpieza al desmontar el componente
   useEffect(() => {
     return () => {
-      clearAllModalStates()
-    }
-  }, [clearAllModalStates])
+      clearAllModalStates();
+    };
+  }, [clearAllModalStates]);
 
   // Transformar solicitudes con manejo de errores mejorado
   const displayRequests = useMemo(() => {
     if (!data?.data || !Array.isArray(data.data)) {
-      return []
+      return [];
     }
 
-    return data.data.map((request) => {
+    return data.data.map((request: Request) => {
       try {
-        return transformRequestForDisplay(request, data?.included)
+        return transformRequestForDisplay(request, data?.included);
       } catch (error) {
-        console.error("Error transforming request:", request.id, error)
+        console.error("Error transforming request:", request.id, error);
         // Retornar un objeto básico si hay error en la transformación
         return {
           id: request.id,
@@ -101,103 +127,119 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
           subserviceName: "Error en datos",
           subserviceId: request.relationships?.field_subservice?.data?.id || "",
           distributorName: "Error en datos",
-          distributorId: request.relationships?.field_distributor_data?.data?.id || "",
+          distributorId:
+            request.relationships?.field_distributor_data?.data?.id || "",
           statusName: "Error en datos",
-          statusId: request.relationships?.field_application_statuses?.data?.id || "",
+          statusId:
+            request.relationships?.field_application_statuses?.data?.id || "",
           serviceStatusName: "Error en datos",
-          serviceStatusId: request.relationships?.field_service_status?.data?.id || "",
+          serviceStatusId:
+            request.relationships?.field_service_status?.data?.id || "",
           score: request.attributes?.field_application_score || 0,
           entryDate: request.attributes?.field_entry_date || "",
-          estimatedHours: request.attributes?.field_estimated_application_hour || 0,
+          estimatedHours:
+            request.attributes?.field_estimated_application_hour || 0,
           logisticsCosts: request.attributes?.field_logistics_costs || 0,
           serviceValue: request.attributes?.field_service_value || 0,
           status: request.attributes?.status || false,
-        }
+        };
       }
-    })
-  }, [data?.data, data?.included])
-
- 
+    });
+  }, [data?.data, data?.included]);
 
   const handleDeleteRequest = async () => {
-    if (!deleteRequestId) return
-    
+    if (!deleteRequestId) return;
+
     try {
-      await deleteRequestMutation.mutateAsync(deleteRequestId)
-      setDeleteRequestId(null)
-      await refetch()
+      await deleteRequestMutation.mutateAsync(deleteRequestId);
+      setDeleteRequestId(null);
+      refetch();
     } catch (error) {
-      console.error("Error deleting request:", error)
+      console.error("Error deleting request:", error);
     }
-  }
+  };
 
   // Handlers optimizados para modales
-  const handleViewDetail = useCallback((request: Request) => {
-    clearAllModalStates()
-    setTimeout(() => {
-      setSelectedRequest(request)
-      setModals(prev => ({ ...prev, detail: true }))
-    }, 0)
-  }, [clearAllModalStates])
+  const handleViewDetail = useCallback(
+    (request: Request) => {
+      clearAllModalStates();
+      setTimeout(() => {
+        setSelectedRequest(request);
+        setModals((prev) => ({ ...prev, detail: true }));
+      }, 0);
+    },
+    [clearAllModalStates]
+  );
 
-  const handleAssignDistributor = useCallback((request: Request) => {
-    clearAllModalStates()
-    setTimeout(() => {
-      setAssignmentData({
-        requestId: request.id,
-        requestNumber: request.attributes?.field_application_number || "Sin número",
-        currentDistributor: request.relationships?.field_distributor_data?.data?.id,
-      })
-      setModals(prev => ({ ...prev, assignDistributor: true }))
-    }, 0)
-  }, [clearAllModalStates])
+  const handleAssignDistributor = useCallback(
+    (request: Request) => {
+      clearAllModalStates();
+      setTimeout(() => {
+        setAssignmentData({
+          requestId: request.id,
+          requestNumber:
+            request.attributes?.field_application_number || "Sin número",
+          currentDistributor:
+            request.relationships?.field_distributor_data?.data?.id,
+        });
+        setModals((prev) => ({ ...prev, assignDistributor: true }));
+      }, 0);
+    },
+    [clearAllModalStates]
+  );
 
+  const handleEditRequest = useCallback(
+    (request: Request) => {
+      clearAllModalStates();
+      setTimeout(() => {
+        setEditingRequest(request);
+        setModals((prev) => ({ ...prev, edit: true }));
+      }, 0);
+    },
+    [clearAllModalStates]
+  );
 
-  const handleEditRequest = useCallback((request: Request) => {
-    clearAllModalStates()
-    setTimeout(() => {
-      setEditingRequest(request)
-      setModals(prev => ({ ...prev, edit: true }))
-    }, 0)
-  }, [clearAllModalStates])
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage === currentPage) return;
 
-  const handlePageChange = useCallback((newPage: number) => {
-    if (newPage === currentPage) return
-    
-    clearAllModalStates()
-    // Usar setTimeout para asegurar que la limpieza se complete antes del cambio de página
-    setTimeout(() => {
-      setCurrentPage(newPage)
-    }, 0)
-  }, [currentPage, clearAllModalStates])
+      clearAllModalStates();
+      // Usar setTimeout para asegurar que la limpieza se complete antes del cambio de página
+      setTimeout(() => {
+        setCurrentPage(newPage);
+      }, 0);
+    },
+    [currentPage, clearAllModalStates]
+  );
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage > 1) {
-      handlePageChange(currentPage - 1)
+      handlePageChange(currentPage - 1);
     }
-  }, [currentPage, handlePageChange])
+  }, [currentPage, handlePageChange]);
 
   const handleNextPage = useCallback(() => {
-    const totalPages = Math.ceil((data?.meta?.count || 0) / 10)
+    const totalPages = Math.ceil((data?.meta?.count || 0) / 10);
     if (currentPage < totalPages) {
-      handlePageChange(currentPage + 1)
+      handlePageChange(currentPage + 1);
     }
-  }, [currentPage, data?.meta?.count, handlePageChange])
+  }, [currentPage, data?.meta?.count, handlePageChange]);
 
   // Handlers para cerrar modales
   const handleCloseModal = useCallback((modalName: keyof typeof modals) => {
-    setModals(prev => ({ ...prev, [modalName]: false }))
-    
+    setModals((prev) => ({ ...prev, [modalName]: false }));
+
     // Limpiar datos relacionados después de un pequeño delay
     setTimeout(() => {
-      if (modalName === 'detail') setSelectedRequest(null)
-      if (modalName === 'assignDistributor' || modalName === 'assignApplicant') setAssignmentData(null)
-      if (modalName === 'edit') setEditingRequest(null)
-    }, 300)
-  }, [])
+      if (modalName === "detail") setSelectedRequest(null);
+      if (modalName === "assignDistributor" || modalName === "assignApplicant")
+        setAssignmentData(null);
+      if (modalName === "edit") setEditingRequest(null);
+    }, 300);
+  }, []);
 
   if (isLoading) {
-    return <TableSkeleton />
+    return <TableSkeleton />;
   }
 
   if (error) {
@@ -211,16 +253,12 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
             <AlertCircle className="h-5 w-5" />
             <span>Error: {error.message}</span>
           </div>
-          <Button 
-            onClick={() => refetch()} 
-            className="mt-4"
-            variant="outline"
-          >
+          <Button onClick={() => refetch()} className="mt-4" variant="outline">
             Reintentar
           </Button>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   // Verificar que los datos sean válidos antes de renderizar
@@ -232,11 +270,11 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
         showRefreshButton={false}
         onCreateNew={onCreateNew}
       />
-    )
+    );
   }
 
-  const totalItems = data?.meta?.count || 0
-  const totalPages = Math.ceil(totalItems / 10)
+  const totalItems = data?.meta?.count || 0;
+  const totalPages = Math.ceil(totalItems / 10);
 
   // Validar que displayRequests sea un array válido
   if (!Array.isArray(displayRequests)) {
@@ -254,7 +292,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   // Mostrar estado vacío cuando no hay resultados
@@ -266,7 +304,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
         onRefresh={refetch}
         onCreateNew={onCreateNew}
       />
-    )
+    );
   }
 
   return (
@@ -281,55 +319,59 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
         <Table className="rounded-md border">
           <TableHeader>
             <TableRow>
-              <TableHead>Número</TableHead>
               <TableHead>Título</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Subservicio</TableHead>
               <TableHead>Repartidor</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>Calificación</TableHead>
-              <TableHead>Acciones</TableHead>
+              <TableHead className="text-center">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {displayRequests.map((displayRequest) => {
-              const request = data.data.find(r => r.id === displayRequest.id)
-              if (!request) return null
-              
+              const request = data.data.find((r: Request) => r.id === displayRequest.id);
+              if (!request) return null;
+
               return (
                 <TableRow key={displayRequest.id}>
-                  <TableCell className="font-mono text-sm">
-                    {displayRequest.number}
-                  </TableCell>
                   <TableCell className="max-w-[200px] truncate">
                     {displayRequest.title}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-medium">{displayRequest.applicantName}</span>
+                      <span className="font-medium">
+                        {displayRequest.applicantName}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span>{displayRequest.subserviceName}</span>
+                      <span>
+                        {displayRequest.subserviceName
+                          ? displayRequest.subserviceName
+                          : "Sin asignar"}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span>{displayRequest.distributorName}</span>
+                      <span>
+                        {displayRequest.distributorName
+                          ? displayRequest.distributorName
+                          : "Sin asignar"}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span>{displayRequest.statusName}</span>
+                      <span>
+                        {displayRequest.statusName
+                          ? displayRequest.statusName
+                          : "Sin asignar"}
+                      </span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                      <span>{displayRequest.score}</span>
-                    </div>
-                  </TableCell>
+
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button
@@ -350,7 +392,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                   
+
                       <Button
                         variant="ghost"
                         size="sm"
@@ -372,7 +414,7 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
                     </div>
                   </TableCell>
                 </TableRow>
-              )
+              );
             })}
           </TableBody>
         </Table>
@@ -408,67 +450,80 @@ export function RequestsTable({ filters = {}, onCreateNew }: RequestsTableProps)
       {/* Modales */}
       <RequestDetailModal
         isOpen={modals.detail}
-        onClose={() => handleCloseModal('detail')}
+        onOpenChange={() => handleCloseModal("detail")}
         request={selectedRequest}
       />
 
       <AssignDistributorModal
         isOpen={modals.assignDistributor}
-        onClose={() => handleCloseModal('assignDistributor')}
+        onClose={() => handleCloseModal("assignDistributor")}
         data={assignmentData}
         onAssign={async (distributorId: string) => {
           try {
             if (assignmentData) {
-              await assignDistributorToRequest(assignmentData.requestId, distributorId)
-              await refetch()
+              await assignDistributorToRequest(
+                assignmentData.requestId,
+                distributorId
+              );
+              await refetch();
             }
-            handleCloseModal('assignDistributor')
+            handleCloseModal("assignDistributor");
           } catch (error) {
-            console.error("Error al asignar repartidor:", error)
+            console.error("Error al asignar repartidor:", error);
           }
         }}
       />
 
       <AssignApplicantModal
         isOpen={modals.assignApplicant}
-        onClose={() => handleCloseModal('assignApplicant')}
+        onClose={() => handleCloseModal("assignApplicant")}
         data={assignmentData}
         onAssign={async (applicantId: string) => {
           try {
             if (assignmentData) {
-              await assignApplicantToRequest(assignmentData.requestId, applicantId)
-              await refetch()
+              await assignApplicantToRequest(
+                assignmentData.requestId,
+                applicantId
+              );
+              await refetch();
             }
-            handleCloseModal('assignApplicant')
+            handleCloseModal("assignApplicant");
           } catch (error) {
-            console.error("Error al asignar solicitante:", error)
+            console.error("Error al asignar solicitante:", error);
           }
         }}
       />
 
       <EditRequestModal
         isOpen={modals.edit}
-        onClose={() => handleCloseModal('edit')}
+        onOpenChange={(open) => !open && handleCloseModal("edit")}
         request={editingRequest}
       />
 
       {/* Modal de confirmación de eliminación */}
-      <AlertDialog open={!!deleteRequestId} onOpenChange={() => setDeleteRequestId(null)}>
+      <AlertDialog
+        open={!!deleteRequestId}
+        onOpenChange={() => setDeleteRequestId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente la solicitud.
+              Esta acción no se puede deshacer. Se eliminará permanentemente la
+              solicitud.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteRequest} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction
+              onClick={handleDeleteRequest}
+              className="bg-red-600 hover:bg-red-700"
+            >
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </Card>
-  )
+  );
 }

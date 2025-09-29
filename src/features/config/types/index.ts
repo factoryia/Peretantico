@@ -24,7 +24,7 @@ export interface Subservice {
   servicioNombre: string;
   nombre: string;
   descripcion?: string;
-  codigo: string;
+  codigo?: string;
   valor: string;
   valorPrioridad: string;
   estado: "activo" | "inactivo";

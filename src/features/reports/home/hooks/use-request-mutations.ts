@@ -1,14 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateRequest, deleteRequest, createRequest } from "../utils/request";
 import { REQUESTS_QUERY_KEY } from "./use-request-query";
-import type { CreateRequestPayload } from "../types/request";
+import type { CreateRequestPayload, UpdateRequestPayload } from "../types/request";
 import { toast } from "sonner";
 
 export const useUpdateRequestMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ requestId, data }: { requestId: string; data: any }) =>
+    mutationFn: ({ requestId, data }: { requestId: string; data: UpdateRequestPayload }) =>
       updateRequest(requestId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [REQUESTS_QUERY_KEY] });

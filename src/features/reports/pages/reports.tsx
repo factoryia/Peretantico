@@ -1,3 +1,4 @@
+
 import {
   Package,
   CheckCircle,
@@ -16,6 +17,10 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
+import { useCoverageAreasQuery } from "@/features/distributors/hooks/taxonomies";
+import { type TaxonomyTerm } from "@/types/global";
+
+
 
 const reportStats = [
   {
@@ -49,6 +54,7 @@ const reportStats = [
 ];
 
 export function Reports() {
+  const { data: coverageAreasData } = useCoverageAreasQuery();
   return (
     <div className="pt-[65px] overflow-y-auto h-full">
       <SidebarHeader title="Gestión de reportes" />
@@ -140,17 +146,17 @@ export function Reports() {
                     <label className="text-sm font-medium text-gray-700">
                       Zona
                     </label>
-                    <Select defaultValue="todas">
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Seleccionar zona" />
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione zona" />
                       </SelectTrigger>
+
                       <SelectContent>
-                        <SelectItem value="todas">Todas las zonas</SelectItem>
-                        <SelectItem value="norte">Norte</SelectItem>
-                        <SelectItem value="centro">Centro</SelectItem>
-                        <SelectItem value="sur">Sur</SelectItem>
-                        <SelectItem value="este">Este</SelectItem>
-                        <SelectItem value="oeste">Oeste</SelectItem>
+                        {coverageAreasData?.map((area: TaxonomyTerm) => (
+                          <SelectItem key={area.id} value={area.id}>
+                            {area.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

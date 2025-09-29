@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getCustomerNameById, getDistributorNameById, getSubserviceNameById, getStatusNameById } from '../utils/request';
+import type { Request } from '../types/request';
 
 interface EntityNames {
   customers: Record<string, string>;
@@ -8,7 +9,7 @@ interface EntityNames {
   statuses: Record<string, string>;
 }
 
-export const useEntityNames = (requests: any[]) => {
+export const useEntityNames = (requests: Request[]) => {
   const [entityNames, setEntityNames] = useState<EntityNames>({
     customers: {},
     distributors: {},

@@ -54,7 +54,7 @@ export function Home() {
       {/* Modal de nueva solicitud */}
       <NewRequestModal
         isOpen={isNewRequestModalOpen}
-        onClose={() => setIsNewRequestModalOpen(false)}
+        onOpenChange={setIsNewRequestModalOpen}
         onSuccess={handleNewRequestSuccess}
       />
     </div>

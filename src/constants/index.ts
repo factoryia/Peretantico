@@ -1,5 +1,5 @@
 import type { DeliveryDriver } from "@/features/distributors/types";
-import { Cog, FileText, MessageSquare, Truck, User } from "lucide-react";
+import { Cog, Banknote, FileText, MessageSquare, Truck, User } from "lucide-react";
 
 // Datos de navegación
 export const data = {
@@ -29,6 +29,11 @@ export const data = {
       title: "Configuración",
       url: "/configuraciones",
       icon: Cog,
+    },
+    {
+      title: "Costos",
+      url: "/costos",
+      icon: Banknote,
     },
   ],
 };
@@ -63,6 +68,17 @@ export const initialRepartidores: DeliveryDriver[] = [
     telefono: "3156677889",
     email: "pedro@peretantico.com",
     zona: "Sur",
+    vehiculo: "Motocicleta",
+    placa: "XYZ789",
+    estado: "Disponible",
+  },
+  {
+    id: 4,
+    nombre: "Juan Pérez",
+    identificacion: "55667788",
+    telefono: "3156677889",
+    email: "pedro@peretantico.com",
+    zona: "oriente",
     vehiculo: "Motocicleta",
     placa: "XYZ789",
     estado: "Disponible",

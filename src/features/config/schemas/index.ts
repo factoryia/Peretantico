@@ -17,7 +17,6 @@ export type ServiceFormValues = z.infer<typeof serviceSchema>;
 export const subserviceSchema = z.object({
   nombre: z.string().min(1).max(100),
   descripcion: z.string().max(250).optional(),
-  codigo: z.string().min(1).max(100),
   valor: z.string().min(1).max(20),
   valorPrioridad: z.string().min(1).max(20),
   estado: z.enum(["activo", "inactivo"]),

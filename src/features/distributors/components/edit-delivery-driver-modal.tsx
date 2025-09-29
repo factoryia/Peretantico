@@ -31,7 +31,7 @@ export function EditDeliveryDriverModal({
   driver,
   onSave,
 }: EditDeliveryDriverModalProps) {
-  console.log("Modal", driver)
+  console.log("Modal", driver);
   const [formData, setFormData] = useState<DeliveryDriver>({
     id: driver?.id || 0,
     nombre: driver?.nombre || "",
@@ -133,13 +133,6 @@ export function EditDeliveryDriverModal({
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar zona" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Norte">Norte</SelectItem>
-                  <SelectItem value="Centro">Centro</SelectItem>
-                  <SelectItem value="Sur">Sur</SelectItem>
-                  <SelectItem value="Oriente">Oriente</SelectItem>
-                  <SelectItem value="Occidente">Occidente</SelectItem>
-                </SelectContent>
               </Select>
             </div>
 

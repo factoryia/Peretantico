@@ -110,12 +110,7 @@ interface Request {
   type: string
   attributes: {
     title: string
-    field_application_number: string
-    field_application_score?: number
     field_entry_date: string
-    field_estimated_application_hour?: number
-    field_logistics_costs?: number
-    field_service_value?: number
     status: boolean
     created: string
     changed: string

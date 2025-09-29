@@ -16,6 +16,7 @@ interface CustomerFormDialogProps {
   customer?: Customer;
   mode: FormMode;
   onCancel: () => void;
+  onSuccess?: () => void;
 }
 
 export function CustomerFormDialog({
@@ -24,6 +25,7 @@ export function CustomerFormDialog({
   customer,
   mode,
   onCancel,
+  onSuccess,
 }: CustomerFormDialogProps) {
   const getTitle = () => {
     switch (mode) {
@@ -49,6 +51,15 @@ export function CustomerFormDialog({
         return "";
     }
   };
+
+  // Función que combina onCancel y onSuccess
+  const handleCancel = () => {
+    onCancel();
+    if (onSuccess) {
+      onSuccess();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
@@ -59,7 +70,7 @@ export function CustomerFormDialog({
         <CustomerForm
           customer={customer}
           mode={mode}
-          onCancel={onCancel}
+          onCancel={handleCancel}
         />
       </DialogContent>
     </Dialog>

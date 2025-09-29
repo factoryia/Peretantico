@@ -70,7 +70,6 @@ export function SubserviceDialog({
     defaultValues: {
       nombre: "",
       descripcion: "",
-      codigo: "",
       valor: "",
       valorPrioridad: "",
       estado: "activo",
@@ -84,7 +83,6 @@ export function SubserviceDialog({
       form.reset({
         nombre: editingSubservice.nombre,
         descripcion: editingSubservice.descripcion,
-        codigo: editingSubservice.codigo,
         estado: editingSubservice.estado,
         valor: editingSubservice.valor,
         valorPrioridad: editingSubservice.valorPrioridad,
@@ -93,7 +91,6 @@ export function SubserviceDialog({
       form.reset({
         nombre: "",
         descripcion: "",
-        codigo: "",
         valor: "",
         valorPrioridad: "",
         estado: "activo",
@@ -219,24 +216,7 @@ export function SubserviceDialog({
               )}
             />
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="codigo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Código <RequiredDot />
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: SC-123" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    <FormDescription>
-                      Define el código por subservicio.
-                    </FormDescription>
-                  </FormItem>
-                )}
-              />
+              
               <FormField
                 control={form.control}
                 name="estado"

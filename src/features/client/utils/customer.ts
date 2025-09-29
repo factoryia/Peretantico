@@ -67,15 +67,13 @@ export const fetchProfiles = async (
       id: item.id,
       fullName: item.attributes.field_full_name,
       documentNumber: item.attributes.field_document_number,
-      gender: item.relationships.field_gender?.data?.id ?? "",
-      department: item.attributes.field_department ?? "",
-      municipality: item.attributes.field_municipality_residence ?? "",
-      birthDate: item.attributes.field_birth_date,
-      address: item.attributes.field_address,
       email: item.attributes.field_mail,
       phoneNumber: item.attributes.field_phone_number,
       documentType: item.relationships.field_type_document?.data?.id ?? "",
-      parentStatus: item.relationships.field_parent_type?.data?.id ?? "",
+      department: item.attributes.field_department || "",
+      municipality: item.attributes.field_municipality_residence || "",
+      address: item.attributes.field_address || "",
+      photo_document: null,
     }));
 
     const totalItems = response.data.meta?.count ?? customers.length;
@@ -96,28 +94,14 @@ export async function createProfile(data: CustomerFormValues) {
         title: data.fullName,
         field_full_name: data.fullName,
         field_document_number: data.documentNumber,
-        field_birth_date: data.birthDate,
         field_phone_number: data.phoneNumber,
         field_mail: data.email,
-        field_department: data.department,
-        field_municipality_residence: data.municipality,
-        field_address: data.address, // ensure address is sent
         status: true, // always send status
       },
       relationships: {
-        field_gender: {
-          data: data.gender
-            ? { type: "taxonomy_term--gender", id: data.gender }
-            : null,
-        },
         field_type_document: {
           data: data.documentType
             ? { type: "taxonomy_term--document_type", id: data.documentType }
-            : null,
-        },
-        field_parent_type: {
-          data: data.parentStatus
-            ? { type: "taxonomy_term--parent_type", id: data.parentStatus }
             : null,
         },
       },
@@ -140,28 +124,14 @@ export async function updateProfile(id: string, data: CustomerFormValues) {
         title: data.fullName,
         field_full_name: data.fullName,
         field_document_number: data.documentNumber,
-        field_birth_date: data.birthDate ?? null, // ensure birthDate is sent as empty string if null
         field_phone_number: data.phoneNumber,
         field_mail: data.email ?? null, // ensure email is sent as empty string if null
-        field_department: data.department,
-        field_municipality_residence: data.municipality,
-        field_address: data.address, // ensure address is sent
         status: true, // always send status
       },
       relationships: {
-        field_gender: {
-          data: data.gender
-            ? { type: "taxonomy_term--gender", id: data.gender }
-            : null,
-        },
         field_type_document: {
           data: data.documentType
             ? { type: "taxonomy_term--document_type", id: data.documentType }
-            : null,
-        },
-        field_parent_type: {
-          data: data.parentStatus
-            ? { type: "taxonomy_term--parent_type", id: data.parentStatus }
             : null,
         },
       },

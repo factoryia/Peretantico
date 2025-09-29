@@ -10,21 +10,6 @@ export const customerSchema = z.object({
     .string()
     .min(1, "El número de documento es requerido")
     .max(15, "Máximo 15 caracteres"),
-  birthDate: z
-    .string()
-    .optional()
-    .or(z.literal(""))
-    .refine(
-      (val) => {
-        if (!val) return true;
-        const inputDate = new Date(val);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return inputDate <= today;
-      },
-      { message: "La fecha de nacimiento no puede ser mayor al día actual" }
-    ),
-  gender: z.string().optional().or(z.literal("")),
   phoneNumber: z
     .string()
     .min(1, "El teléfono es requerido")
@@ -42,5 +27,14 @@ export const customerSchema = z.object({
     .string()
     .min(1, "La dirección es requerida")
     .max(200, "Máximo 200 caracteres"),
-  parentStatus: z.string().optional().or(z.literal("")),
+  photo_document: z
+    .any()
+    .refine(
+      (files) =>
+        files instanceof FileList ||
+        files instanceof File ||
+        files === undefined,
+      { message: "Debe seleccionar un archivo válido" }
+    )
+    .optional(),
 });

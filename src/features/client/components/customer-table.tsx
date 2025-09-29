@@ -10,12 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Customer } from "../types";
-import { useQuery } from "@tanstack/react-query";
-import {
-  fetchGenderTaxonomy,
-} from "../utils/customer";
-import { getNameFromId } from "../utils/customer";
-import { GENDER_TAXONOMY_KEY } from "../constants";
 
 interface CustomerTableProps {
   customers: Customer[];
@@ -28,22 +22,15 @@ export function CustomerTable({
   onView,
   onEdit,
 }: CustomerTableProps) {
-  const { data: genderOptions = [] } = useQuery({
-    queryKey: [GENDER_TAXONOMY_KEY],
-    queryFn: fetchGenderTaxonomy,
-  });
-
   return (
-    <div className="rounded-md border">
-      <Table>
+    <div className="rounded-md border ">
+      <Table className="table-fixed w-full">
         <TableHeader>
           <TableRow>
             <TableHead>Nombre completo</TableHead>
-            <TableHead>Número de documento</TableHead>
-            <TableHead>Sexo</TableHead>
-            <TableHead>Departamento</TableHead>
-            <TableHead>Municipio</TableHead>
-            <TableHead className="text-right">Acciones</TableHead>
+            <TableHead>Teléfono</TableHead>
+            <TableHead>Correo electrónico</TableHead>
+            <TableHead className="text-center">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -59,17 +46,17 @@ export function CustomerTable({
           ) : (
             customers.map((customer) => (
               <TableRow key={customer.id}>
-                <TableCell className="font-medium">
-                  {customer.fullName}
+                <TableCell className="font-medium text-left">
+                  {customer.fullName ? customer.fullName : "Sin agregar"}
                 </TableCell>
-                <TableCell>{customer.documentNumber}</TableCell>
                 <TableCell>
-                  {getNameFromId(customer.gender, genderOptions)}
+                  {customer.phoneNumber ? customer.phoneNumber : "Sin agregar"}
                 </TableCell>
-                <TableCell>{customer.department}</TableCell>
-                <TableCell>{customer.municipality}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
+                <TableCell>
+                  {customer.email ? customer.email : "Sin agregar"}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"

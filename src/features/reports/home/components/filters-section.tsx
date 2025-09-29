@@ -39,12 +39,11 @@ export function FiltersSection({ filters, onFiltersChange, onNewRequest }: Filte
   // Estados predefinidos para los filtros
   const statusOptions = [
     { value: "all", label: "Todos los estados" },
-    { value: "Pendiente", label: "Pendiente" },
-    { value: "En proceso", label: "En proceso" },
-    { value: "Asignada", label: "Asignada" },
-    { value: "Completada", label: "Completada" },
-    { value: "Cancelada", label: "Cancelada" },
-    { value: "Registrada", label: "Registrada" },
+    { value: "pendiente", label: "Pendiente" },
+    { value: "en_proceso", label: "En Proceso" },
+    { value: "asignada", label: "Asignada" },
+    { value: "completada", label: "Completada" },
+    { value: "cancelada", label: "Cancelada" },
   ]
 
   return (

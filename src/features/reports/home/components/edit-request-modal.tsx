@@ -1,6 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
-import { Loader, Edit, User, Package, CreditCard, MessageSquare } from "lucide-react";
+import {
+  Loader,
+  Edit,
+  User,
+  Package,
+  CreditCard,
+  MessageSquare,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -22,112 +29,154 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { updateRequest, fetchApplicants, fetchSubserviceWithHierarchy} from "@/features/home/utils/request";
-import {  useDistributorsQuery, useCategoriesQuery, useServicesByCategoryQuery, useSubservicesByServiceQuery } from "@/features/home/hooks/use-request-query";
-import type { Request, EditRequestFormData, Category, Service, Subservice, Applicant, Distributor } from "@/features/home/types/request";
+import {
+  updateRequest,
+  fetchApplicants,
+  fetchSubserviceWithHierarchy,
+} from "@/features/reports/home/utils/request";
+import {
+  useDistributorsQuery,
+  useCategoriesQuery,
+  useServicesByCategoryQuery,
+  useSubservicesByServiceQuery,
+} from "@/features/reports/home/hooks/use-request-query";
+import type {
+  Request,
+  EditRequestFormData,
+  Category,
+  Service,
+  Subservice,
+  Applicant,
+  Distributor,
+} from "@/features/reports/home/types/request";
 
 interface EditRequestModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
   request: Request | null;
 }
 
-
-
-export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalProps) {
+export function EditRequestModal({
+  isOpen,
+  onOpenChange,
+  request,
+}: EditRequestModalProps) {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
 
-  // Fetch data for form options
+  // Obtener datos para las opciones del formulario
   const { data: distributorsData } = useDistributorsQuery();
   const { data: categoriesData } = useCategoriesQuery();
-  
-  // Get services based on selected category
+
+  // Obtener servicios basados en la categoría seleccionada
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const { data: servicesData } = useServicesByCategoryQuery(selectedCategoryId);
-  
-  // Get subservices based on selected service
+
+  // Obtener subservicios basados en el servicio seleccionado
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
-  const { data: filteredSubservicesData } = useSubservicesByServiceQuery(selectedServiceId);
-  
-  // Handle category change
+  const { data: filteredSubservicesData } =
+    useSubservicesByServiceQuery(selectedServiceId);
+
+  // Manejar cambio de categoría
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategoryId(categoryId);
     setSelectedServiceId("");
     form.setValue("serviceId", "");
     form.setValue("subserviceId", "");
   };
-  
-  // Handle service change
+
+  // Manejar cambio de servicio
   const handleServiceChange = (serviceId: string) => {
     setSelectedServiceId(serviceId);
     form.setValue("subserviceId", "");
   };
 
   // Transform data to match our interface with safety checks
-  const distributors: Distributor[] = Array.isArray(distributorsData?.data) ? distributorsData.data.map((item: any) => ({
-    id: item.id,
-    title: item.attributes?.title || "",
-    documentNumber: item.attributes?.field_document_number || "",
-    documentType: item.attributes?.field_document_type || "",
-    phone: item.attributes?.field_phone || "",
-    email: item.attributes?.field_email || "",
-    status: item.attributes?.field_current_availability ? "Disponible" : "No disponible",
-  })) : [];
+  const distributors: Distributor[] = Array.isArray(
+    (distributorsData as { data?: unknown[] })?.data
+  )
+    ? (distributorsData as { data: unknown[] }).data.map((item: unknown) => {
+        const itemRecord = item as Record<string, unknown>;
+        const attributes = itemRecord.attributes as Record<string, unknown>;
+        return {
+          id: itemRecord.id as string,
+          title: (attributes?.title as string) || "",
+          documentNumber: (attributes?.field_document_number as string) || "",
+          documentType: (attributes?.field_document_type as string) || "",
+          phone: (attributes?.field_phone as string) || "",
+          email: (attributes?.field_email as string) || "",
+          status: attributes?.field_current_availability
+            ? "Disponible"
+            : "No disponible",
+        };
+      })
+    : [];
 
   const categories: Category[] = categoriesData || [];
   const services: Service[] = servicesData?.services || [];
-  
+
   // Get subservices from the hook
   const subservices: Subservice[] = filteredSubservicesData?.subservices || [];
 
-  // Load applicants when modal opens
+  const loadApplicants = useCallback(async () => {
+    try {
+      const response = await fetchApplicants();
+      if (response?.data) {
+        const applicantsData = response.data.map(
+          (item: Record<string, unknown>) => {
+            const attributes = item.attributes as Record<string, unknown>;
+            return {
+              id: item.id as string,
+              fullName: (attributes?.field_full_name as string) || "",
+              documentNumber:
+                (attributes?.field_document_number as string) || "",
+            };
+          }
+        );
+        setApplicants(applicantsData);
+      }
+    } catch {
+      // Manejar error silenciosamente - los solicitantes permanecerán vacíos
+    }
+  }, []);
+
+  // Cargar solicitantes cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
       loadApplicants();
     }
-  }, [isOpen]);
+  }, [isOpen, loadApplicants]);
 
-  // Cleanup effect
+  // Efecto de limpieza
   useEffect(() => {
     if (!isOpen) {
       const timer = setTimeout(() => {
         setIsSubmitting(false);
       }, 100);
-      
+
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
-
-  const loadApplicants = async () => {
-    try {
-      const response = await fetchApplicants();
-      if (response?.data) {
-        const applicantsData = response.data.map((item: any) => ({
-          id: item.id,
-          fullName: item.attributes?.field_full_name || "",
-          documentNumber: item.attributes?.field_document_number || "",
-        }));
-        setApplicants(applicantsData);
-      }
-    } catch (error) {
-      console.error("Error loading applicants:", error);
-    }
-  };
 
   const form = useForm<EditRequestFormData>({
     defaultValues: {
       // Campos del solicitante
       applicantId: "",
-      
+
       // Campos de la solicitud
       title: "",
       applicationNumber: "",
-      applicationScore: 4, // Por defecto 4 según criterios
+      applicationScore: 4,
       entryDate: "",
       categoryId: "",
       serviceId: "",
@@ -141,15 +190,15 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
       priorityEstimatedHours: 0,
       logisticsCosts: 0,
       isRecurring: false,
-      
+
       // Campos del repartidor
       distributorId: "",
-      
+
       // Gestión de solicitud
       serviceStatus: "",
       requestStatus: "",
       observations: "",
-      
+
       // Configuración
       status: true,
       promote: false,
@@ -160,12 +209,13 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
   useEffect(() => {
     const loadRequestData = async () => {
       if (request && isOpen) {
-        const subserviceId = request.relationships?.field_subservice?.data?.id || "";
-        
+        const subserviceId =
+          request.relationships?.field_subservice?.data?.id || "";
+
         form.reset({
           // Campos del solicitante
           applicantId: request.relationships?.field_applicant?.data?.id || "",
-          
+
           // Campos de la solicitud
           title: request.attributes?.title || "",
           applicationNumber: request.attributes?.field_application_number || "",
@@ -176,28 +226,31 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
           subserviceId: subserviceId,
           serviceCode: "", // TODO: Implementar cuando esté disponible en la API
           serviceValue: request.attributes?.field_service_value || 0,
-          priorityValue: 0, // TODO: Implementar cuando esté disponible en la API
-          paymentStatus: "", // TODO: Implementar cuando esté disponible en la API
-          usedChannel: "", // TODO: Implementar cuando esté disponible en la API
-          estimatedHours: request.attributes?.field_estimated_application_hour || 0,
-          priorityEstimatedHours: 0, // TODO: Implementar cuando esté disponible en la API
+          priorityValue: request.attributes?.field_priority_value || 0,
+          paymentStatus: request.attributes?.field_payment_status || "",
+          usedChannel: request.attributes?.field_used_channel || "",
+          estimatedHours:
+            request.attributes?.field_estimated_application_hour || 0,
+          priorityEstimatedHours:
+            request.attributes?.field_priority_estimated_hours || 0,
           logisticsCosts: request.attributes?.field_logistics_costs || 0,
-          isRecurring: false, // TODO: Implementar cuando esté disponible en la API
-          
+          isRecurring: request.attributes?.field_is_recurring || false,
+
           // Campos del repartidor
-          distributorId: request.relationships?.field_distributor_data?.data?.id || "",
-          
+          distributorId:
+            request.relationships?.field_distributor_data?.data?.id || "",
+
           // Gestión de solicitud
-          serviceStatus: "", // TODO: Implementar cuando esté disponible en la API
-          requestStatus: "", // TODO: Implementar cuando esté disponible en la API
-          observations: "", // TODO: Implementar cuando esté disponible en la API
-          
+          serviceStatus: request.attributes?.field_service_status || "",
+          requestStatus: request.attributes?.field_request_status || "",
+          observations: request.attributes?.field_observations || "",
+
           // Configuración
           status: request.attributes?.status ?? true,
           promote: request.attributes?.promote ?? false,
           sticky: request.attributes?.sticky ?? false,
         });
-        
+
         // Si hay subservicio, determinar categoría y servicio
         if (subserviceId) {
           try {
@@ -208,45 +261,68 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
               form.setValue("categoryId", hierarchy.category.uuid);
               form.setValue("serviceId", hierarchy.service.id);
             }
-          } catch (error) {
-            console.error("Error fetching subservice hierarchy:", error);
+          } catch {
+            // Manejar error silenciosamente - el formulario funcionará sin jerarquía
           }
         }
       }
     };
-    
+
     loadRequestData();
   }, [request, isOpen, form]);
-  
+
   // Sync form values when selections change
   useEffect(() => {
     if (selectedCategoryId) {
       form.setValue("categoryId", selectedCategoryId);
     }
   }, [selectedCategoryId, form]);
-  
+
   useEffect(() => {
     if (selectedServiceId) {
       form.setValue("serviceId", selectedServiceId);
     }
   }, [selectedServiceId, form]);
-  
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      form.reset();
+    }
+  }, [isOpen, form]);
+
   const handleSubmit = async (data: EditRequestFormData) => {
     if (!request || isSubmitting) return;
 
-    // Confirmar cambios antes de guardar
     if (!confirm("¿Confirma que desea guardar los cambios?")) {
       return;
     }
 
     setIsSubmitting(true);
     try {
-      console.log("Submitting form data:", data);
-      
-      // Payload simplificado para evitar errores 500
-      const requestData: any = {
+      const relationships: Record<string, { data: { type: string; id: string } }> = {};
+
+      if (data.applicantId) {
+        relationships.field_applicant = {
+          data: { type: "node--profile", id: data.applicantId },
+        };
+      }
+
+      if (data.distributorId && data.distributorId !== "none") {
+        relationships.field_distributor_data = {
+          data: { type: "node--distributor", id: data.distributorId },
+        };
+      }
+
+      if (data.subserviceId) {
+        relationships.field_subservice = {
+          data: { type: "taxonomy_term--category", id: data.subserviceId },
+        };
+      }
+
+      const requestData = {
         data: {
-          type: "node--request",
+          type: "node--request" as const,
           id: request.id,
           attributes: {
             title: data.title,
@@ -260,61 +336,34 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
             promote: data.promote,
             sticky: data.sticky,
           },
+          relationships: relationships,
         },
       };
 
-      // Solo agregar relaciones si tienen valores válidos
-      const relationships: any = {};
-      
-      if (data.applicantId) {
-        relationships.field_applicant = {
-          data: { type: "node--profile", id: data.applicantId }
-        };
-      }
-      
-      if (data.distributorId && data.distributorId !== "none") {
-        relationships.field_distributor_data = {
-          data: { type: "node--distributor", id: data.distributorId }
-        };
-      }
-      
-      if (data.subserviceId) {
-        relationships.field_subservice = {
-          data: { type: "taxonomy_term--category", id: data.subserviceId }
-        };
-      }
-
-      // Solo agregar relationships si hay alguna
-      if (Object.keys(relationships).length > 0) {
-        requestData.data.relationships = relationships;
-      }
-
-      console.log("Sending simplified update payload:", JSON.stringify(requestData, null, 2));
-
       await updateRequest(request.id, requestData);
       
-      toast.success("Solicitud actualizada correctamente");
-      queryClient.invalidateQueries({ queryKey: ["requests"] });
+      onOpenChange(false);
       
-      // Solo cerrar si el componente sigue montado
-      if (isOpen) {
-        onClose();
-      }
-    } catch (error) {
-      console.error("Error updating request:", error);
+      requestAnimationFrame(() => {
+        toast.success("Solicitud actualizada correctamente");
+        queryClient.invalidateQueries({ queryKey: ["requests"] });
+      });
+    } catch {
       toast.error("Error al actualizar la solicitud");
     } finally {
-      // Solo actualizar el estado si el modal sigue abierto
-      if (isOpen) {
-        setIsSubmitting(false);
-      }
+      setIsSubmitting(false);
     }
   };
 
-  if (!request) return null;
+  if (!request || !isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onOpenChange(open);
+      }}
+    >
       <DialogContent className="sm:max-w-[800px] p-0 max-h-[90vh] overflow-y-auto">
         <DialogHeader className="px-6 py-4 border-b">
           <div className="flex items-center justify-between">
@@ -331,12 +380,14 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                 </DialogDescription>
               </div>
             </div>
-          
           </div>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="px-6 py-4 space-y-6">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="px-6 py-4 space-y-6"
+          >
             {/* Información Principal */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
@@ -368,10 +419,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     <FormItem>
                       <FormLabel>Número de solicitud *</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="APP-001"
-                          {...field}
-                        />
+                        <Input placeholder="APP-001" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -387,10 +435,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     <FormItem>
                       <FormLabel>Fecha de entrada *</FormLabel>
                       <FormControl>
-                        <Input
-                          type="date"
-                          {...field}
-                        />
+                        <Input type="date" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -399,18 +444,19 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
 
                 <FormField
                   control={form.control}
-                  name="applicationScore"
+                  name="estimatedHours"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Calificación</FormLabel>
+                      <FormLabel>Horas estimadas *</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          min="1"
-                          max="5"
-                          placeholder="1-5"
+                          min="0"
+                          placeholder="2"
                           {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                          onChange={(e) =>
+                            field.onChange(parseInt(e.target.value) || 0)
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -433,10 +479,14 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Categoría *</FormLabel>
-                      <Select onValueChange={(value) => {
-                        field.onChange(value);
-                        handleCategoryChange(value);
-                      }} defaultValue={field.value}>
+                      <Select
+                        key={`category-${isOpen}`}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          handleCategoryChange(value);
+                        }}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger className="max-w-[200px]">
                             <SelectValue placeholder="Seleccionar categoría" />
@@ -444,8 +494,12 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                         </FormControl>
                         <SelectContent className="max-w-[300px]">
                           {categories.map((category) => (
-                            <SelectItem key={category.uuid} value={category.uuid} className="truncate">
-                              {category.name}
+                            <SelectItem
+                              key={category.uuid}
+                              value={category.uuid}
+                              className="truncate"
+                            >
+                              {category.name ?? "Sin nombre"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -461,19 +515,34 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Tipo de Servicio *</FormLabel>
-                      <Select onValueChange={(value) => {
-                        field.onChange(value);
-                        handleServiceChange(value);
-                      }} defaultValue={field.value} disabled={!selectedCategoryId}>
+                      <Select
+                        key={`service-${isOpen}`}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          handleServiceChange(value);
+                        }}
+                        defaultValue={field.value}
+                        disabled={!selectedCategoryId}
+                      >
                         <FormControl>
                           <SelectTrigger className="max-w-[200px]">
-                            <SelectValue placeholder={selectedCategoryId ? "Seleccionar servicio" : "Seleccione categoría primero"} />
+                            <SelectValue
+                              placeholder={
+                                selectedCategoryId
+                                  ? "Seleccionar servicio"
+                                  : "Seleccione categoría primero"
+                              }
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="max-w-[300px]">
                           {services.map((service) => (
-                            <SelectItem key={service.id} value={service.id} className="truncate">
-                              {service.name}
+                            <SelectItem
+                              key={service.id}
+                              value={service.id}
+                              className="truncate"
+                            >
+                              {service.name ?? "Sin servicio"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -489,16 +558,31 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Subservicio *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!selectedServiceId}>
+                      <Select
+                        key={`subservice-${isOpen}`}
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        disabled={!selectedServiceId}
+                      >
                         <FormControl>
                           <SelectTrigger className="max-w-[200px]">
-                            <SelectValue placeholder={selectedServiceId ? "Seleccionar subservicio" : "Seleccione servicio primero"} />
+                            <SelectValue
+                              placeholder={
+                                selectedServiceId
+                                  ? "Seleccionar subservicio"
+                                  : "Seleccione servicio primero"
+                              }
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="max-w-[300px]">
                           {subservices.map((subservice) => (
-                            <SelectItem key={subservice.id} value={subservice.id} className="truncate">
-                              {subservice.name}
+                            <SelectItem
+                              key={subservice.id}
+                              value={subservice.id}
+                              className="truncate"
+                            >
+                              {subservice.name ?? "Sin subservicio"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -516,7 +600,11 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cliente *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        key={`applicant-${isOpen}`}
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccionar cliente" />
@@ -525,7 +613,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                         <SelectContent>
                           {applicants.map((applicant) => (
                             <SelectItem key={applicant.id} value={applicant.id}>
-                              {applicant.fullName} - {applicant.documentNumber}
+                              {applicant.fullName ?? "Sin nombre"} - {applicant.documentNumber ?? "Sin número de documento"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -541,7 +629,11 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Repartidor</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        key={`distributor-${isOpen}`}
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Sin asignar" />
@@ -549,8 +641,11 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                         </FormControl>
                         <SelectContent>
                           {distributors.map((distributor) => (
-                            <SelectItem key={distributor.id} value={distributor.id}>
-                              {distributor.title} - {distributor.documentNumber}
+                            <SelectItem
+                              key={distributor.id}
+                              value={distributor.id}
+                            >
+                              {distributor.title ?? "Sin nombre"} - {distributor.documentNumber ?? "Sin número de documento"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -568,40 +663,23 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                 <CreditCard className="h-5 w-5" />
                 Valores y Costos
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="estimatedHours"
+                  name="serviceValue"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Horas estimadas *</FormLabel>
+                      <FormLabel>Valor del servicio</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
                           min="0"
-                          placeholder="2"
+                          step="0.01"
+                          placeholder="150"
                           {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="priorityEstimatedHours"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Horas estimadas priorizadas *</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="1"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          onChange={(e) =>
+                            field.onChange(parseFloat(e.target.value) || 0)
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -622,130 +700,11 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                           step="0.01"
                           placeholder="50"
                           {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          onChange={(e) =>
+                            field.onChange(parseFloat(e.target.value) || 0)
+                          }
                         />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="serviceValue"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor del servicio</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="150"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="priorityValue"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor priorizado</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="200"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="isRecurring"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm">Recurrente</FormLabel>
-                        <p className="text-xs text-gray-500">¿Es una solicitud recurrente?</p>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Gestión de Solicitud */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
-                <MessageSquare className="h-5 w-5" />
-                Gestión de Solicitud
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="serviceStatus"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Estado del servicio *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar estado del servicio" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="pendiente">Pendiente</SelectItem>
-                          <SelectItem value="en_proceso">En Proceso</SelectItem>
-                          <SelectItem value="completado">Completado</SelectItem>
-                          <SelectItem value="cancelado">Cancelado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="requestStatus"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Estado de la solicitud *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar estado de la solicitud" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="registrada">Registrada</SelectItem>
-                          <SelectItem value="asignada">Asignada</SelectItem>
-                          <SelectItem value="en_proceso">En Proceso</SelectItem>
-                          <SelectItem value="completada">Completada</SelectItem>
-                          <SelectItem value="cancelada">Cancelada</SelectItem>
-                        </SelectContent>
-                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -754,20 +713,49 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
 
               <FormField
                 control={form.control}
+                name="isRecurring"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm">Recurrente</FormLabel>
+                      <p className="text-xs text-gray-500">
+                        ¿Es una solicitud recurrente?
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Gestión de Solicitud */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
+                <MessageSquare className="h-5 w-5" />
+                Gestión de Solicitud
+              </h3>
+
+              <FormField
+                control={form.control}
                 name="observations"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Observaciones *</FormLabel>
+                    <FormLabel>Observaciones</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="Ingrese las observaciones de la solicitud..."
                         className="resize-none"
-                        maxLength={100}
+                        maxLength={500}
                         {...field}
                       />
                     </FormControl>
                     <div className="text-xs text-gray-500 text-right">
-                      {field.value?.length || 0}/100 caracteres
+                      {field.value?.length || 0}/500 caracteres
                     </div>
                     <FormMessage />
                   </FormItem>
@@ -788,7 +776,9 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     <FormItem className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <FormLabel className="text-sm">Estado activo</FormLabel>
-                        <p className="text-xs text-gray-500">Activar o desactivar la solicitud</p>
+                        <p className="text-xs text-gray-500">
+                          Activar o desactivar la solicitud
+                        </p>
                       </div>
                       <FormControl>
                         <Switch
@@ -799,7 +789,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="promote"
@@ -807,7 +797,9 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     <FormItem className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <FormLabel className="text-sm">Promocionar</FormLabel>
-                        <p className="text-xs text-gray-500">Destacar en la lista principal</p>
+                        <p className="text-xs text-gray-500">
+                          Destacar en la lista principal
+                        </p>
                       </div>
                       <FormControl>
                         <Switch
@@ -818,7 +810,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="sticky"
@@ -826,7 +818,9 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
                     <FormItem className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <FormLabel className="text-sm">Fijar</FormLabel>
-                        <p className="text-xs text-gray-500">Mantener siempre visible</p>
+                        <p className="text-xs text-gray-500">
+                          Mantener siempre visible
+                        </p>
                       </div>
                       <FormControl>
                         <Switch
@@ -843,7 +837,7 @@ export function EditRequestModal({ isOpen, onClose, request }: EditRequestModalP
         </Form>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button
