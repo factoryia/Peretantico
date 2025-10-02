@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -51,6 +52,7 @@ interface PaymentFormData {
   baseValue: number;
   additionalValue: number;
   discountValue: number;
+  observations: string;
 }
 
 export function PaymentCalculationModal({
@@ -58,6 +60,7 @@ export function PaymentCalculationModal({
   onOpenChange,
   distributor,
 }: PaymentCalculationModalProps) {
+  const queryClient = useQueryClient();
   const [paymentCalculation, setPaymentCalculation] =
     useState<PaymentCalculation>({
       baseValue: 0,
@@ -65,6 +68,7 @@ export function PaymentCalculationModal({
       discountValue: 0,
       total: 0,
     });
+  const [paidForRequest] = useState<Record<string, boolean>>({});
 
   const form = useForm<PaymentFormData>({
     defaultValues: {
@@ -72,13 +76,24 @@ export function PaymentCalculationModal({
       baseValue: 0,
       additionalValue: 0,
       discountValue: 0,
+      observations: "",
     },
   });
 
-  const { data: requests, isLoading } = useQuery({
+  const { data: requestsRaw, isLoading } = useQuery({
     queryKey: ["assigned-requests", distributor?.id],
     queryFn: () => fetchAssignedRequests(distributor?.id || ""),
     enabled: !!distributor?.id && open,
+  });
+
+  const requests = (requestsRaw || []).filter((req) => {
+    // Excluir solicitudes que ya están marcadas como pagadas localmente
+    if (paidForRequest[req.id]) return false;
+    
+    // Excluir solicitudes que ya tienen estado de pago "Recibido"
+    if (req.paymentStatus?.name?.toLowerCase() === "recibido") return false;
+    
+    return true;
   });
 
   const { data: paymentHistory, isLoading: isLoadingHistory } = useQuery({
@@ -86,6 +101,17 @@ export function PaymentCalculationModal({
     queryFn: () => fetchPaymentHistory(distributor?.id || "", 5),
     enabled: !!distributor?.id && open,
   });
+
+  const createPaymentMutation = useMutation({
+    mutationFn: saveCostRecord,
+    onSuccess: async () => {
+      // Invalidar queries para refrescar el historial y las solicitudes
+      await queryClient.invalidateQueries({ queryKey: ["payment-history", distributor?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["assigned-requests", distributor?.id] });
+    },
+  });
+
+  // Mutación de marcar como pagado eliminada según requerimiento
 
   const watchedValues = form.watch();
 
@@ -123,12 +149,13 @@ export function PaymentCalculationModal({
         return;
       }
 
-      await saveCostRecord({
+      await createPaymentMutation.mutateAsync({
         distributorId: distributor.id,
         requestId: data.requestId,
         baseValue: data.baseValue,
         additionalValue: data.additionalValue,
         discountValue: data.discountValue,
+        observations: data.observations,
       });
 
       toast.success("Cálculo de pago guardado correctamente");
@@ -139,6 +166,8 @@ export function PaymentCalculationModal({
       console.error("Error saving payment calculation:", error);
     }
   };
+
+  // Acción de marcar como pagado eliminada según requerimiento
 
   const handleClose = () => {
     form.reset();
@@ -305,6 +334,23 @@ export function PaymentCalculationModal({
               />
             </div>
 
+            <FormField
+              control={form.control}
+              name="observations"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Observaciones</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Observaciones del pago..."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -365,7 +411,7 @@ export function PaymentCalculationModal({
                       >
                         <div className="flex-1">
                           <p className="text-sm font-medium">
-                            Solicitud: {payment.requestId}
+                            Solicitud: {payment.requestApplicationNumber || payment.requestId}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(payment.createdAt).toLocaleDateString()}
@@ -375,6 +421,11 @@ export function PaymentCalculationModal({
                           <p className="text-sm font-bold">
                             ${(payment.paymentCalculation?.total || 0).toLocaleString()}
                           </p>
+                          {payment.paymentStatus?.name ? (
+                            <p className="text-xs text-muted-foreground">
+                              Estado: {payment.paymentStatus.name}
+                            </p>
+                          ) : null}
                           <p className="text-xs text-muted-foreground">
                             Base: $
                             {(payment.paymentCalculation?.baseValue || 0).toLocaleString()}
@@ -401,13 +452,14 @@ export function PaymentCalculationModal({
                 <X className="h-4 w-4" />
                 Cancelar
               </Button>
+              {/* Botón de cambiar a pagado eliminado según requerimiento */}
               <Button
                 type="submit"
                 className="flex items-center gap-2"
-                disabled={!form.formState.isValid || !watchedValues.requestId}
+                disabled={!form.formState.isValid || !watchedValues.requestId || createPaymentMutation.isPending}
               >
                 <Save className="h-4 w-4" />
-                Guardar Cálculo
+                Pagar
               </Button>
             </div>
           </form>

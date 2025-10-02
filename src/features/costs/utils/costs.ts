@@ -51,6 +51,7 @@ interface RequestsApiResponse {
       field_service?: { data?: { id: string } };
       field_category?: { data?: { id: string } };
       field_application_statuses?: { data?: { id: string } };
+      field_payment_status?: { data?: { id: string } };
     };
   }>;
   included?: Array<{
@@ -66,16 +67,19 @@ interface PaymentsApiResponse {
     id: string;
     attributes: {
       title: string;
-      field_base_value: number;
-      field_additional_value: number;
-      field_discount_value: number;
-      field_total_value: number;
+      field_base_value?: number;
+      field_additional_value?: number;
+      field_discount_value?: number;
+      field_total_value?: number;
+      field_additional_amount?: number;
+      field_discount_amount?: number;
       created: string;
       changed: string;
     };
     relationships: {
       field_distributor_data?: { data?: { id: string } };
-      field_request?: { data?: { id: string } };
+      field_request?: { data?: { id: string } | Array<{ id: string }> };
+      field_payment_status?: { data?: { id: string } };
     };
   }>;
   included?: Array<{
@@ -179,7 +183,7 @@ export const fetchAssignedRequests = async (distributorId: string): Promise<Requ
         response = await api.get("/api/node/request", {
           params: {
             "page[limit]": 100,
-            include: "field_subservice,field_distributor_data",
+            include: "field_subservice,field_distributor_data,field_payment_status",
             sort: "-created",
             ...filterOptions[i],
           },
@@ -250,7 +254,25 @@ export const fetchAssignedRequests = async (distributorId: string): Promise<Requ
           id: distributor.id,
           title: distributor.attributes.title as string,
         } : undefined,
+        paymentStatus: item.relationships.field_payment_status?.data?.id
+          ? {
+              id: item.relationships.field_payment_status.data.id,
+              name: "Unknown",
+            }
+          : undefined,
       };
+    });
+
+    // Buscar nombres de estados de pago en included y actualizar
+    requests.forEach((request) => {
+      if (request.paymentStatus?.id) {
+        const paymentStatusIncluded = response.data.included?.find(
+          (inc) => inc.id === request.paymentStatus!.id && inc.type === "taxonomy_term--payment_status"
+        );
+        if (paymentStatusIncluded?.attributes?.name) {
+          request.paymentStatus.name = paymentStatusIncluded.attributes.name as string;
+        }
+      }
     });
 
     // Debug: Verificar los datos de las solicitudes
@@ -292,7 +314,7 @@ export const fetchAllRequestsAndFilter = async (distributorId: string): Promise<
     const response: AxiosResponse<RequestsApiResponse> = await api.get("/api/node/request", {
       params: {
         "page[limit]": 100,
-        include: "field_subservice,field_distributor_data",
+        include: "field_subservice,field_distributor_data,field_payment_status",
         sort: "-created",
       },
     });
@@ -351,7 +373,25 @@ export const fetchAllRequestsAndFilter = async (distributorId: string): Promise<
           id: distributor.id,
           title: distributor.attributes.title as string,
         } : undefined,
+        paymentStatus: item.relationships.field_payment_status?.data?.id
+          ? {
+              id: item.relationships.field_payment_status.data.id,
+              name: "Unknown",
+            }
+          : undefined,
       };
+    });
+
+    // Buscar nombres de estados de pago en included y actualizar
+    allRequests.forEach((request) => {
+      if (request.paymentStatus?.id) {
+        const paymentStatusIncluded = response.data.included?.find(
+          (inc) => inc.id === request.paymentStatus!.id && inc.type === "taxonomy_term--payment_status"
+        );
+        if (paymentStatusIncluded?.attributes?.name) {
+          request.paymentStatus.name = paymentStatusIncluded.attributes.name as string;
+        }
+      }
     });
 
     // Filtrar por distribuidor en el frontend
@@ -382,32 +422,250 @@ export const calculatePayment = (baseValue: number, additionalValue: number, dis
 };
 
 // Función para guardar un registro de costo
+type CreatedPaymentNode = {
+  id: string;
+  attributes: {
+    field_base_value?: number;
+    field_additional_value?: number;
+    field_discount_value?: number;
+    field_total_value?: number;
+    field_additional_amount?: number;
+    field_discount_amount?: number;
+    field_observations?: string;
+    created?: string;
+    changed?: string;
+  };
+  relationships: {
+    field_request?: { data?: { id?: string } | Array<{ id?: string }> };
+    field_payment_status?: { data?: { id?: string } };
+  };
+};
+
 export const saveCostRecord = async (costData: {
   distributorId: string;
   requestId: string;
   baseValue: number;
   additionalValue: number;
   discountValue: number;
+  observations?: string;
 }): Promise<CostRecord> => {
   try {
-    // TODO: Implementar endpoint real para guardar costos
-    // Por ahora, simulamos la respuesta
-    const paymentCalculation = calculatePayment(costData.baseValue, costData.additionalValue, costData.discountValue);
-    const costRecord: CostRecord = {
-      id: `cost_${Date.now()}`,
-      distributorId: costData.distributorId,
-      requestId: costData.requestId,
-      paymentCalculation,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Simular llamada a API
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(costRecord), 500);
-    });
+    const totalValue = calculatePayment(
+      costData.baseValue,
+      costData.additionalValue,
+      costData.discountValue
+    ).total;
+
+    // Intentar crear el pago con JSON:API
+    try {
+      const payload = {
+        data: {
+          type: "node--payment",
+          attributes: {
+            title: `Pago solicitud ${costData.requestId}`,
+            field_observations: costData.observations || "",
+            // Solo enviar montos necesarios
+            field_additional_amount: costData.additionalValue,
+            field_discount_amount: costData.discountValue,
+            status: true,
+          },
+          relationships: {
+            field_distributor_data: {
+              data: { type: "node--distributor", id: costData.distributorId },
+            },
+            // El backend espera arreglo de requests
+            field_request: {
+              data: [
+                { type: "node--request", id: costData.requestId },
+              ],
+            },
+            // Se establecerá más abajo cuando obtengamos el id de "Recibido"
+          },
+        },
+      };
+
+      // Buscar el estado "Recibido"
+      try {
+        const statusesResponse = await api.get("/api/taxonomy_term/payment_status", { params: { "page[limit]": 100 } });
+        const statuses: Array<{ id: string; attributes: { name?: string } }> = statusesResponse?.data?.data || [];
+        const recibido = statuses.find((s) => (s.attributes?.name || "").toLowerCase() === "recibido");
+        if (recibido?.id) {
+          (payload.data as unknown as { relationships: { field_payment_status?: { data: { type: string; id: string } } } }).relationships.field_payment_status = {
+            data: { type: "taxonomy_term--payment_status", id: recibido.id },
+          };
+        }
+      } catch {
+        // Si falla, continua sin estado (el backend puede aplicar por defecto)
+      }
+
+      const response: AxiosResponse<{ data: CreatedPaymentNode }> = await api.post(
+        "/api/node/payment",
+        payload,
+        {
+          headers: { "Content-Type": "application/vnd.api+json" },
+        }
+      );
+
+      // Normalizar respuesta a CostRecord
+      const created = response.data.data;
+      const attributes = created?.attributes || {};
+      const relationships = created?.relationships || {};
+      const requestRel = relationships?.field_request?.data as
+        | { id?: string }
+        | Array<{ id?: string }>
+        | undefined;
+      const requestIdFromRel = Array.isArray(requestRel)
+        ? requestRel[0]?.id
+        : (requestRel as { id?: string } | undefined)?.id;
+
+      const additionalFromAttr: number | undefined =
+        (attributes as { field_additional_amount?: number; field_additional_value?: number }).field_additional_amount ??
+        (attributes as { field_additional_value?: number }).field_additional_value;
+      const discountFromAttr: number | undefined =
+        (attributes as { field_discount_amount?: number; field_discount_value?: number }).field_discount_amount ??
+        (attributes as { field_discount_value?: number }).field_discount_value;
+
+      const computedTotal = calculatePayment(
+        costData.baseValue,
+        additionalFromAttr ?? costData.additionalValue,
+        discountFromAttr ?? costData.discountValue
+      ).total;
+
+      const record: CostRecord = {
+        id: created?.id || `payment_${Date.now()}`,
+        distributorId: costData.distributorId,
+        requestId: requestIdFromRel || costData.requestId,
+        paymentCalculation: {
+          baseValue: costData.baseValue,
+          additionalValue: additionalFromAttr ?? costData.additionalValue,
+          discountValue: discountFromAttr ?? costData.discountValue,
+          total: computedTotal,
+        },
+        paymentStatus: relationships?.field_payment_status?.data?.id
+          ? { id: relationships.field_payment_status.data.id, name: "Recibido" }
+          : undefined,
+        createdAt: attributes?.created || new Date().toISOString(),
+        updatedAt: attributes?.changed || new Date().toISOString(),
+      };
+      // Después de crear el pago exitosamente, actualizar el estado de la solicitud a "Recibido"
+      try {
+        await updateRequestPaymentStatus(costData.requestId, "recibido");
+      } catch (updateError) {
+        console.error("Error updating request payment status:", updateError);
+        // No lanzar el error para que el pago se guarde aunque falle la actualización del estado
+      }
+
+      return record;
+    } catch {
+      // Fallback: intentar Drupal REST si JSON:API no está disponible
+      const restPayload: Record<string, unknown> = {
+        type: [{ target_id: "payment" }],
+        title: [{ value: `Pago solicitud ${costData.requestId}` }],
+        field_observations: [{ value: costData.observations || "" }],
+        field_additional_amount: [{ value: costData.additionalValue }],
+        field_discount_amount: [{ value: costData.discountValue }],
+        field_distributor_data: [{ target_id: costData.distributorId }],
+        field_request: [{ target_id: costData.requestId }],
+        status: [{ value: 1 }],
+      };
+
+      const response = await api.post("/node?_format=json", restPayload, {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      return {
+        id: response.data?.nid?.[0]?.value?.toString?.() || `payment_${Date.now()}`,
+        distributorId: costData.distributorId,
+        requestId: costData.requestId,
+        paymentCalculation: {
+          baseValue: costData.baseValue,
+          additionalValue: costData.additionalValue,
+          discountValue: costData.discountValue,
+          total: totalValue,
+        },
+        paymentStatus: undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
   } catch (error) {
     console.error("Error saving cost record:", error);
+    throw error;
+  }
+};
+
+// Actualizar estado de pago de la solicitud
+export const updateRequestPaymentStatus = async (requestId: string, statusName: string): Promise<void> => {
+  try {
+    // Obtener taxonomías de estados de pago y buscar el estado
+    const statusesResponse = await api.get("/api/taxonomy_term/payment_status", {
+      params: { "page[limit]": 100 },
+    });
+    const statuses: Array<{ id: string; attributes: { name?: string } }> = statusesResponse?.data?.data || [];
+    const status = statuses.find((s) => (s.attributes?.name || "").toLowerCase() === statusName.toLowerCase());
+
+    if (!status?.id) {
+      throw new Error(`No se encontró el estado de pago '${statusName}'`);
+    }
+
+    const payload = {
+      data: {
+        type: "node--request",
+        id: requestId,
+        relationships: {
+          field_payment_status: {
+            data: { type: "taxonomy_term--payment_status", id: status.id },
+          },
+        },
+      },
+    };
+
+    await api.patch(`/api/node/request/${requestId}`, payload, {
+      headers: {
+        "Content-Type": "application/vnd.api+json",
+        "X-Csrf-Token": localStorage.getItem("csrf_token") || "",
+      },
+    });
+  } catch (error) {
+    console.error("Error updating request payment status:", error);
+    throw error;
+  }
+};
+
+// Cambiar estado de pago de la solicitud a "Pagado"
+export const markRequestPaymentAsPaid = async (requestId: string): Promise<void> => {
+  try {
+    // Obtener taxonomías de estados de pago y buscar "Pagado"
+    const statusesResponse = await api.get("/api/taxonomy_term/payment_status", {
+      params: { "page[limit]": 100 },
+    });
+    const statuses: Array<{ id: string; attributes: { name?: string } }> = statusesResponse?.data?.data || [];
+    const paid = statuses.find((s) => (s.attributes?.name || "").toLowerCase() === "pagado");
+
+    if (!paid?.id) {
+      throw new Error("No se encontró el estado de pago 'Pagado'");
+    }
+
+    const payload = {
+      data: {
+        type: "node--request",
+        id: requestId,
+        relationships: {
+          field_payment_status: {
+            data: { type: "taxonomy_term--payment_status", id: paid.id },
+          },
+        },
+      },
+    };
+
+    await api.patch(`/api/node/request/${requestId}`, payload, {
+      headers: {
+        "Content-Type": "application/vnd.api+json",
+        "X-Csrf-Token": localStorage.getItem("csrf_token") || "",
+      },
+    });
+  } catch (error) {
+    console.error("Error marcando solicitud como pagada:", error);
     throw error;
   }
 };
@@ -420,22 +678,53 @@ export const fetchPaymentHistory = async (distributorId: string, limit: number =
         "page[limit]": limit,
         "filter[field_distributor_data.id]": distributorId,
         sort: "-created",
-        include: "field_distributor_data,field_request",
+        include: "field_distributor_data,field_request,field_payment_status",
       },
     });
 
     // Procesar pagos
     const payments: CostRecord[] = response.data.data.map((item) => {
+      // Buscar nombre de estado en included
+      const paymentStatusRelId = item.relationships.field_payment_status?.data?.id;
+      const statusIncluded = response.data.included?.find(
+        (inc) => inc.id === paymentStatusRelId && inc.type === "taxonomy_term--payment_status"
+      );
+      const paymentStatusName = (statusIncluded?.attributes as { name?: string } | undefined)?.name || "";
+
+      // Extraer requestId (puede venir como objeto o arreglo)
+      const requestRel = item.relationships.field_request?.data as
+        | { id: string }
+        | Array<{ id: string }>
+        | undefined;
+      const requestId = Array.isArray(requestRel) ? requestRel[0]?.id ?? "" : requestRel?.id ?? "";
+
+      // Inferir base desde la solicitud incluida si está disponible
+      const requestIncluded = response.data.included?.find(
+        (inc) => inc.id === requestId && inc.type === "node--request"
+      );
+      const requestAttributes = (requestIncluded?.attributes || {}) as { field_service_value?: number; field_application_number?: string };
+      const baseFromRequest = requestAttributes.field_service_value ?? item.attributes.field_base_value ?? 0;
+
+      // Montos adicionales/descuentos con compatibilidad de nombres
+      const additional = item.attributes.field_additional_amount ?? item.attributes.field_additional_value ?? 0;
+      const discount = item.attributes.field_discount_amount ?? item.attributes.field_discount_value ?? 0;
+
+      const total = calculatePayment(baseFromRequest, additional, discount).total;
+
       return {
         id: item.id,
         distributorId: distributorId,
-        requestId: item.relationships.field_request?.data?.id || "",
+        requestId,
+        requestApplicationNumber: requestAttributes.field_application_number ?? undefined,
         paymentCalculation: {
-          baseValue: item.attributes.field_base_value,
-          additionalValue: item.attributes.field_additional_value,
-          discountValue: item.attributes.field_discount_value,
-          total: item.attributes.field_total_value,
+          baseValue: baseFromRequest,
+          additionalValue: additional,
+          discountValue: discount,
+          total,
         },
+        paymentStatus: paymentStatusRelId
+          ? { id: paymentStatusRelId, name: paymentStatusName }
+          : undefined,
         createdAt: item.attributes.created,
         updatedAt: item.attributes.changed,
       };

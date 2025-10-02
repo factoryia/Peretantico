@@ -79,41 +79,35 @@ export function RequestsModal({
     setFilterDate("");
   };
 
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case "completed":
+  const getPaymentStatusBadgeVariant = (paymentStatusName: string) => {
+    switch (paymentStatusName?.toLowerCase()) {
+      case "recibido":
         return "default";
-      case "in_progress":
+      case "pendiente":
+        return "outline";
+      case "incompleto":
+        return "destructive";
+      case "n/a":
         return "secondary";
-      case "pending":
-        return "outline";
       default:
-        return "outline";
+        return "secondary"; // N/A por defecto
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "Completada";
-      case "in_progress":
-        return "En Progreso";
-      case "pending":
-        return "Pendiente";
-      default:
-        return status;
+  const getPaymentStatusLabel = (request: Request) => {
+    if (request.paymentStatus?.name) {
+      return request.paymentStatus.name;
     }
+    return "N/A";
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            Solicitudes Asignadas - {distributor?.title}
-          </DialogTitle>
+          <DialogTitle>Solicitudes Asignadas</DialogTitle>
           <DialogDescription>
-            Listado de todas las solicitudes asignadas a este distribuidor.
+            Solicitudes asignadas al distribuidor {distributor?.title}
           </DialogDescription>
         </DialogHeader>
 
@@ -124,7 +118,11 @@ export function RequestsModal({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium">Nombre:</span>
+                <p>{distributor?.title}</p>
+              </div>
               <div>
                 <span className="font-medium">Documento:</span>
                 <p>{distributor?.documentNumber}</p>
@@ -137,110 +135,112 @@ export function RequestsModal({
                 <span className="font-medium">Email:</span>
                 <p>{distributor?.email}</p>
               </div>
-              <div>
-                <span className="font-medium">Vehículo:</span>
-                <p>{distributor?.vehicleId}</p>
-              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">
-              Solicitudes ({filteredRequests.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* Filtro de fecha */}
-            <div className="mb-6 p-4 border rounded-lg bg-muted/50">
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm font-medium">Filtrar por fecha</span>
-              </div>
-              <div className="flex items-end gap-4">
-                <div className="space-y-2 flex-1">
-                  <label htmlFor="filterDate" className="text-sm font-medium">
-                    Fecha
+        <div className="space-y-4">
+          {/* Filtros */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Filtros</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4 md:flex-row md:items-end">
+                <div className="flex-1">
+                  <label htmlFor="filterDate" className="block text-sm font-medium mb-1">
+                    Filtrar por Fecha
                   </label>
-                  <Input
-                    id="filterDate"
-                    type="date"
-                    value={filterDate}
-                    onChange={(e) => setFilterDate(e.target.value)}
-                    className="w-full"
-                  />
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="filterDate"
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={clearFilters}
-                    disabled={!filterDate}
-                    className="px-4"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Limpiar
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="flex items-center gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Limpiar Filtros
+                </Button>
               </div>
-            </div>
-            {isLoading ? (
-              <TableSkeleton />
-            ) : filteredRequests && filteredRequests.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Número de Solicitud</TableHead>
-                      <TableHead>Servicio</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Valor del Servicio</TableHead>
-                      <TableHead>Fecha</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRequests.map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell className="font-mono text-sm">
-                          {request.applicationNumber}
-                        </TableCell>
+            </CardContent>
+          </Card>
 
-                        <TableCell>
-                          <div>
-                            <p className="text-sm text-muted-foreground">
-                              {request.subservice.name}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={getStatusBadgeVariant(request.status)}
-                          >
-                            {getStatusLabel(request.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          ${request.serviceValue.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {new Date(request.entryDate + 'T00:00:00').toLocaleDateString('es-CO')}
-                        </TableCell>
+          {/* Tabla de solicitudes */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                Solicitudes Asignadas ({filteredRequests.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <TableSkeleton />
+              ) : filteredRequests && filteredRequests.length > 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Número de Solicitud</TableHead>
+                        <TableHead>Servicio</TableHead>
+                        <TableHead>Estado de Pago</TableHead>
+                        <TableHead>Valor del Servicio</TableHead>
+                        <TableHead>Fecha</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                {requests && requests.length > 0 
-                  ? "No hay solicitudes que coincidan con los filtros de fecha."
-                  : "No hay solicitudes asignadas a este distribuidor."
-                }
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRequests.map((request) => (
+                        <TableRow key={request.id}>
+                          <TableCell className="font-mono text-sm">
+                            {request.applicationNumber}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                {request.subservice.name}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={getPaymentStatusBadgeVariant(request.paymentStatus?.name || "")}
+                            >
+                              {getPaymentStatusLabel(request)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            ${request.serviceValue.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(request.entryDate + 'T00:00:00').toLocaleDateString('es-CO')}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No se encontraron solicitudes asignadas</p>
+                  {filterDate && (
+                    <p className="text-sm mt-2">
+                      para la fecha seleccionada
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </DialogContent>
     </Dialog>
   );

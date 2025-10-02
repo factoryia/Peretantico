@@ -56,6 +56,10 @@ export interface Request {
     id: string;
     title: string;
   };
+  paymentStatus?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface PaymentCalculation {
@@ -69,7 +73,12 @@ export interface CostRecord {
   id: string;
   distributorId: string;
   requestId: string;
+  requestApplicationNumber?: string;
   paymentCalculation: PaymentCalculation;
+  paymentStatus?: {
+    id: string;
+    name: string;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -84,4 +93,5 @@ export interface CostFormData {
   baseValue: number;
   additionalValue: number;
   discountValue: number;
+  observations?: string;
 }
