@@ -17,7 +17,7 @@ import {
   FileCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Request } from "@/features/reports/home/types/request";
+import type { Request } from "@/features/home/types/request";
 import api from "@/api";
 
 // Interfaces para los tipos de entidades

@@ -187,6 +187,7 @@ interface FieldSchema {
   multiple: boolean;
   type: string;
   title?: number;
+  options?: { label: string; value: string }[];
 }
 
 interface SubserviceSchema {
@@ -231,13 +232,12 @@ interface ApplicantData {
 
 // Schema base de validación - Solo campos que existen en el formulario
 const baseFormSchema = z.object({
-  title: z.string().min(1, "El título es requerido"),
+  applicationNumber: z.string().optional(),
   applicantId: z.string().min(1, "El cliente es requerido"),
   categoryId: z.string().min(1, "La categoría es requerida"),
   serviceId: z.string().min(1, "El tipo de servicio es requerido"),
   subserviceId: z.string().optional(),
   entryDate: z.string().min(1, "La fecha de entrada es requerida"),
-  serviceStatus: z.string().min(1, "El estado del servicio es requerido"),
   coverageAreaId: z.string().optional(),
   paymentMethod: z.string().optional(),
   priorityValue: z.boolean().optional(),
@@ -312,8 +312,6 @@ export function NewRequestModal({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
 
-
-
   // Estado para el modal de crear cliente
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
@@ -335,6 +333,214 @@ export function NewRequestModal({
   // Usar el hook de mutación para crear solicitudes
   const createRequestMutation = useCreateRequestMutation();
 
+  // Función para mapear nombres de subservicios a tipos (fallback)
+  const mapSubserviceNameToType = useCallback(
+    (subserviceName: string): string | null => {
+      const mapping: Record<string, string> = {
+        // Certificaciones y Propiedades
+        "Certificación de propiedad": "property_certification",
+
+        // Farmacia y Medicamentos
+        "Reclamos de farmacia": "pharmacy_claims",
+        "Reclamo de medicamentos": "pharmacy_claims",
+        "Reclamo en una (1) o más farmacias": "pharmacy_claims",
+        "Diferentes farmacias de la mesa": "pharmacy_claims",
+        "Diferentes EPS la mesa": "authorizations_claims",
+
+        // Correspondencia y Documentos
+        "Radicación y sello de recibido": "document_processing",
+        "Con evidencia fotográfica": "mail_delivery",
+
+        // Transporte
+        "Bogotá-La Mesa o Viceversa": "transport_service",
+
+        // Registros Civiles y Documentos Legales
+        "Solicitud registros civiles": "civil_records_request",
+        "Partidas de matrimonio": "marriage_certificate",
+        "Partidas de defunción": "death_certificate",
+        "Copia de escrituras": "property_deed_copy",
+
+        // Trámites Catastrales
+        "Certificado de solvencia": "desenglobes_solicit",
+        "Plan de estudios": "planos_solicit",
+        "Solicitudes desenglobes": "desenglobes_solicit",
+        "Solicitudes planes": "planos_solicit",
+        "Solicitudes planos": "planos_solicit",
+        "Solicitud de planos": "planos_solicit",
+
+        // Agregar más mapeos según sea necesario
+      };
+
+      return mapping[subserviceName] || null;
+    },
+    []
+  );
+
+  // Función para mapear tipos de subservicio a prefijos
+  const mapSubserviceTypeToPrefix = useCallback(
+    (subserviceType: string): string => {
+      const prefixMapping: Record<string, string> = {
+        // Escrituras y Propiedades
+        property_deed_copy: "ESC",
+        property_certification: "ESC",
+
+        // Matrimonio
+        marriage_certificate: "MAR",
+
+        // Medicamentos y Farmacia
+        pharmacy_claims: "MED",
+        authorizations_claims: "MED",
+
+        // Paquetes y Correspondencia
+        mail_delivery: "PKG",
+        document_processing: "PKG",
+
+        // Registro Civil
+        civil_records_request: "CIV",
+        death_certificate: "CIV",
+
+        // Trámites Catastrales
+        desenglobes_solicit: "CAT",
+        planos_solicit: "CAT",
+
+        // Transporte
+        transport_service: "TRP",
+      };
+
+      return prefixMapping[subserviceType] || "GEN";
+    },
+    []
+  );
+
+  // Función para obtener el prefijo basado en la categoría, servicio o subservicio
+  const getPrefixFromHierarchy = useCallback(
+    (
+      categoryId?: string,
+      serviceId?: string,
+      subserviceId?: string
+    ): string => {
+      // Si hay subservicio seleccionado, usar su tipo
+      if (subserviceId) {
+        const selectedSubservice = subservices.find(
+          (s) => s.id === subserviceId
+        );
+        if (selectedSubservice) {
+          const subserviceType = mapSubserviceNameToType(
+            selectedSubservice.name
+          );
+          if (subserviceType) {
+            return mapSubserviceTypeToPrefix(subserviceType);
+          }
+        }
+      }
+
+      // Si hay servicio seleccionado, intentar mapear por nombre del servicio
+      if (serviceId) {
+        const selectedService = services.find((s) => s.id === serviceId);
+        if (selectedService) {
+          const serviceName = selectedService.name.toLowerCase();
+          if (
+            serviceName.includes("escritura") ||
+            serviceName.includes("propiedad")
+          )
+            return "ESC";
+          if (serviceName.includes("matrimonio")) return "MAR";
+          if (
+            serviceName.includes("medicamento") ||
+            serviceName.includes("farmacia")
+          )
+            return "MED";
+          if (
+            serviceName.includes("paquete") ||
+            serviceName.includes("correspondencia")
+          )
+            return "PKG";
+          if (serviceName.includes("registro") || serviceName.includes("civil"))
+            return "CIV";
+          if (
+            serviceName.includes("catastral") ||
+            serviceName.includes("plano")
+          )
+            return "CAT";
+          if (serviceName.includes("transporte")) return "TRP";
+        }
+      }
+
+      // Si hay categoría seleccionada, intentar mapear por nombre de la categoría
+      if (categoryId) {
+        const selectedCategory = categories.find((c) => c.uuid === categoryId);
+        if (selectedCategory) {
+          const categoryName = selectedCategory.name.toLowerCase();
+          if (
+            categoryName.includes("escritura") ||
+            categoryName.includes("propiedad")
+          )
+            return "ESC";
+          if (categoryName.includes("matrimonio")) return "MAR";
+          if (
+            categoryName.includes("medicamento") ||
+            categoryName.includes("farmacia")
+          )
+            return "MED";
+          if (
+            categoryName.includes("paquete") ||
+            categoryName.includes("correspondencia")
+          )
+            return "PKG";
+          if (
+            categoryName.includes("registro") ||
+            categoryName.includes("civil")
+          )
+            return "CIV";
+          if (
+            categoryName.includes("catastral") ||
+            categoryName.includes("plano")
+          )
+            return "CAT";
+          if (categoryName.includes("transporte")) return "TRP";
+        }
+      }
+
+      return "GEN"; // Fallback genérico
+    },
+    [
+      subservices,
+      services,
+      categories,
+      mapSubserviceNameToType,
+      mapSubserviceTypeToPrefix,
+    ]
+  );
+
+  // Función para generar ID de solicitud con formato correcto
+  const generateRequestId = useCallback(
+    (
+      categoryId?: string,
+      serviceId?: string,
+      subserviceId?: string
+    ): string => {
+      const prefix = getPrefixFromHierarchy(
+        categoryId,
+        serviceId,
+        subserviceId
+      );
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      const hour = String(now.getHours()).padStart(2, "0");
+      const minute = String(now.getMinutes()).padStart(2, "0");
+      const timestamp = `${year}${month}${day}${hour}${minute}`;
+      const randomSuffix = String(Math.floor(Math.random() * 10000)).padStart(
+        4,
+        "0"
+      );
+
+      return `PER-${prefix}-${timestamp}-${randomSuffix}`;
+    },
+    [getPrefixFromHierarchy]
+  );
+
   // Funciones para manejar cambios en selects dependientes
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategoryId(categoryId);
@@ -344,6 +550,16 @@ export function NewRequestModal({
     setSubserviceSchema(null);
     setIsLoadingSubserviceSchema(false);
     setLastProcessedSubserviceId(null);
+
+    // Regenerar el número de solicitud con la nueva categoría
+    const currentServiceId = form.getValues("serviceId");
+    const currentSubserviceId = form.getValues("subserviceId");
+    const newRequestId = generateRequestId(
+      categoryId,
+      currentServiceId,
+      currentSubserviceId
+    );
+    setGeneratedApplicationNumber(newRequestId);
 
     if (categoryId) {
       loadServicesByCategory(categoryId);
@@ -358,6 +574,16 @@ export function NewRequestModal({
     setSubserviceSchema(null);
     setIsLoadingSubserviceSchema(false);
     setLastProcessedSubserviceId(null);
+
+    // Regenerar el número de solicitud con el nuevo servicio
+    const currentCategoryId = form.getValues("categoryId");
+    const currentSubserviceId = form.getValues("subserviceId");
+    const newRequestId = generateRequestId(
+      currentCategoryId,
+      serviceId,
+      currentSubserviceId
+    );
+    setGeneratedApplicationNumber(newRequestId);
 
     if (serviceId) {
       loadSubservicesByService(serviceId);
@@ -378,90 +604,6 @@ export function NewRequestModal({
     loadFormData();
   };
 
-  // Función para manejar cambios en el subservicio
-  const handleSubserviceChange = useCallback(
-    async (subserviceId: string, forceReload = false) => {
-      if (!forceReload && subserviceId === lastProcessedSubserviceId) {
-        return;
-      }
-
-      if (subserviceId) {
-        setIsLoadingSubserviceSchema(true);
-        setLastProcessedSubserviceId(subserviceId);
-
-        try {
-          const selectedSubservice = subservices.find(
-            (s) => s.id === subserviceId
-          );
-
-          if (selectedSubservice) {
-            const subserviceType = mapSubserviceNameToType(
-              selectedSubservice.name
-            );
-
-            if (subserviceType) {
-              const defaultSchema = createDefaultSchema(subserviceType);
-              setSubserviceSchema(defaultSchema);
-            } else {
-              const genericSchema = createDefaultSchema("generic");
-              setSubserviceSchema(genericSchema);
-            }
-          }
-        } catch {
-          const genericSchema = createDefaultSchema("generic");
-          setSubserviceSchema(genericSchema);
-        } finally {
-          setIsLoadingSubserviceSchema(false);
-        }
-      } else {
-        setSubserviceSchema(null);
-        setIsLoadingSubserviceSchema(false);
-        setLastProcessedSubserviceId(null);
-      }
-    },
-    [subservices, lastProcessedSubserviceId]
-  );
-
-  // Función para mapear nombres de subservicios a tipos (fallback)
-  const mapSubserviceNameToType = (subserviceName: string): string | null => {
-    const mapping: Record<string, string> = {
-      // Certificaciones y Propiedades
-      "Certificación de propiedad": "property_certification",
-
-      // Farmacia y Medicamentos
-      "Reclamos de farmacia": "pharmacy_claims",
-      "Reclamo de medicamentos": "pharmacy_claims",
-      "Reclamo en una (1) o más farmacias": "pharmacy_claims",
-      "Diferentes farmacias de la mesa": "pharmacy_claims",
-      "Diferentes EPS la mesa": "authorizations_claims",
-
-      // Correspondencia y Documentos
-      "Radicación y sello de recibido": "document_processing",
-      "Con evidencia fotográfica": "mail_delivery",
-
-      // Transporte
-      "Bogotá-La Mesa o Viceversa": "transport_service",
-
-      // Registros Civiles y Documentos Legales
-      "Solicitud registros civiles": "civil_records_request",
-      "Partidas de matrimonio": "marriage_certificate",
-      "Partidas de defunción": "death_certificate",
-      "Copia de escrituras": "property_deed_copy",
-
-      // Trámites Catastrales
-      "Certificado de solvencia": "desenglobes_solicit",
-      "Plan de estudios": "planos_solicit",
-      "Solicitudes desenglobes": "desenglobes_solicit",
-      "Solicitudes planes": "planos_solicit",
-      "Solicitudes planos": "planos_solicit",
-      "Solicitud de planos": "planos_solicit",
-
-      // Agregar más mapeos según sea necesario
-    };
-
-    return mapping[subserviceName] || null;
-  };
-
   // Función para crear schema por defecto cuando no esté disponible
   const createDefaultSchema = (subserviceType: string): SubserviceSchema => {
     const defaultSchemas: Record<string, SubserviceSchema> = {
@@ -470,22 +612,28 @@ export function NewRequestModal({
         label: "Reclamos de Farmacia",
         description: "Información adicional para reclamos de farmacia",
         schema: {
-          field_claim_location: {
+          field_eps: {
             label: "Nombre de la EPS",
             description: "Nombre de la EPS autorizada",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_delivery_address: {
+          field_drugstore: {
             label: "Nombre de la Droguería",
             description: "Dirección donde se entregará el medicamento",
             required: false,
             multiple: false,
             type: "string",
           },
-
-          field_files: {
+          field_ips_address: {
+            label: "Dirección de la IPS",
+            description: "Dirección de la IPS",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_path: {
             label:
               "Adjunta tu orden medica, MIPRES o autorización si es el caso",
             description: "Archivos adjuntos (jpg, jpeg, png, pdf)",
@@ -500,7 +648,7 @@ export function NewRequestModal({
         label: "Autorizaciones EPS",
         description: "Información adicional para autorizaciones EPS",
         schema: {
-          field_eps_name: {
+          field_eps: {
             label: "Nombre de la EPS",
             description: "Nombre de la EPS",
             required: false,
@@ -508,7 +656,7 @@ export function NewRequestModal({
             type: "string",
           },
 
-          field_files: {
+          field_path: {
             label:
               "Adjunta tu historia clínica, orden médica y MIPRES si es el caso",
             description: "Archivos adjuntos (jpg, jpeg, png, pdf)",
@@ -682,50 +830,56 @@ export function NewRequestModal({
         description:
           "Información adicional para solicitud de registros civiles",
         schema: {
-          field_request_reason: {
-            label: "Motivo de solicitud",
-            description: "Razón por la cual se solicita el registro",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
           field_person_name: {
-            label: "Nombre de la persona",
-            description: "Nombre completo de la persona del registro",
+            label: "Nombre(s) de quien pertenece el registro",
+            description: "Nombre de quien pertenece el registro",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_number_document: {
-            label: "Número de identificación (si ya tiene).",
-            description: "Número de documento de la persona",
+          field_person_last_name: {
+            label: "Apellido(s) de quien pertenece el registro",
+            description: "Apellido de quien pertenece el registro",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_name_parents: {
-            label: "Nombre de los padres",
-            description: "Nombres completos de los padres",
+          field_request_reason: {
+            label: "Número de registro",
+            description: "Número del registro civil",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_birth_date: {
-            label: "Fecha de nacimiento",
-            description: "Fecha de nacimiento de la persona",
-            required: false,
-            multiple: false,
-            type: "date",
-          },
-
-          field_place_of_birth: {
-            label: "Lugar de nacimiento",
-            description: "Ciudad o lugar donde nació la persona",
+          field_notary_number: {
+            label: "Número de la notaria",
+            description: "Número de la notaria",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_files: {
+          field_tomo_number: {
+            label: "Número del tomo",
+            description: "Número del tomo",
+            required: false,
+            multiple: false,
+            type: "number",
+          },
+          field_folio_number: {
+            label: "Número del folio",
+            description: "Número del folio",
+            required: false,
+            multiple: false,
+            type: "number",
+          },
+          field_serial_number: {
+            label: "Número del serial",
+            description: "Número del serial",
+            required: false,
+            multiple: false,
+            type: "number",
+          },
+          field_path: {
             label: "Adjunte documentos",
             description:
               "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
@@ -740,50 +894,31 @@ export function NewRequestModal({
         label: "Partida de Matrimonio",
         description: "Información adicional para partida de matrimonio",
         schema: {
-          field_spouse1_name: {
-            label: "Nombre del esposo",
-            description: "Nombre completo del primer cónyuge",
+          field_marriage_type: {
+            label: "Tipo partida de matrimonio",
+            description: "Seleccione el tipo de partida de matrimonio",
             required: true,
             multiple: false,
-            type: "string",
+            type: "select",
+            options: [
+              { label: "Civil", value: "civil" },
+              { label: "Católica", value: "catolica" },
+            ],
           },
-          field_spouse2_name: {
-            label: "Nombre de la esposa",
-            description: "Nombre completo del segundo cónyuge",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_marriage_date: {
-            label: "Fecha de matrimonio",
-            description: "Fecha en que se celebró el matrimonio",
+          field_motive_type: {
+            label: "Solicitud de divorcio o juicio de separación",
+            description:
+              "Seleccione el tipo de solicitud de divorcio o juicio de separación",
             required: true,
             multiple: false,
-            type: "string",
+            type: "select",
+            options: [
+              { label: "Divorcio", value: "divorce" },
+              { label: "Sucesión", value: "succession" },
+              { label: "Volverse a casar", value: "re-marry" },
+            ],
           },
-          field_marriage_place: {
-            label: "Lugar de matrimonio",
-            description: "Ciudad/ Notaría/ Parroquia según corresponda",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_official: {
-            label: "Funcionario que celebró",
-            description: "Nombre del funcionario que celebró el matrimonio",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_witnesses: {
-            label: "Testigos",
-            description: "Nombres de los testigos del matrimonio",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-
-          field_files: {
+          field_path: {
             label: "Adjunte documentos",
             description:
               "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
@@ -798,42 +933,14 @@ export function NewRequestModal({
         label: "Partida de Defunción",
         description: "Información adicional para partida de defunción",
         schema: {
-          field_deceased_name: {
-            label: "Nombre del fallecido",
-            description: "Nombre completo de la persona fallecida",
+          field_motive_type: {
+            label: "Motivo de la partida de defunción",
+            description: "Motivo de la partida de defunción",
             required: true,
             multiple: false,
             type: "string",
           },
-          field_number_document: {
-            label: "Número de documento",
-            description: "Número de documento del fallecido",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_death_date: {
-            label: "Fecha de fallecimiento",
-            description: "Fecha en que falleció la persona",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_death_place: {
-            label: "Lugar de fallecimiento",
-            description: "Ciudad o lugar donde falleció la persona",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_funeral_home: {
-            label: "Funeraria",
-            description: "Nombre de la funeraria que manejó el servicio",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_files: {
+          field_path: {
             label: "Adjunte documentos",
             description:
               "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
@@ -849,35 +956,39 @@ export function NewRequestModal({
         description: "Información adicional para copia de escrituras",
         schema: {
           field_type_property: {
-            label: "Tipo de propiedad",
-            description: "Tipo de inmueble (casa, apartamento, terreno, etc.)",
+            label: "Tipo de persona",
+            description: "Seleccione el tipo de persona",
             required: true,
             multiple: false,
-            type: "string",
+            type: "select",
+            options: [
+              { label: "Natural", value: "natural" },
+              { label: "Jurídica", value: "juridica" },
+            ],
           },
           field_deed_number: {
             label: "Número de escritura",
             description: "Número de la escritura pública",
             required: true,
             multiple: false,
-            type: "string",
+            type: "number",
           },
-          field_deed_date: {
-            label: "Fecha de la escritura",
-            description: "Fecha en que se otorgó la escritura",
+          field_deed_year: {
+            label: "Año de la escritura",
+            description: "Año en que se otorgó la escritura",
             required: false,
             multiple: false,
-            type: "string",
+            type: "date",
           },
-          field_notary_office: {
-            label: "Nombre de la notaría",
-            description: "Nombre de la notaría y ciudad donde se otorgó",
+          field_deed_city: {
+            label: "Ciudad donde se otorgó la escritura",
+            description: "Ciudad donde se otorgó la escritura",
             required: false,
             multiple: false,
             type: "string",
           },
 
-          field_files: {
+          field_path: {
             label: "Adjunte documentos",
             description:
               "Adjunte copia de la escritura y otros documentos (jpg, png, pdf)",
@@ -1094,6 +1205,16 @@ export function NewRequestModal({
           })
         );
         setServices(mappedServices);
+
+        // Regenerar el número de solicitud con la nueva categoría
+        const currentServiceId = form.getValues("serviceId");
+        const currentSubserviceId = form.getValues("subserviceId");
+        const newRequestId = generateRequestId(
+          categoryId,
+          currentServiceId,
+          currentSubserviceId
+        );
+        setGeneratedApplicationNumber(newRequestId);
       } else {
         setServices([]);
       }
@@ -1120,6 +1241,16 @@ export function NewRequestModal({
           })
         );
         setSubservices(mappedSubservices);
+
+        // Regenerar el número de solicitud con el nuevo servicio
+        const currentCategoryId = form.getValues("categoryId");
+        const currentSubserviceId = form.getValues("subserviceId");
+        const newRequestId = generateRequestId(
+          currentCategoryId,
+          serviceId,
+          currentSubserviceId
+        );
+        setGeneratedApplicationNumber(newRequestId);
       } else {
         setSubservices([]);
       }
@@ -1133,24 +1264,101 @@ export function NewRequestModal({
     return createDynamicFormSchema(subserviceSchema);
   }, [subserviceSchema]);
 
+  // Estado para el número de aplicación que se regenera según la jerarquía
+  const [generatedApplicationNumber, setGeneratedApplicationNumber] = useState(
+    () => generateRequestId()
+  );
+
   // Formulario con react-hook-form
   const form = useForm({
     resolver: zodResolver(memoizedSchema),
     mode: "onSubmit", // Solo validar al enviar
     reValidateMode: "onSubmit", // Solo re-validar al enviar
     defaultValues: {
-      title: "",
+      applicationNumber: generatedApplicationNumber,
       applicantId: "",
       categoryId: "",
       serviceId: "",
       subserviceId: "",
-      entryDate: new Date().toISOString().split("T")[0],
-      serviceStatus: "",
+      entryDate: new Date().toLocaleDateString('en-CA'), // Formato YYYY-MM-DD en zona horaria local
       coverageAreaId: "",
       paymentMethod: "",
       priorityValue: false,
     },
   });
+
+  // Función para manejar cambios en el subservicio
+  const handleSubserviceChange = useCallback(
+    async (subserviceId: string, forceReload = false) => {
+      if (!forceReload && subserviceId === lastProcessedSubserviceId) {
+        return;
+      }
+
+      if (subserviceId) {
+        setIsLoadingSubserviceSchema(true);
+        setLastProcessedSubserviceId(subserviceId);
+
+        try {
+          const selectedSubservice = subservices.find(
+            (s) => s.id === subserviceId
+          );
+
+          if (selectedSubservice) {
+            const subserviceType = mapSubserviceNameToType(
+              selectedSubservice.name
+            );
+
+            // Regenerar el número de solicitud con la jerarquía actual
+            const currentCategoryId = form.getValues("categoryId");
+            const currentServiceId = form.getValues("serviceId");
+            const newRequestId = generateRequestId(
+              currentCategoryId,
+              currentServiceId,
+              subserviceId
+            );
+            setGeneratedApplicationNumber(newRequestId);
+
+            if (subserviceType) {
+              const defaultSchema = createDefaultSchema(subserviceType);
+              setSubserviceSchema(defaultSchema);
+            } else {
+              const genericSchema = createDefaultSchema("generic");
+              setSubserviceSchema(genericSchema);
+            }
+          }
+        } catch {
+          const genericSchema = createDefaultSchema("generic");
+          setSubserviceSchema(genericSchema);
+        } finally {
+          setIsLoadingSubserviceSchema(false);
+        }
+      } else {
+        setSubserviceSchema(null);
+        setIsLoadingSubserviceSchema(false);
+        setLastProcessedSubserviceId(null);
+        // Regenerar con la jerarquía actual cuando no hay subservicio
+        const currentCategoryId = form.getValues("categoryId");
+        const currentServiceId = form.getValues("serviceId");
+        const newRequestId = generateRequestId(
+          currentCategoryId,
+          currentServiceId
+        );
+        setGeneratedApplicationNumber(newRequestId);
+      }
+    },
+    [
+      subservices,
+      lastProcessedSubserviceId,
+      generateRequestId,
+      mapSubserviceNameToType,
+      form,
+    ]
+  );
+
+  // Actualizar el formulario cuando cambie el número generado
+  useEffect(() => {
+    form.setValue("applicationNumber", generatedApplicationNumber);
+  }, [generatedApplicationNumber, form]);
 
   // Limpiar errores cuando cambie el schema del subservicio
   useEffect(() => {
@@ -1242,8 +1450,6 @@ export function NewRequestModal({
       const categoriesData =
         categoriesResult.status === "fulfilled" ? categoriesResult.value : null;
 
-     
-
       // Cargar solicitantes
       if (applicantsData?.data) {
         setApplicants(
@@ -1271,29 +1477,87 @@ export function NewRequestModal({
     }
 
     // Validación básica
-    if (
-      !values.title ||
-      !values.applicantId ||
-      !values.categoryId ||
-      !values.serviceId ||
-      !values.serviceStatus
-    ) {
+    if (!values.applicantId || !values.categoryId || !values.serviceId) {
       toast.error("Por favor completa todos los campos requeridos");
       return;
     }
 
     try {
-      // Generar número de aplicación automáticamente
-      const applicationNumber = `APP-${new Date().getFullYear()}-${String(
-        Date.now()
-      ).slice(-6)}`;
+      // Usar el número de aplicación generado
+      const applicationNumber = generatedApplicationNumber;
+
+      // Debug: Verificar valores antes de crear el payload
+      console.log("🔍 Valores del formulario:", {
+        applicantId: values.applicantId,
+        categoryId: values.categoryId,
+        serviceId: values.serviceId,
+        subserviceId: values.subserviceId,
+        coverageAreaId: values.coverageAreaId,
+      });
 
       // Crear un payload mínimo con solo los campos existentes
+      // y agregar campos dinámicos del subservicio (p.ej. pharmacy_claims)
+      const dynamicSubserviceAttributes: Record<string, unknown> = {};
+
+      // Incluir campos específicos cuando el bundle sea pharmacy_claims
+      if (subserviceSchema?.bundle === "pharmacy_claims") {
+        const fieldDrugstore = (values as Record<string, unknown>)[
+          "field_drugstore"
+        ] as string | undefined;
+        const fieldEps = (values as Record<string, unknown>)["field_eps"] as
+          | string
+          | undefined;
+        const fieldIpsAddress = (values as Record<string, unknown>)[
+          "field_ips_address"
+        ] as string | null | undefined;
+        const fieldPathValue = (values as Record<string, unknown>)[
+          "field_path"
+        ] as unknown;
+
+        if (typeof fieldDrugstore === "string") {
+          dynamicSubserviceAttributes["field_drugstore"] = fieldDrugstore;
+        }
+        if (typeof fieldEps === "string") {
+          dynamicSubserviceAttributes["field_eps"] = fieldEps;
+        }
+        // Permitir null o string para dirección IPS
+        if (fieldIpsAddress === null || typeof fieldIpsAddress === "string") {
+          dynamicSubserviceAttributes["field_ips_address"] = fieldIpsAddress;
+        }
+
+        // Mapear field_path al formato [{ uri, title, options }]
+        const toFileObjects = (
+          input: unknown
+        ): Array<{
+          uri: string;
+          title: string;
+          options: unknown[];
+        }> => {
+          const asArray = Array.isArray(input) ? input : input ? [input] : [];
+          return (asArray as unknown[])
+            .map((item) =>
+              typeof item === "string"
+                ? { uri: item, title: "", options: [] as unknown[] }
+                : null
+            )
+            .filter(Boolean) as Array<{
+            uri: string;
+            title: string;
+            options: unknown[];
+          }>;
+        };
+
+        const mappedFiles = toFileObjects(fieldPathValue);
+        if (mappedFiles.length > 0) {
+          dynamicSubserviceAttributes["field_path"] = mappedFiles;
+        }
+      }
+
       const payload: CreateRequestPayload = {
         data: {
           type: "node--request",
           attributes: {
-            title: values.title as string,
+            title: applicationNumber,
             field_entry_date: values.entryDate as string,
             field_application_number: applicationNumber,
             field_application_score: 4,
@@ -1302,25 +1566,14 @@ export function NewRequestModal({
             field_service_value: 0,
             promote: false,
             sticky: false,
-            status: true,
+            // Agregar atributos dinámicos del subservicio (si corresponde)
+            ...dynamicSubserviceAttributes,
           },
           relationships: {
             field_applicant: {
               data: {
                 type: "node--profile",
                 id: values.applicantId as string,
-              },
-            },
-            field_application_statuses: {
-              data: {
-                type: "taxonomy_term--application_statuses",
-                id: values.serviceStatus as string,
-              },
-            },
-            field_service_status: {
-              data: {
-                type: "taxonomy_term--application_statuses",
-                id: values.serviceStatus as string,
               },
             },
             ...(values.categoryId && {
@@ -1362,6 +1615,9 @@ export function NewRequestModal({
           },
         },
       };
+
+      // Debug: Verificar el payload final
+      console.log("📤 Payload final:", JSON.stringify(payload, null, 2));
 
       await createRequestMutation.mutateAsync(payload);
 
@@ -1456,12 +1712,16 @@ export function NewRequestModal({
                 />
                 <FormField
                   control={form.control}
-                  name="title"
+                  name="applicationNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Título </FormLabel>
+                      <FormLabel>Número de solicitud</FormLabel>
                       <FormControl>
-                        <Input placeholder="Alguien - Solicitud" {...field} />
+                        <Input
+                          {...field}
+                          disabled
+                          className="bg-gray-50 text-gray-600 cursor-not-allowed"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

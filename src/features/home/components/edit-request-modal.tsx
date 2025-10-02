@@ -42,13 +42,13 @@ import {
   updateRequest,
   fetchApplicants,
   fetchSubserviceWithHierarchy,
-} from "@/features/reports/home/utils/request";
+} from "@/features/home/utils/request";
 import {
   useDistributorsQuery,
   useCategoriesQuery,
   useServicesByCategoryQuery,
   useSubservicesByServiceQuery,
-} from "@/features/reports/home/hooks/use-request-query";
+} from "@/features/home/hooks/use-request-query";
 import type {
   Request,
   EditRequestFormData,
@@ -57,7 +57,7 @@ import type {
   Subservice,
   Applicant,
   Distributor,
-} from "@/features/reports/home/types/request";
+} from "@/features/home/types/request";
 
 interface EditRequestModalProps {
   isOpen: boolean;
