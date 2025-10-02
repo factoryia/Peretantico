@@ -342,7 +342,6 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
           )}
         />
 
-        {/* Documento */}
         <FormField
           control={form.control}
           name="photo_document"
@@ -350,31 +349,68 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             <FormItem className="md:col-span-2">
               <FormLabel>
                 Documento de identidad <RequiredDot />
-              </FormLabel> <p className="text-xs text-gray-500">
-               Cargue una imagen o PDF de su documento de identidad por ambas caras.
+              </FormLabel>
+              <p className="text-xs text-gray-500">
+                Cargue una imagen o PDF de su documento de identidad por ambas
+                caras.
               </p>
+
               <FormControl>
                 <label
                   htmlFor="photo_document"
-                  className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 cursor-pointer hover:border-muted-foreground/50 transition"
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 cursor-pointer transition"
+                  onDragOver={(e) => {
+                    e.preventDefault(); // necesario para permitir drop
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const files = Array.from(e.dataTransfer.files);
+                    field.onChange(files); // guardamos los archivos arrastrados
+                  }}
                 >
                   <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2 text-center">
                     Haga clic para subir o arrastre el archivo aquí
                   </p>
+
                   <Input
                     id="photo_document"
                     type="file"
                     className="hidden"
-                    multiple={true}
+                    multiple
                     accept="image/*,application/pdf"
                     disabled={isFieldDisabled()}
-                    onChange={(e) =>
-                      field.onChange(e.target.files?.[0] || null)
-                    }
+                    onChange={(e) => {
+                      const files = e.target.files
+                        ? Array.from(e.target.files)
+                        : [];
+                      field.onChange(files);
+                    }}
                   />
                 </label>
               </FormControl>
+
+              {/* Lista de archivos seleccionados */}
+              {field.value &&
+                Array.isArray(field.value) &&
+                field.value.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-sm text-gray-600">
+                    {field.value.map((file: File, idx: number) => (
+                      <li
+                        key={idx}
+                        className="flex items-center justify-between border rounded px-2 py-1"
+                      >
+                        <span className="truncate max-w-[200px]">
+                          {file.name}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
               <FormMessage />
             </FormItem>
           )}

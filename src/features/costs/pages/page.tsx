@@ -1,16 +1,15 @@
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
+import CostManagementPage from "../components/cost-page";
 
-
-function Costs() {
+function CostPage() {
   return (
     <div className="h-full pt-[65px] flex flex-col">
-      <SidebarHeader title="Clientes" />
+      <SidebarHeader title="Costos" />
       <div className="flex-1 overflow-y-auto p-4 md:px-6">
-        <h1>Costos</h1>
-        <p>Hola</p>
+        <CostManagementPage />
       </div>
     </div>
   );
 }
 
-export default Costs;
+export default CostPage;

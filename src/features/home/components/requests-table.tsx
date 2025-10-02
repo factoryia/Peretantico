@@ -319,7 +319,7 @@ export function RequestsTable({
         <Table className="rounded-md border">
           <TableHeader>
             <TableRow>
-              <TableHead>Título</TableHead>
+              <TableHead>Número de solicitud</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Subservicio</TableHead>
               <TableHead>Repartidor</TableHead>
@@ -335,7 +335,7 @@ export function RequestsTable({
               return (
                 <TableRow key={displayRequest.id}>
                   <TableCell className="max-w-[200px] truncate">
-                    {displayRequest.title}
+                    {displayRequest.number}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">

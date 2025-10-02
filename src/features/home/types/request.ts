@@ -174,9 +174,20 @@ export interface Request {
         field_observations?: string
         field_payment_status?: string
         field_used_channel?: string
-        status: boolean
+        status?: boolean
         promote: boolean
         sticky: boolean
+        // Campos dinámicos del subservicio (p.ej. pharmacy_claims)
+        field_drugstore?: string
+        field_eps?: string
+        field_ips_address?: string | null
+        field_path?: Array<{
+          uri: string
+          title: string
+          options: unknown[]
+        }>
+        // Permitir otros campos dinámicos
+        [key: string]: unknown
       }
       relationships: {
         field_applicant: {
@@ -188,10 +199,10 @@ export interface Request {
         field_distributor_data?: {
           data: { type: "node--distributor"; id: string }
         }
-        field_application_statuses: {
+        field_application_statuses?: {
           data: { type: "taxonomy_term--application_statuses"; id: string }
         }
-        field_service_status: {
+        field_service_status?: {
           data: { type: "taxonomy_term--application_statuses"; id: string }
         }
         field_payment_status?: {

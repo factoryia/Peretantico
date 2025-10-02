@@ -1,14 +1,14 @@
 import { Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import { Home } from "@/features/reports/home/pages/home";
+import { Home } from "@/features/home/pages/home";
 import { Reports } from "@/features/reports/pages/reports";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Distributors } from "@/features/distributors/pages/distributors";
 import { AuthRoutes } from "@/features/auth/routes/auth-routes";
 import { PrivateRoutes } from "@/features/auth/components/private-routes";
 import { Configuration } from "./features/config/pages/configuration";
-import Costs from "./features/costs/pages/costs";
+import CostPage from "@/features/costs/pages/page";
 import Client from "./features/client/pages/client";
 
 export default function App() {
@@ -37,7 +37,7 @@ export default function App() {
               <Route path="/reportes" element={<Reports />} />
               <Route path="/configuraciones" element={<Configuration />} />
               <Route path="/clientes" element={<Client />} />
-              <Route path="/costos" element={<Costs />} />
+              <Route path="/costos" element={<CostPage/>} />
             </Route>
           </Route>
         </Routes>
