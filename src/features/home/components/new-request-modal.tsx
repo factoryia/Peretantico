@@ -56,63 +56,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { CustomerFormDialog } from "@/features/client/components/customer-dialog";
 import { RequiredDot } from "@/components/common/required-dot";
-import { useCoverageAreasQuery } from "@/features/distributors/hooks/taxonomies";
-import { type TaxonomyTerm } from "@/types/global";
-
-// Función para convertir archivo a Base64
-const convertFileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result);
-    };
-    reader.onerror = () => {
-      reject(new Error("Error al convertir el archivo a Base64"));
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
-// Función para extraer el nombre del archivo desde Base64
-const getFileNameFromBase64 = (base64String: string): string | null => {
-  try {
-    // El Base64 contiene metadatos del archivo original
-    // Buscar si hay información del nombre en el string
-    if (base64String.includes("filename=")) {
-      const match = base64String.match(/filename=([^;]+)/);
-      if (match) return decodeURIComponent(match[1]);
-    }
-
-    // Si no hay filename, intentar extraer del tipo MIME
-    if (base64String.includes("data:")) {
-      const mimeMatch = base64String.match(/data:([^;]+)/);
-      if (mimeMatch) {
-        const mimeType = mimeMatch[1];
-        const extension = mimeType.split("/")[1];
-        if (extension) {
-          return `archivo.${extension}`;
-        }
-      }
-    }
-
-    return "archivo_adjunto";
-  } catch {
-    return "archivo_adjunto";
-  }
-};
 
 // Función para obtener tipos de archivo aceptados según el subservicio
 const getFileAcceptTypes = (bundle?: string): string => {
   const acceptTypes: Record<string, string> = {
-    pharmacy_claims: "image/jpeg,image/jpg,image/png,application/pdf",
+    request_medication: "image/jpeg,image/jpg,image/png,application/pdf",
     mail_delivery: "image/jpeg,image/jpg,image/png,application/pdf",
     document_processing: "image/jpeg,image/jpg,image/png,application/pdf",
     civil_records_request: "image/jpeg,image/jpg,image/png,application/pdf",
-    marriage_certificate: "image/jpeg,image/jpg,image/png,application/pdf",
-    death_certificate: "image/jpeg,image/jpg,image/png,application/pdf",
+    marriage_certificate_request:
+      "image/jpeg,image/jpg,image/png,application/pdf",
+    request_medication_request:
+      "image/jpeg,image/jpg,image/png,application/pdf",
     property_deed_copy: "image/jpeg,image/jpg,image/png,application/pdf",
-    desenglobes_solicit:
+    property_unbundling_request:
       "image/jpeg,image/jpg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     planos_solicit:
       "image/jpeg,image/jpg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -124,36 +81,6 @@ const getFileAcceptTypes = (bundle?: string): string => {
     acceptTypes[bundle || ""] ||
     "image/jpeg,image/jpg,image/png,application/pdf"
   );
-};
-
-// Función para subir archivos usando Base64 (fallback)
-const uploadFile = async (file: File): Promise<string> => {
-  try {
-    console.log("📤 Convirtiendo archivo a Base64:", {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    });
-
-    // Convertir archivo a Base64
-    const base64Data = await convertFileToBase64(file);
-
-    // Agregar metadatos del archivo al Base64
-    const base64WithMetadata = base64Data.replace(
-      "data:" + file.type + ";base64,",
-      `data:${file.type};filename=${encodeURIComponent(file.name)};base64,`
-    );
-
-    console.log("✅ Archivo convertido a Base64 exitosamente");
-
-    // Retornar el Base64 con metadatos
-    return base64WithMetadata;
-  } catch (error: unknown) {
-    console.error("❌ Error convirtiendo archivo:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "Error desconocido";
-    throw new Error("Error al procesar el archivo: " + errorMessage);
-  }
 };
 
 interface NewRequestModalProps {
@@ -327,9 +254,6 @@ export function NewRequestModal({
   // Estado para controlar qué archivos se están subiendo
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
 
-  // Hook para zonas de cobertura (usando el mismo que los repartidores)
-  const { data: coverageAreasData } = useCoverageAreasQuery();
-
   // Usar el hook de mutación para crear solicitudes
   const createRequestMutation = useCreateRequestMutation();
 
@@ -337,38 +261,41 @@ export function NewRequestModal({
   const mapSubserviceNameToType = useCallback(
     (subserviceName: string): string | null => {
       const mapping: Record<string, string> = {
-        // Certificaciones y Propiedades
+        //Bogota la mesa o viceversa
+        "Reclamo en una (1) o más farmacias": "request_medication",
+        "Con evidencia fotográfica": "subservice_photo_evidence",
+        "Radicación y sello de recibido": "filing_and_received_stamp",
+        //Tramites notariales
+        "Solicitud registros civiles": "civil_registry_request",
+        "Partidas de matrimonio": "marriage_certificate_request",
+        "Partidas de defunción": "death_certificate_request",
+        "Copia de escrituras": "deed_copy_request",
+        //Tramites Catastrales
+        "Solicitudes desenglobes": "property_unbundling_request",
+        "Solicitud de planos": "planos_solicit",
         "Certificación de propiedad": "property_certification",
 
-        // Farmacia y Medicamentos
-        "Reclamos de farmacia": "pharmacy_claims",
-        "Reclamo de medicamentos": "pharmacy_claims",
-        "Reclamo en una (1) o más farmacias": "pharmacy_claims",
-        "Diferentes farmacias de la mesa": "pharmacy_claims",
-        "Diferentes EPS la mesa": "authorizations_claims",
+        //corporativos
+        "Radicación por sobre": "medical_bills",
+        "Radicación por caja": "medical_bills",
+        "Por nevera": "clinical_labs_fridge",
+        "Por unidad": "collect_envelopes",
 
-        // Correspondencia y Documentos
-        "Radicación y sello de recibido": "document_processing",
-        "Con evidencia fotográfica": "mail_delivery",
+        //Chocoperetantico
+        "Sobre o paquete": "collect_envelopes",
 
+        //La mesa
+        "Diferentes farmacias de la mesa": "request_medication",
+        "Diferentes EPS la mesa": "subservice_eps_la_mesa",
+
+        //Otros no asignados
+        "Solicitud de citas medicas": "medical_appointment_request",
+        //Envio de paquete
+        "Envio de paquetes": "package_shipping",
         // Transporte
         "Bogotá-La Mesa o Viceversa": "transport_service",
 
-        // Registros Civiles y Documentos Legales
-        "Solicitud registros civiles": "civil_records_request",
-        "Partidas de matrimonio": "marriage_certificate",
-        "Partidas de defunción": "death_certificate",
-        "Copia de escrituras": "property_deed_copy",
-
-        // Trámites Catastrales
-        "Certificado de solvencia": "desenglobes_solicit",
-        "Plan de estudios": "planos_solicit",
-        "Solicitudes desenglobes": "desenglobes_solicit",
-        "Solicitudes planes": "planos_solicit",
-        "Solicitudes planos": "planos_solicit",
-        "Solicitud de planos": "planos_solicit",
-
-        // Agregar más mapeos según sea necesario
+        "Certificado de solvencia": "property_unbundling_request",
       };
 
       return mapping[subserviceName] || null;
@@ -385,10 +312,10 @@ export function NewRequestModal({
         property_certification: "ESC",
 
         // Matrimonio
-        marriage_certificate: "MAR",
+        marriage_certificate_request: "MAR",
 
         // Medicamentos y Farmacia
-        pharmacy_claims: "MED",
+        request_medication: "MED",
         authorizations_claims: "MED",
 
         // Paquetes y Correspondencia
@@ -397,10 +324,10 @@ export function NewRequestModal({
 
         // Registro Civil
         civil_records_request: "CIV",
-        death_certificate: "CIV",
+        request_medication_request_request: "CIV",
 
         // Trámites Catastrales
-        desenglobes_solicit: "CAT",
+        property_unbundling_request: "CAT",
         planos_solicit: "CAT",
 
         // Transporte
@@ -607,8 +534,9 @@ export function NewRequestModal({
   // Función para crear schema por defecto cuando no esté disponible
   const createDefaultSchema = (subserviceType: string): SubserviceSchema => {
     const defaultSchemas: Record<string, SubserviceSchema> = {
-      pharmacy_claims: {
-        bundle: "pharmacy_claims",
+      //Bogota la mesa o viceversa
+      request_medication: {
+        bundle: "request_medication",
         label: "Reclamos de Farmacia",
         description: "Información adicional para reclamos de farmacia",
         schema: {
@@ -641,238 +569,268 @@ export function NewRequestModal({
             multiple: true,
             type: "file",
           },
-        },
-      },
-      authorizations_claims: {
-        bundle: "authorizations_claims",
-        label: "Autorizaciones EPS",
-        description: "Información adicional para autorizaciones EPS",
-        schema: {
-          field_eps: {
-            label: "Nombre de la EPS",
-            description: "Nombre de la EPS",
+          field_service_path: {
+            label: "Trayecto del servicio",
+            description: "Trayecto del servicio (Bogotá -> La Mesa, La Mesa)",
             required: false,
             multiple: false,
-            type: "string",
+            type: "select",
+            options: [
+              {
+                value: "188",
+                label: "Bogotá -> La Mesa",
+              },
+              {
+                value: "187",
+                label: "La Mesa -> Bogotá",
+              },
+            ],
           },
-
-          field_path: {
-            label:
-              "Adjunta tu historia clínica, orden médica y MIPRES si es el caso",
-            description: "Archivos adjuntos (jpg, jpeg, png, pdf)",
+          field_type_service: {
+            label: "Tipo de servicio",
+            description: "Tipo de servicio (Normal o Prioritario)",
             required: true,
-            multiple: true,
-            type: "file",
+            multiple: false,
+            type: "reference",
+            options: [
+              {
+                value: "189",
+                label: "Normal",
+              },
+              {
+                value: "190",
+                label: "Prioritario",
+              },
+            ],
           },
         },
       },
-      mail_delivery: {
-        bundle: "mail_delivery",
-        label: "Entrega de Correspondencia",
-        description:
-          "Información adicional para entrega de correspondencia por paquete",
+
+      subservice_photo_evidence: {
+        bundle: "subservice_photo_evidence",
+        label: "Evidencia fotográfica",
+        description: "Información adicional para evidencia fotográfica",
         schema: {
-          field_sender_address: {
-            label: "Dirección del remitente",
-            description: "Dirección completa del remitente",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_recipient_name: {
-            label: "Nombre del destinatario",
-            description: "Nombre completo de quien recibe la correspondencia",
-            required: false,
+          title: {
+            label: "Título",
+            description: null,
+            required: true,
             multiple: false,
             type: "string",
           },
 
-          field_delivery_address: {
-            label: "Dirección del destinatario",
-            description: "Dirección completa del destinatario",
+          field_birth_date: {
+            label: "Fecha de nacimiento",
+            description: "",
             required: false,
             multiple: false,
-            type: "string",
+            type: "datetime",
           },
-          field_package_description: {
-            label: "Descripcion del paquete",
-            description: "Descripcion del paquete a entregar",
+
+          field_gender: {
+            label: "Género",
+            description: "",
             required: false,
             multiple: false,
-            type: "string",
+            type: "reference", // se renderiza como select
+            options: [
+              { value: "14", label: "Femenino" },
+              { value: "2", label: "Masculino" },
+              { value: "15", label: "Otro" },
+            ],
           },
-          field_package_weight: {
-            label: "Peso del paquete",
-            description: "Peso aproximado del paquete en kilogramos",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_priority_value: {
-            label: "Entrega urgente",
-            description: "Indica si la entrega es urgente",
-            required: false,
-            multiple: false,
-            type: "boolean",
-          },
-          field_files: {
-            label: "Adjunte fotos del paquete",
+          field_package_content_descriptio: {
+            label: "Descripción del contenido del paquete",
             description:
-              "Envíe fotografía del paquete a entregar (jpg, png, pdf)",
+              "Diligencie una descripción detallada del contenido del paquete.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_recipient_address: {
+            label: "Dirección (Destinatario)",
+            description: "Ingrese la dirección completa del destinatario.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_recipient_contact_phone: {
+            label: "Teléfono de contacto (Destinatario)",
+            description:
+              "Ingrese el número de teléfono de contacto del destinatario.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_recipient_full_name: {
+            label: "Nombre y apellidos (Destinatario)",
+            description:
+              "Ingrese el nombre completo de la persona destinataria.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_sender_address: {
+            label: "Dirección (Remitente)",
+            description: "Ingrese la dirección completa del remitente.",
             required: false,
-            multiple: true,
-            type: "file",
+            multiple: false,
+            type: "string",
+          },
+          field_sender_contact_phone: {
+            label: "Teléfono de contacto (Remitente)",
+            description:
+              "Ingrese el número de teléfono de contacto del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_sender_full_name: {
+            label: "Nombre y apellidos (Remitente)",
+            description: "Ingrese el nombre completo de la persona remitente",
+            required: true,
+            multiple: false,
+            type: "string",
           },
         },
       },
-      document_processing: {
-        bundle: "document_processing",
+      filing_and_received_stamp: {
+        bundle: "filing_and_received_stamp",
         label: "Radicación y sello de recibido",
-        description: "Información adicional para entrega de correspondencia",
+        description:
+          "Información adicional para radicación y sello de recibido",
         schema: {
-          field_recipient_name: {
-            label: "Nombre completo del destinatario",
-            description: "Nombre y apellido del destinatario",
+          field_birth_date: {
+            label: "Fecha de nacimiento",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "datetime",
+          },
+          field_gender: {
+            label: "Género",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "reference",
+            options: [
+              { value: "14", label: "Femenino" },
+              { value: "2", label: "Masculino" },
+              { value: "15", label: "Otro" },
+            ],
+          },
+          field_package_content_descriptio: {
+            label: "Descripción del contenido del paquete",
+            description:
+              "Diligencie una descripción detallada del contenido del paquete.",
             required: true,
             multiple: false,
             type: "string",
           },
-          field_delivery_address: {
-            label: "Dirección del destinatario",
-            description: "Dirección completa del destinatario",
+          field_recipient_address: {
+            label: "Dirección (Destinatario)",
+            description: "Ingrese la dirección completa del destinatario.",
             required: true,
             multiple: false,
             type: "string",
           },
-          field_recipient_phone: {
-            label: "Teléfono de contacto del destinatario",
-            description: "Número de teléfono del destinatario",
+          field_recipient_contact_phone: {
+            label: "Teléfono de contacto (Destinatario)",
+            description:
+              "Ingrese el número de teléfono de contacto del destinatario.",
             required: true,
             multiple: false,
             type: "string",
           },
-          field_required_stamp: {
-            label: "Requiere radicado",
-            description: "Indica si el envío requiere radicado",
+          field_recipient_full_name: {
+            label: "Nombre y apellidos (Destinatario)",
+            description:
+              "Ingrese el nombre completo de la persona destinataria.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_requires_filing: {
+            label: "¿Requiere radicado?",
+            description: "Seleccione si el trámite requiere radicado.",
             required: false,
             multiple: false,
             type: "boolean",
           },
-          field_files: {
-            label: "Adjunte documentos",
-            description: "Envíe fotografía del radicado/sello (jpg, png, pdf)",
+          field_sender_address: {
+            label: "Dirección (Remitente)",
+            description: "Ingrese la dirección completa del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_sender_contact_phone: {
+            label: "Teléfono de contacto (Remitente)",
+            description:
+              "Ingrese el número de teléfono de contacto del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_sender_full_name: {
+            label: "Nombre y apellidos (Remitente)",
+            description: "Ingrese el nombre completo de la persona remitente",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_path: {
+            label: "URL (Foto de la fórmula médica, de Google Drive)",
+            description: "",
             required: false,
             multiple: true,
-            type: "file",
+            type: "link",
+            title: 0,
           },
         },
       },
-      transport_service: {
-        bundle: "transport_service",
-        label: "Servicio de Transporte",
-        description: "Información adicional para servicios de transporte",
-        schema: {
-          field_origin_location: {
-            label: "Ubicación de origen",
-            description: "Punto de partida del transporte",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_destination_location: {
-            label: "Ubicación de destino",
-            description: "Punto de llegada del transporte",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_transport_type: {
-            label: "Tipo de transporte",
-            description: "Tipo de vehículo o medio de transporte",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_passenger_count: {
-            label: "Número de pasajeros",
-            description: "Cantidad de pasajeros a transportar",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_cargo_description: {
-            label: "Descripción de la carga",
-            description: "Descripción de la carga a transportar",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_special_requirements: {
-            label: "Requerimientos especiales",
-            description: "Requerimientos especiales para el transporte",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_urgent_service: {
-            label: "Servicio urgente",
-            description: "Indica si el servicio es urgente",
-            required: false,
-            multiple: false,
-            type: "boolean",
-          },
-        },
-      },
-
-      civil_records_request: {
-        bundle: "civil_records_request",
+      civil_registry_request: {
+        bundle: "civil_registry_request",
         label: "Solicitud de Registros Civiles",
         description:
           "Información adicional para solicitud de registros civiles",
         schema: {
-          field_person_name: {
-            label: "Nombre(s) de quien pertenece el registro",
+          field_registrant_full_name: {
+            label: "Nombre(s) y apellido(s) de quien pertenece el registro",
             description: "Nombre de quien pertenece el registro",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_person_last_name: {
-            label: "Apellido(s) de quien pertenece el registro",
-            description: "Apellido de quien pertenece el registro",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_request_reason: {
+          field_registrant_registration_co: {
             label: "Número de registro",
             description: "Número del registro civil",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_notary_number: {
+          field_registry_notary_number: {
             label: "Número de la notaria",
             description: "Número de la notaria",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_tomo_number: {
+          field_registry_tome_number: {
             label: "Número del tomo",
             description: "Número del tomo",
             required: false,
             multiple: false,
             type: "number",
           },
-          field_folio_number: {
+          field_registry_folio_number: {
             label: "Número del folio",
             description: "Número del folio",
             required: false,
             multiple: false,
             type: "number",
           },
-          field_serial_number: {
+          field_registry_serial_number: {
             label: "Número del serial",
             description: "Número del serial",
             required: false,
@@ -889,271 +847,726 @@ export function NewRequestModal({
           },
         },
       },
-      marriage_certificate: {
-        bundle: "marriage_certificate",
+      marriage_certificate_request: {
+        bundle: "marriage_certificate_request_request",
         label: "Partida de Matrimonio",
         description: "Información adicional para partida de matrimonio",
         schema: {
-          field_marriage_type: {
-            label: "Tipo partida de matrimonio",
-            description: "Seleccione el tipo de partida de matrimonio",
-            required: true,
-            multiple: false,
-            type: "select",
-            options: [
-              { label: "Civil", value: "civil" },
-              { label: "Católica", value: "catolica" },
-            ],
-          },
-          field_motive_type: {
-            label: "Solicitud de divorcio o juicio de separación",
-            description:
-              "Seleccione el tipo de solicitud de divorcio o juicio de separación",
-            required: true,
-            multiple: false,
-            type: "select",
-            options: [
-              { label: "Divorcio", value: "divorce" },
-              { label: "Sucesión", value: "succession" },
-              { label: "Volverse a casar", value: "re-marry" },
-            ],
-          },
-          field_path: {
-            label: "Adjunte documentos",
-            description:
-              "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
+          field_applicant_id_copy: {
+            label: "Copia cédula del solicitante",
+            description: "Copia de la cédula de identidad del solicitante",
             required: false,
             multiple: true,
-            type: "file",
+            type: "link",
+            title: 1,
+          },
+          field_marriage_case: {
+            label: "Caso matrimonial",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "reference",
+            options: [
+              { value: "203", label: "Divorcio" },
+              { value: "204", label: "Sucesión" },
+              { value: "205", label: "Volver a casarse" },
+            ],
+          },
+          field_marriage_certificate: {
+            label: "Certificado matrimonial",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "link",
+            title: 1,
+          },
+          field_marriage_registry: {
+            label: "Estado de registro del matrimonio",
+            description: "Seleccione el estado de registro del matrimonio.",
+            required: false,
+            multiple: false,
+            type: "reference",
+            options: [
+              {
+                value: "198",
+                label: "Fue un matrimonio civil (se registró automáticamente)",
+              },
+              {
+                value: "197",
+                label: "No, solo fue ceremonia religiosa (no está registrado)",
+              },
+              {
+                value: "196",
+                label:
+                  "Sí, ya está registrado (partida de matrimonio registrada)",
+              },
+            ],
+          },
+          field_marriage_type: {
+            label: "Tipo de partida de matrimonio",
+            description:
+              "Seleccione el tipo de partida de matrimonio que desea solicitar.",
+            required: false,
+            multiple: false,
+            type: "reference",
+            options: [
+              { value: "199", label: "Católico" },
+              { value: "200", label: "Civil" },
+            ],
+          },
+          field_signed_authorization: {
+            label: "Cargue autorización firmada",
+            description:
+              "Archivo de la autorización firmada para autorizar al repartidor",
+            required: true,
+            multiple: false,
+            type: "link",
+            title: 1,
           },
         },
       },
-      death_certificate: {
-        bundle: "death_certificate",
+      death_certificate_request: {
+        bundle: "death_certificate_request",
         label: "Partida de Defunción",
         description: "Información adicional para partida de defunción",
         schema: {
-          field_motive_type: {
-            label: "Motivo de la partida de defunción",
-            description: "Motivo de la partida de defunción",
+          field_document_number: {
+            label: "Número de documento",
+            description:
+              "Ingrese el número de documento de la persona fallecida.",
             required: true,
             multiple: false,
             type: "string",
           },
-          field_path: {
-            label: "Adjunte documentos",
+
+          field_has_original_death_certifi: {
+            label: "¿Tiene el certificado de defunción original?",
             description:
-              "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
+              "Indique si cuenta con el certificado de defunción original.",
             required: false,
-            multiple: true,
-            type: "file",
+            multiple: false,
+            type: "boolean",
+          },
+
+          field_registrant_full_name: {
+            label: "Nombre y apellidos (Inscrito)",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_registry_serial_number: {
+            label: "Número de serial",
+            description:
+              "Diligencie el número de serial correspondiente al registro civil.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_signed_authorization: {
+            label: "Cargue autorización firmada",
+            description:
+              "Archivo de la autorización firmada para autorizar al repartidor",
+            required: true,
+            multiple: false,
+            type: "link",
           },
         },
       },
-      property_deed_copy: {
-        bundle: "property_deed_copy",
+      deed_copy_request: {
+        bundle: "deed_copy_request",
         label: "Copia de Escrituras",
         description: "Información adicional para copia de escrituras",
         schema: {
-          field_type_property: {
-            label: "Tipo de persona",
-            description: "Seleccione el tipo de persona",
-            required: true,
-            multiple: false,
-            type: "select",
-            options: [
-              { label: "Natural", value: "natural" },
-              { label: "Jurídica", value: "juridica" },
-            ],
-          },
-          field_deed_number: {
-            label: "Número de escritura",
-            description: "Número de la escritura pública",
-            required: true,
-            multiple: false,
-            type: "number",
-          },
-          field_deed_year: {
-            label: "Año de la escritura",
-            description: "Año en que se otorgó la escritura",
+          field_applicant_id_copy: {
+            label: "Copia cédula del solicitante",
+            description: "Copia de la cédula de identidad del solicitante",
             required: false,
-            multiple: false,
-            type: "date",
+            multiple: true,
+            type: "link",
           },
+
           field_deed_city: {
-            label: "Ciudad donde se otorgó la escritura",
-            description: "Ciudad donde se otorgó la escritura",
+            label: "Ciudad donde está registrada la escritura",
+            description:
+              "Diligencie la ciudad en la cual está registrada la escritura.",
             required: false,
             multiple: false,
             type: "string",
+          },
+
+          field_deed_notary_name: {
+            label: "Nombre de la notaría donde se otorgó la escritura",
+            description:
+              "Diligencie el nombre completo de la notaría donde se otorgó la escritura.",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_deed_number_year: {
+            label: "Número y año de la escritura",
+            description:
+              "Diligencie el número y el año correspondientes a la escritura.",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_document_number: {
+            label: "Número de documento",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_is_legal_entity: {
+            label: "¿Es persona jurídica?",
+            description:
+              "Indique si la solicitud corresponde a una persona jurídica.",
+            required: false,
+            multiple: false,
+            type: "boolean",
+          },
+
+          field_legal_representation_certi: {
+            label: "Certificado de representación legal (Cámara de Comercio)",
+            description:
+              "Adjunte el certificado de representación legal expedido por la Cámara de Comercio.",
+            required: true,
+            multiple: false,
+            type: "link",
           },
 
           field_path: {
-            label: "Adjunte documentos",
-            description:
-              "Adjunte copia de la escritura y otros documentos (jpg, png, pdf)",
+            label: "URL (Foto de la fórmula médica, de Google Drive)",
+            description: "",
             required: false,
             multiple: true,
-            type: "file",
+            type: "link",
+          },
+
+          field_signed_authorization: {
+            label: "Cargue autorización firmada",
+            description:
+              "Archivo de la autorización firmada para autorizar al repartidor",
+            required: true,
+            multiple: false,
+            type: "link",
           },
         },
       },
-      desenglobes_solicit: {
-        bundle: "Solicitudes desenglobes",
-        label: "Solicitudes desenglobes",
-        description: "Información adicional para certificado de solvencia",
+      property_unbundling_request: {
+        bundle: "property_unbundling_request",
+        label: "Solicitud de Desenglobes",
+        description: "Información adicional para solicitud de desenglobes",
         schema: {
-          field_name_applicant: {
-            label: "Nombre del solicitante",
-            description: "Nombre del solicitante",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_number_document: {
-            label: "Numero de documento",
-            description: "Numero de documento del propietario",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_license_number: {
-            label: "Número de matricula inmobiliaria",
-            description: "Número de matricula inmobiliaria",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_cadastral_code: {
-            label: "Número catastral",
-            description: "Número catastral",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_files: {
-            label: "Adjunte documentos",
-            description:
-              "Adjunte copia del plano de desenglobe y otros documentos (jpg, png, pdf)",
+          field_applicant_id_copy: {
+            label: "Copia cédula del solicitante",
+            description: "Copia de la cédula de identidad del solicitante",
             required: false,
             multiple: true,
-            type: "file",
+            type: "link",
           },
-        },
-      },
-      planos_solicit: {
-        bundle: "Solicitud de planos",
-        label: "Solicitud de planos",
-        description: "Información adicional para solicitud de planos",
-        schema: {
-          field_license_number: {
-            label: "Numero de matricula inmobiliaria",
-            description: "Numero de matricula inmobiliaria",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_property_address: {
-            label: "Dirección del predio",
-            description: "Dirección del predio",
+
+          field_cadastral_resolution: {
+            label: "Resolución de Catastro (desenglobe)",
+            description:
+              "Adjunte la resolución expedida por Catastro que aprueba el desenglobe del predio.",
             required: false,
             multiple: false,
-            type: "string",
+            type: "link",
           },
-          field_owner_name: {
-            label: "Nombre del propietario",
-            description: "Nombre completo del propietario",
-            required: true,
+
+          field_disengagement_deed: {
+            label: "disengagement_deed",
+            description: "",
+            required: false,
             multiple: false,
-            type: "string",
+            type: "link",
           },
-          field_number_document: {
-            label: "Numero de documento",
-            description: "Numero de documento del propietario",
+
+          field_document_number: {
+            label: "Número de documento",
+            description: "",
             required: true,
             multiple: false,
             type: "string",
           },
 
-          field_relation_property: {
-            label: "Relación con el predio",
-            description: "Relación con el predio",
+          field_has_property_plan: {
+            label: "¿Cuenta con plano del predio?",
+            description: "Indique si dispone del plano del predio.",
             required: false,
             multiple: false,
-            type: "string",
+            type: "boolean",
           },
-          field_phone_owner: {
-            label: "Telefono del propietario",
-            description: "Telefono del propietario",
-            required: false,
-            multiple: false,
-            type: "string",
-          },
-          field_files: {
-            label: "Adjunte documentos",
+
+          field_is_legal_entity: {
+            label: "¿Es persona jurídica?",
             description:
-              "Adjunte copia del documento de representante legal y otros (jpg, png, pdf)",
+              "Indique si la solicitud corresponde a una persona jurídica.",
             required: false,
-            multiple: true,
-            type: "file",
+            multiple: false,
+            type: "boolean",
+          },
+
+          field_legal_representation_certi: {
+            label: "Certificado de representación legal (Cámara de Comercio)",
+            description:
+              "Adjunte el certificado de representación legal expedido por la Cámara de Comercio.",
+            required: true,
+            multiple: false,
+            type: "link",
+          },
+
+          field_neighboring_properties: {
+            label: "Relación de predios colindantes",
+            description:
+              "Adjunte un documento con la relación de los predios colindantes.",
+            required: false,
+            multiple: false,
+            type: "link",
+          },
+
+          field_notarial_power: {
+            label: "Poder notarial con autorización",
+            description:
+              "Adjunte el poder notarial registrado que autoriza a la persona a realizar el trámite.",
+            required: false,
+            multiple: false,
+            type: "link",
+          },
+
+          field_property_deed_copy: {
+            label: "Copia de la escritura",
+            description: "Adjunte copia de la escritura correspondiente.",
+            required: false,
+            multiple: false,
+            type: "link",
+          },
+
+          field_property_plan: {
+            label: "Plano de predio",
+            description: "Adjunte el plano del predio.",
+            required: false,
+            multiple: false,
+            type: "link",
+          },
+
+          field_property_tax: {
+            label: "Copia de impuesto predial (último año)",
+            description:
+              "Adjunte la copia del impuesto predial correspondiente al último año.",
+            required: false,
+            multiple: false,
+            type: "link",
+          },
+
+          field_registry_serial_number: {
+            label: "Número de serial",
+            description:
+              "Diligencie el número de serial correspondiente al registro civil.",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_tradition_certificate: {
+            label: "Certificado de libertad y tradición",
+            description:
+              "Adjunte el certificado de libertad y tradición vigente.",
+            required: false,
+            multiple: false,
+            type: "link",
           },
         },
       },
       property_certification: {
-        bundle: "Certificación de Propiedad",
+        bundle: "property_certification",
         label: "Certificación de Propiedad",
-        description: "Información adicional para partida de defunción",
+        description: "Información adicional para certificación de propiedad",
         schema: {
-          field_license_number: {
-            label: "Numero de matricula inmobiliaria",
-            description: "Numero de matricula inmobiliaria",
-            required: true,
-            multiple: false,
-            type: "string",
+          field_applicant_id_copy: {
+            label: "Copia cédula del solicitante",
+            description: "Copia de la cédula de identidad del solicitante",
+            required: false,
+            multiple: true,
+            type: "link",
           },
-          field_property_address: {
-            label: "Dirección del predio",
-            description: "Dirección del predio",
+
+          field_cadastral_registration: {
+            label: "Diligenciar el registro catastral",
+            description: "Número del registro catastral del predio",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_owner_name: {
-            label: "Nombre del propietario",
-            description: "Nombre completo del propietario",
-            required: true,
-            multiple: false,
-            type: "string",
-          },
-          field_number_document: {
-            label: "Numero de documento",
-            description: "Numero de documento del propietario",
+
+          field_document_number: {
+            label: "Número de documento",
+            description: "",
             required: true,
             multiple: false,
             type: "string",
           },
 
-          field_relation_property: {
-            label: "Relación con el predio",
-            description: "Relación con el predio",
+          field_owner_name: {
+            label: "Diligenciar nombre del propietario",
+            description: "Nombre completo del propietario del predio",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_phone_owner: {
-            label: "Telefono del propietario",
-            description: "Telefono del propietario",
+
+          field_property_deed_copy: {
+            label: "Copia de la escritura",
+            description: "Adjunte copia de la escritura correspondiente.",
+            required: false,
+            multiple: false,
+            type: "link",
+          },
+
+          field_property_number: {
+            label: "Diligenciar número de matrícula inmobiliaria",
+            description: "Número de matrícula del predio",
             required: false,
             multiple: false,
             type: "string",
           },
-          field_files: {
-            label: "Adjunte documentos",
+
+          field_property_registered: {
+            label: "Cuenta con la matrícula inmobiliaria",
+            description: "Indica si el predio tiene matrícula inmobiliaria",
+            required: false,
+            multiple: false,
+            type: "boolean",
+          },
+
+          field_registry_notary_number: {
+            label: "Número de notaría",
             description:
-              "Adjunte copia del documento de representante legal y otros (jpg, png, pdf)",
+              "Diligencie el número de la notaría correspondiente al registro civil.",
             required: false,
-            multiple: true,
-            type: "file",
+            multiple: false,
+            type: "string",
+          },
+        },
+      },
+      medical_bills: {
+        bundle: "medical_bills",
+        label: "Facturas médicas",
+        description: "Información adicional para facturas médicas",
+        schema: {
+          field_package_content_descriptio: {
+            label: "Descripción del contenido del paquete",
+            description:
+              "Diligencie una descripción detallada del contenido del paquete.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_priority: {
+            label: "priority",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "boolean",
+          },
+
+          field_recipient_address: {
+            label: "Dirección (Destinatario)",
+            description: "Ingrese la dirección completa del destinatario.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_recipient_contact_phone: {
+            label: "Teléfono de contacto (Destinatario)",
+            description:
+              "Ingrese el número de teléfono de contacto del destinatario.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_recipient_full_name: {
+            label: "Nombre y apellidos (Destinatario)",
+            description:
+              "Ingrese el nombre completo de la persona destinataria.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_sender_address: {
+            label: "Dirección (Remitente)",
+            description: "Ingrese la dirección completa del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_sender_contact_phone: {
+            label: "Teléfono de contacto (Remitente)",
+            description:
+              "Ingrese el número de teléfono de contacto del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_sender_full_name: {
+            label: "Nombre y apellidos (Remitente)",
+            description: "Ingrese el nombre completo de la persona remitente",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+        },
+      },
+      clinical_labs_fridge: {
+        bundle: "clinical_labs_fridge",
+        label: "Laboratorios clínicos por nevera",
+        description: "Información adicional para laboratorios clínicos",
+        schema: {
+          field_delivery_address: {
+            label: "Dirección de entrega",
+            description: "Dirección de entrega",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_document_number: {
+            label: "Número de documento",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_lab_name: {
+            label: "Nombre del laboratorio",
+            description: "Nombre completo del laboratorio",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_lab_registration_code: {
+            label: "Laboratorio cuenta con código de registro destinatario",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_recipient_full_name: {
+            label: "Nombre y apellidos (Destinatario)",
+            description:
+              "Ingrese el nombre completo de la persona destinataria.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_sender_full_name: {
+            label: "Nombre y apellidos (Remitente)",
+            description: "Ingrese el nombre completo de la persona remitente",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+        },
+      },
+      collect_envelopes: {
+        bundle: "collect_envelopes",
+        label: "Recgoger sobres por unidad",
+        description: "Información adicional para recoger sobres por unidad",
+        schema: {
+          field_sender_address: {
+            label: "Dirección (Remitente)",
+            description: "Ingrese la dirección completa del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_sender_contact_phone: {
+            label: "Teléfono de contacto (Remitente)",
+            description:
+              "Ingrese el número de teléfono de contacto del remitente.",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_sender_full_name: {
+            label: "Nombre y apellidos (Remitente)",
+            description: "Ingrese el nombre completo de la persona remitente",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+        },
+      },
+      subservice_eps_la_mesa: {
+        bundle: "subservice_eps_la_mesa",
+        label: "Diferentes EPS la mesa",
+        description: "Información adicional para diferentes EPS la mesa",
+        schema: {
+          field_address: {
+            label: "Dirección de residencia",
+            description: "Dirección y barrio, Dirección completa",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_eps: {
+            label: "EPS",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_patient_id_number: {
+            label: "Número de cédula de paciente",
+            description: "Número de identificación del paciente",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_patient_name_order: {
+            label: "Nombre de paciente orden médica",
+            description: "Nombre del paciente de la orden médica a autorizar",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_phone_number: {
+            label: "Teléfono de contacto",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "tel",
+          },
+
+          field_registrant_full_name: {
+            label: "Nombre y apellidos (Inscrito)",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_signed_authorization: {
+            label: "Cargue autorización firmada",
+            description:
+              "Archivo de la autorización firmada para autorizar al repartidor",
+            required: false,
+            multiple: false,
+            type: "link",
+            title: 1,
+          },
+
+          field_upload_medical_history: {
+            label: "Cargar historia clínica",
+            description: "Archivo de la historia clínica del paciente",
+            required: false,
+            multiple: false,
+            type: "link",
+            title: 1,
+          },
+
+          field_upload_medical_order: {
+            label: "Cargar orden médica para autorizar",
+            description: "Orden médica que se requiere autorizar",
+            required: false,
+            multiple: false,
+            type: "link",
+            title: 1,
+          },
+        },
+      },
+      medical_appointment_request: {
+        bundle: "medical_appointment_request",
+        label: "Solicitud de Citas médicas",
+        description: "Información adicional para solicitud de citas médicas",
+        schema: {
+          field_address: {
+            label: "Dirección de residencia",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_current_availability: {
+            label: "Disponibilidad actual",
+            description: "",
+            required: false,
+            multiple: false,
+            type: "boolean",
+          },
+
+          field_document_number: {
+            label: "Número de documento",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_eps: {
+            label: "EPS",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_patient_name_order: {
+            label: "Nombre de paciente orden médica",
+            description: "Nombre del paciente de la orden médica a autorizar",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+
+          field_phone_number: {
+            label: "Teléfono de contacto",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "tel",
+          },
+
+          field_registrant_full_name: {
+            label: "Nombre y apellidos (Inscrito)",
+            description: "",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+
+          field_signed_authorization: {
+            label: "Cargue autorización firmada",
+            description:
+              "Archivo de la autorización firmada para autorizar al repartidor",
+            required: true,
+            multiple: false,
+            type: "link",
+            title: 1,
           },
         },
       },
@@ -1280,7 +1693,7 @@ export function NewRequestModal({
       categoryId: "",
       serviceId: "",
       subserviceId: "",
-      entryDate: new Date().toLocaleDateString('en-CA'), // Formato YYYY-MM-DD en zona horaria local
+      entryDate: new Date().toLocaleDateString("en-CA"), // Formato YYYY-MM-DD en zona horaria local
       coverageAreaId: "",
       paymentMethod: "",
       priorityValue: false,
@@ -1363,7 +1776,6 @@ export function NewRequestModal({
   // Limpiar errores cuando cambie el schema del subservicio
   useEffect(() => {
     if (subserviceSchema) {
-      console.log("🔄 Schema del subservicio cargado:", subserviceSchema.label);
       // Solo limpiar errores relacionados con campos de subservicio
       const subserviceFields = Object.keys(subserviceSchema.schema);
       subserviceFields.forEach((fieldKey) => {
@@ -1377,12 +1789,8 @@ export function NewRequestModal({
   // Cargar datos para los selects
   useEffect(() => {
     if (isOpen) {
-      console.log("Modal opened, loading form data...");
       setError(null);
       loadFormData();
-
-      // Test node creation endpoints for debugging - COMMENTED OUT TO AVOID 404/406 ERRORS
-      // testNodeCreation();
     }
   }, [isOpen]);
 
@@ -1423,10 +1831,6 @@ export function NewRequestModal({
       !subserviceSchema &&
       !isLoadingSubserviceSchema
     ) {
-      console.log(
-        "🔄 Re-loading schema for existing subservicio:",
-        currentSubserviceId
-      );
       handleSubserviceChange(currentSubserviceId, true);
     }
   }, [
@@ -1486,71 +1890,25 @@ export function NewRequestModal({
       // Usar el número de aplicación generado
       const applicationNumber = generatedApplicationNumber;
 
-      // Debug: Verificar valores antes de crear el payload
-      console.log("🔍 Valores del formulario:", {
-        applicantId: values.applicantId,
-        categoryId: values.categoryId,
-        serviceId: values.serviceId,
-        subserviceId: values.subserviceId,
-        coverageAreaId: values.coverageAreaId,
-      });
+      // Crear la solicitud principal directamente
 
-      // Crear un payload mínimo con solo los campos existentes
-      // y agregar campos dinámicos del subservicio (p.ej. pharmacy_claims)
+      // Recopilar campos dinámicos del subservicio para incluir en la solicitud principal
       const dynamicSubserviceAttributes: Record<string, unknown> = {};
 
-      // Incluir campos específicos cuando el bundle sea pharmacy_claims
-      if (subserviceSchema?.bundle === "pharmacy_claims") {
-        const fieldDrugstore = (values as Record<string, unknown>)[
-          "field_drugstore"
-        ] as string | undefined;
-        const fieldEps = (values as Record<string, unknown>)["field_eps"] as
-          | string
-          | undefined;
-        const fieldIpsAddress = (values as Record<string, unknown>)[
-          "field_ips_address"
-        ] as string | null | undefined;
-        const fieldPathValue = (values as Record<string, unknown>)[
-          "field_path"
-        ] as unknown;
+      if (subserviceSchema?.schema) {
+        Object.keys(subserviceSchema.schema).forEach((fieldKey) => {
+          if (fieldKey.startsWith("field_")) {
+            const fieldValue = (values as Record<string, unknown>)[fieldKey];
 
-        if (typeof fieldDrugstore === "string") {
-          dynamicSubserviceAttributes["field_drugstore"] = fieldDrugstore;
-        }
-        if (typeof fieldEps === "string") {
-          dynamicSubserviceAttributes["field_eps"] = fieldEps;
-        }
-        // Permitir null o string para dirección IPS
-        if (fieldIpsAddress === null || typeof fieldIpsAddress === "string") {
-          dynamicSubserviceAttributes["field_ips_address"] = fieldIpsAddress;
-        }
-
-        // Mapear field_path al formato [{ uri, title, options }]
-        const toFileObjects = (
-          input: unknown
-        ): Array<{
-          uri: string;
-          title: string;
-          options: unknown[];
-        }> => {
-          const asArray = Array.isArray(input) ? input : input ? [input] : [];
-          return (asArray as unknown[])
-            .map((item) =>
-              typeof item === "string"
-                ? { uri: item, title: "", options: [] as unknown[] }
-                : null
-            )
-            .filter(Boolean) as Array<{
-            uri: string;
-            title: string;
-            options: unknown[];
-          }>;
-        };
-
-        const mappedFiles = toFileObjects(fieldPathValue);
-        if (mappedFiles.length > 0) {
-          dynamicSubserviceAttributes["field_path"] = mappedFiles;
-        }
+            if (
+              fieldValue !== undefined &&
+              fieldValue !== null &&
+              fieldValue !== ""
+            ) {
+              dynamicSubserviceAttributes[fieldKey] = fieldValue;
+            }
+          }
+        });
       }
 
       const payload: CreateRequestPayload = {
@@ -1558,15 +1916,16 @@ export function NewRequestModal({
           type: "node--request",
           attributes: {
             title: applicationNumber,
-            field_entry_date: values.entryDate as string,
             field_application_number: applicationNumber,
             field_application_score: 4,
+            field_entry_date: values.entryDate as string,
             field_estimated_application_hour: 0,
             field_logistics_costs: 0,
             field_service_value: 0,
+            status: true,
             promote: false,
             sticky: false,
-            // Agregar atributos dinámicos del subservicio (si corresponde)
+            // Incluir campos dinámicos del subservicio en la solicitud principal
             ...dynamicSubserviceAttributes,
           },
           relationships: {
@@ -1576,48 +1935,27 @@ export function NewRequestModal({
                 id: values.applicantId as string,
               },
             },
-            ...(values.categoryId && {
-              field_category: {
-                data: {
-                  type: "taxonomy_term--category",
-                  id: values.categoryId as string,
-                },
+            field_application_statuses: {
+              data: {
+                type: "taxonomy_term--application_statuses",
+                id: "24d38208-a645-4cca-a0c8-a460bce4453a", // ID válido de estado
               },
-            }),
-            ...(values.serviceId && {
-              field_service: {
-                data: {
-                  type: "taxonomy_term--category",
-                  id: values.serviceId as string,
-                },
+            },
+            field_service_status: {
+              data: {
+                type: "taxonomy_term--application_statuses",
+                id: "2aa93128-20bb-4262-bf30-f53d7e9af052", // ID válido de estado
               },
-            }),
-            ...(values.subserviceId
-              ? {
-                  field_subservice: {
-                    data: {
-                      type: "taxonomy_term--category",
-                      id: values.subserviceId as string,
-                    },
-                  },
-                }
-              : {}),
-            ...(values.coverageAreaId
-              ? {
-                  field_coverage_area: {
-                    data: {
-                      type: "taxonomy_term--coverage_area",
-                      id: values.coverageAreaId as string,
-                    },
-                  },
-                }
-              : {}),
+            },
+            field_subservice: {
+              data: {
+                type: "taxonomy_term--category",
+                id: values.subserviceId as string,
+              },
+            },
           },
         },
       };
-
-      // Debug: Verificar el payload final
-      console.log("📤 Payload final:", JSON.stringify(payload, null, 2));
 
       await createRequestMutation.mutateAsync(payload);
 
@@ -1972,6 +2310,7 @@ export function NewRequestModal({
                           multiple: boolean;
                           type: string;
                           title?: number;
+                          options?: Array<{ value: string; label: string }>;
                         };
 
                         return (
@@ -1999,6 +2338,58 @@ export function NewRequestModal({
                                       checked={field.value || false}
                                       onCheckedChange={field.onChange}
                                     />
+                                  ) : typedFieldSchema.type === "select" ? (
+                                    <Select
+                                      value={field.value || ""}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue
+                                          placeholder={`Seleccione ${typedFieldSchema.label.toLowerCase()}`}
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {typedFieldSchema.options?.map(
+                                          (option: {
+                                            value: string;
+                                            label: string;
+                                          }) => (
+                                            <SelectItem
+                                              key={option.value}
+                                              value={option.value}
+                                            >
+                                              {option.label}
+                                            </SelectItem>
+                                          )
+                                        )}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : typedFieldSchema.type === "reference" ? (
+                                    <Select
+                                      value={field.value || ""}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue
+                                          placeholder={`Seleccione ${typedFieldSchema.label.toLowerCase()}`}
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {typedFieldSchema.options?.map(
+                                          (option: {
+                                            value: string;
+                                            label: string;
+                                          }) => (
+                                            <SelectItem
+                                              key={option.value}
+                                              value={option.value}
+                                            >
+                                              {option.label}
+                                            </SelectItem>
+                                          )
+                                        )}
+                                      </SelectContent>
+                                    </Select>
                                   ) : (
                                     <Input
                                       placeholder={`Ingrese ${typedFieldSchema.label.toLowerCase()}`}
@@ -2200,12 +2591,9 @@ export function NewRequestModal({
                                                     { id: fieldKey }
                                                   );
 
-                                                  // 🔹 Subir archivo al backend
-                                                  const fileId =
-                                                    await uploadFile(file);
-
-                                                  // Guardar solo ID en el campo
-                                                  field.onChange(fileId);
+                                                  // Simular una URL (funcionalidad de upload pendiente)
+                                                  const fileUrl = `https://ejemplo.com/archivos/${file.name}`;
+                                                  field.onChange(fileUrl);
 
                                                   toast.success(
                                                     `${
@@ -2217,10 +2605,6 @@ export function NewRequestModal({
                                                     { id: fieldKey }
                                                   );
                                                 } catch (error: unknown) {
-                                                  console.error(
-                                                    "Error subiendo archivo:",
-                                                    error
-                                                  );
                                                   const errorMessage =
                                                     error instanceof Error
                                                       ? error.message
@@ -2285,16 +2669,19 @@ export function NewRequestModal({
                                                   </div>
                                                   <div className="flex-1 min-w-0">
                                                     <div className="text-sm font-medium text-gray-900 truncate">
-                                                      {getFileNameFromBase64(
-                                                        field.value
-                                                      ) || "Archivo adjunto"}
+                                                      {field.value
+                                                        ? "Archivo subido"
+                                                        : "Archivo adjunto"}
                                                     </div>
                                                     <div className="text-xs text-gray-500">
                                                       {typedFieldSchema.type ===
                                                       "document"
                                                         ? "Documento"
+                                                        : typedFieldSchema.type ===
+                                                          "link"
+                                                        ? "Archivo"
                                                         : "Imagen"}{" "}
-                                                      subida
+                                                      subido
                                                     </div>
                                                   </div>
                                                   <button
@@ -2387,38 +2774,6 @@ export function NewRequestModal({
                 </h3>
                 <p>Seleccione los ajustes de su solicitud</p>
 
-                {/*  <FormField
-                    control={form.control}
-                    name="serviceStatus"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado del servicio *</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="max-w-[200px]">
-                              <SelectValue placeholder="Seleccionar estado del servicio" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="max-w-[300px]">
-                            {serviceStatuses.map((status) => (
-                              <SelectItem
-                                key={status.id}
-                                value={status.id}
-                                className="truncate"
-                              >
-                                {status.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  /> */}
-
                 <div className="grid grid-cols-2 gap-4">
                   {/* Selección de método de pago */}
                   <FormField
@@ -2449,36 +2804,6 @@ export function NewRequestModal({
                             </SelectContent>
                           </Select>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="coverageAreaId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Zona de Cobertura <RequiredDot />
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccione zona" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {coverageAreasData?.map((area: TaxonomyTerm) => (
-                              <SelectItem key={area.id} value={area.id}>
-                                {area.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

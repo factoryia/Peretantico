@@ -9,6 +9,51 @@ import type {
   AssignApplicantPayload,
 } from "../types/request";
 
+// Interfaces para tipos específicos
+interface ApiEntity {
+  id: string;
+  type: string;
+  attributes: {
+    [key: string]: unknown;
+  };
+}
+
+interface ProfileEntity extends ApiEntity {
+  type: "node--profile";
+  attributes: {
+    field_full_name?: string;
+    title?: string;
+  };
+}
+
+interface DistributorEntity extends ApiEntity {
+  type: "node--distributor";
+  attributes: {
+    title?: string;
+    name?: string;
+  };
+}
+
+interface TaxonomyEntity extends ApiEntity {
+  attributes: {
+    name?: string;
+    title?: string;
+  };
+}
+
+interface ApiError {
+  message: string;
+  response?: {
+    status: number;
+    data?: {
+      errors?: Array<{ detail?: string; title?: string }>;
+      message?: string;
+      error?: string;
+    };
+  };
+}
+
+
 export const fetchRequests = async (
   filters: RequestFilters = {}
 ): Promise<RequestsApiResponse> => {
@@ -63,7 +108,7 @@ export const fetchRequests = async (
     // Obtener entidades relacionadas si no están incluidas
     if (response.data.data && (!response.data.included || response.data.included.length === 0)) {
       const requests = response.data.data;
-      const allIncluded: Array<{ id: string; type: string; attributes: Record<string, unknown> }> = [];
+      const allIncluded: ApiEntity[] = [];
       
       const applicantIds = new Set<string>();
       const distributorIds = new Set<string>();
@@ -101,11 +146,11 @@ export const fetchRequests = async (
           });
           
           if (applicantsResponse.data?.data) {
-            applicantsResponse.data.data.forEach((item: Record<string, unknown>) => {
+            applicantsResponse.data.data.forEach((item: ProfileEntity) => {
               allIncluded.push({
-                id: item.id as string,
+                id: item.id,
                 type: "node--profile",
-                attributes: { name: (item.attributes as Record<string, unknown>)?.field_full_name as string || "" }
+                attributes: { name: item.attributes.field_full_name }
               });
             });
           }
@@ -123,11 +168,11 @@ export const fetchRequests = async (
           });
           
           if (distributorsResponse.data?.data) {
-            distributorsResponse.data.data.forEach((item: Record<string, unknown>) => {
+            distributorsResponse.data.data.forEach((item: DistributorEntity) => {
               allIncluded.push({
-                id: item.id as string,
+                id: item.id,
                 type: "node--distributor",
-                attributes: { name: (item.attributes as Record<string, unknown>)?.title as string || "" }
+                attributes: { name: item.attributes.title }
               });
             });
           }
@@ -145,11 +190,11 @@ export const fetchRequests = async (
           });
           
           if (subservicesResponse.data?.data) {
-            subservicesResponse.data.data.forEach((item: Record<string, unknown>) => {
+            subservicesResponse.data.data.forEach((item: TaxonomyEntity) => {
               allIncluded.push({
-                id: item.id as string,
+                id: item.id,
                 type: "taxonomy_term--category",
-                attributes: { name: (item.attributes as Record<string, unknown>)?.name as string || "" }
+                attributes: { name: item.attributes.name }
               });
             });
           }
@@ -167,11 +212,11 @@ export const fetchRequests = async (
           });
           
           if (statusResponse.data?.data) {
-            statusResponse.data.data.forEach((item: Record<string, unknown>) => {
+            statusResponse.data.data.forEach((item: TaxonomyEntity) => {
               allIncluded.push({
-                id: item.id as string,
+                id: item.id,
                 type: "taxonomy_term--application_statuses",
-                attributes: { name: (item.attributes as Record<string, unknown>)?.name as string || "" }
+                attributes: { name: item.attributes.name }
               });
             });
           }
@@ -207,21 +252,32 @@ export const updateRequest = async (
   }
 };
 
+
+
 export const createRequest = async (payload: CreateRequestPayload) => {
   try {
+    console.log("Creating request with payload:", JSON.stringify(payload, null, 2));
+    
     let response;
     
-    // Intentar JSON:API primero
+    // Try JSON:API first
     try {
+      console.log("Trying JSON:API endpoint: /api/node/request");
       response = await api.post("/api/node/request", payload, {
         headers: {
           "Content-Type": "application/vnd.api+json",
         },
       });
+      console.log("Request created successfully via JSON:API:", response.data);
       return response;
     } catch (jsonApiError: unknown) {
-      if ((jsonApiError as { response?: { status?: number } })?.response?.status === 404) {
-        // Intentar endpoints JSON:API alternativos
+      const error = jsonApiError as ApiError;
+      console.log("JSON:API failed:", error.message);
+      
+      if (error.response?.status === 404) {
+        console.log("JSON:API endpoint not found, trying alternative endpoints...");
+        
+        // Try alternative JSON:API endpoints
         const alternativeEndpoints = [
           "/api/node/requests",
           "/api/node/application",
@@ -230,21 +286,27 @@ export const createRequest = async (payload: CreateRequestPayload) => {
         
         for (const endpoint of alternativeEndpoints) {
           try {
+            console.log(`Trying alternative endpoint: ${endpoint}`);
             response = await api.post(endpoint, payload, {
               headers: {
                 "Content-Type": "application/vnd.api+json",
               },
             });
+            console.log(`Request created successfully via ${endpoint}:`, response.data);
             return response;
-          } catch {
+          } catch (altError: unknown) {
+            const altErr = altError as ApiError;
+            console.log(`${endpoint} failed:`, altErr.message);
             continue;
           }
         }
         
-        // Si todos los endpoints JSON:API fallan, intentar Drupal REST API
-        // Convertir payload JSON:API al formato Drupal REST API
+        // If all JSON:API endpoints fail, try Drupal REST API
+        console.log("All JSON:API endpoints failed, trying Drupal REST API...");
+        
+        // Convert JSON:API payload to Drupal REST API format
         const drupalPayload: Record<string, unknown> = {
-          type: [{ target_id: "request_medication" }], // Usar el tipo de contenido correcto que existe
+          type: [{ target_id: "request" }], // Use the correct content type
           title: [{ value: payload.data.attributes.title }],
           field_application_number: [{ value: payload.data.attributes.field_application_number }],
           field_application_score: [{ value: payload.data.attributes.field_application_score }],
@@ -252,58 +314,97 @@ export const createRequest = async (payload: CreateRequestPayload) => {
           field_estimated_application_hour: [{ value: payload.data.attributes.field_estimated_application_hour }],
           field_logistics_costs: [{ value: payload.data.attributes.field_logistics_costs }],
           field_service_value: [{ value: payload.data.attributes.field_service_value }],
+          field_estimated_prioritized_hour: payload.data.attributes.field_estimated_prioritized_hour !== null 
+            ? [{ value: payload.data.attributes.field_estimated_prioritized_hour }] 
+            : null,
+          field_prioritized_value: payload.data.attributes.field_prioritized_value !== null 
+            ? [{ value: payload.data.attributes.field_prioritized_value }] 
+            : null,
+          field_is_recurring: [{ value: payload.data.attributes.field_is_recurring ? 1 : 0 }],
           status: [{ value: payload.data.attributes.status ? 1 : 0 }],
           promote: [{ value: payload.data.attributes.promote ? 1 : 0 }],
           sticky: [{ value: payload.data.attributes.sticky ? 1 : 0 }],
         };
         
-        // Agregar campos opcionales si existen
-        if (payload.data.attributes.field_estimated_prioritized_hour) {
-          drupalPayload.field_estimated_prioritized_hour = [{ value: payload.data.attributes.field_estimated_prioritized_hour }];
-        }
-        if (payload.data.attributes.field_prioritized_value) {
-          drupalPayload.field_prioritized_value = [{ value: payload.data.attributes.field_prioritized_value }];
-        }
-        if (payload.data.attributes.field_is_recurring !== undefined) {
-          drupalPayload.field_is_recurring = [{ value: payload.data.attributes.field_is_recurring ? 1 : 0 }];
-        }
         if (payload.data.attributes.field_observations) {
           drupalPayload.field_observations = [{ value: payload.data.attributes.field_observations }];
         }
         
-        // Agregar relaciones - convertir al formato Drupal
+        // Add dynamic subservice fields
+        Object.keys(payload.data.attributes).forEach(key => {
+          if (key.startsWith('field_') && !drupalPayload[key]) {
+            const value = payload.data.attributes[key];
+            if (value !== undefined && value !== null) {
+              if (Array.isArray(value)) {
+                // Handle file arrays
+                drupalPayload[key] = value;
+              } else {
+                drupalPayload[key] = [{ value }];
+              }
+            }
+          }
+        });
+        
+        // Add relationships - convert to Drupal format
         if (payload.data.relationships) {
+          // Required relationships
           if (payload.data.relationships.field_applicant?.data?.id) {
             drupalPayload.field_applicant = [{ target_id: payload.data.relationships.field_applicant.data.id }];
           }
+          
+          // Optional relationships
           if (payload.data.relationships.field_distributor_data?.data?.id) {
             drupalPayload.field_distributor_data = [{ target_id: payload.data.relationships.field_distributor_data.data.id }];
+          } else {
+            drupalPayload.field_distributor_data = null;
           }
+          
           if (payload.data.relationships.field_category?.data?.id) {
             drupalPayload.field_category = [{ target_id: payload.data.relationships.field_category.data.id }];
           }
+          
           if (payload.data.relationships.field_service?.data?.id) {
             drupalPayload.field_service = [{ target_id: payload.data.relationships.field_service.data.id }];
           }
+          
           if (payload.data.relationships.field_subservice?.data?.id) {
             drupalPayload.field_subservice = [{ target_id: payload.data.relationships.field_subservice.data.id }];
           }
-          if (payload.data.relationships.field_info_service?.data?.id) {
-            drupalPayload.field_info_service = [{ target_id: payload.data.relationships.field_info_service.data.id }];
+          
+          if (payload.data.relationships.field_coverage_area?.data?.id) {
+            drupalPayload.field_coverage_area = [{ target_id: payload.data.relationships.field_coverage_area.data.id }];
           }
+          
+          // Required status relationships
           if (payload.data.relationships.field_application_statuses?.data?.id) {
             drupalPayload.field_application_statuses = [{ target_id: payload.data.relationships.field_application_statuses.data.id }];
           }
+          
           if (payload.data.relationships.field_service_status?.data?.id) {
             drupalPayload.field_service_status = [{ target_id: payload.data.relationships.field_service_status.data.id }];
           }
+          
+          // Optional status relationships
           if (payload.data.relationships.field_payment_status?.data?.id) {
             drupalPayload.field_payment_status = [{ target_id: payload.data.relationships.field_payment_status.data.id }];
+          } else {
+            drupalPayload.field_payment_status = null;
           }
+          
           if (payload.data.relationships.field_used_channel?.data?.id) {
             drupalPayload.field_used_channel = [{ target_id: payload.data.relationships.field_used_channel.data.id }];
+          } else {
+            drupalPayload.field_used_channel = null;
+          }
+          
+          if (payload.data.relationships.field_info_service?.data?.id) {
+            drupalPayload.field_info_service = [{ target_id: payload.data.relationships.field_info_service.data.id }];
+          } else {
+            drupalPayload.field_info_service = null;
           }
         }
+        
+        console.log("Drupal REST API payload with request:", drupalPayload);
         
         response = await api.post("/node?_format=json", drupalPayload, {
           headers: {
@@ -311,21 +412,23 @@ export const createRequest = async (payload: CreateRequestPayload) => {
           },
         });
         
+        console.log("Request created successfully via Drupal REST API with request:", response.data);
         return response;
       }
       
-      // Re-lanzar el error original si no es un 404
+      // Re-throw the original error if it's not a 404
       throw jsonApiError;
     }
   } catch (error: unknown) {
+    const apiError = error as ApiError;
+    console.error("Error creating request:", apiError);
     
-    if ((error as { response?: { status?: number } })?.response?.status === 403) {
+    if (apiError.response?.status === 403) {
       throw new Error("Error de permisos: No tienes autorización para crear solicitudes. Verifica tu autenticación.");
     }
     
-    if ((error as { response?: { status?: number; data?: { errors?: Array<{ detail?: string; title?: string }> } } })?.response?.status === 422) {
-      const errorObj = error as { response?: { data?: { errors?: Array<{ detail?: string; title?: string }> } } };
-      const validationErrors = errorObj.response?.data?.errors || [];
+    if (apiError.response?.status === 422) {
+      const validationErrors = apiError.response.data?.errors || [];
       const errorMessages = validationErrors.map((err) => err.detail || err.title).join(", ");
       
       if (errorMessages) {
@@ -335,9 +438,8 @@ export const createRequest = async (payload: CreateRequestPayload) => {
       }
     }
     
-    if ((error as { response?: { status?: number; data?: { errors?: Array<{ detail?: string; title?: string }>; message?: string; error?: string } } })?.response?.status === 400) {
-      const errorObj = error as { response?: { data?: { errors?: Array<{ detail?: string; title?: string }>; message?: string; error?: string } } };
-      const errorData = errorObj.response?.data;
+    if (apiError.response?.status === 400) {
+      const errorData = apiError.response.data;
       
       if (errorData?.errors && Array.isArray(errorData.errors)) {
         const errorMessages = errorData.errors.map((err) => err.detail || err.title).join(", ");
@@ -438,16 +540,15 @@ export const transformRequestForDisplay = (
         (item) => item.id === entityId && item.type === entityType
       );
       
-      if (entity && entity.attributes) {
-        const attrs = entity.attributes as Record<string, unknown>;
+      if (entity) {
         if (entityType === "node--profile") {
-          return (attrs?.field_full_name as string) || (attrs?.title as string) || "";
+          return (entity.attributes?.field_full_name as string) || (entity.attributes?.title as string) || "";
         } else if (entityType === "node--distributor") {
-          return (attrs?.title as string) || (attrs?.name as string) || "";
+          return (entity.attributes?.title as string) || (entity.attributes?.name as string) || "";
         } else if (entityType.startsWith("taxonomy_term--")) {
-          return (attrs?.name as string) || (attrs?.title as string) || "";
+          return (entity.attributes?.name as string) || (entity.attributes?.title as string) || "";
         }
-        return (attrs?.name as string) || (attrs?.title as string) || "";
+        return (entity.attributes?.name as string) || (entity.attributes?.title as string) || "";
       }
       return "";
     };
@@ -663,9 +764,9 @@ export const fetchServicesByCategory = async (categoryId: string) => {
       },
     });
     
-    const services = response.data.data.map((item: Record<string, unknown>) => ({
-      id: item.id as string,
-      name: (item.attributes as Record<string, unknown>)?.name as string || "",
+    const services = response.data.data.map((item: TaxonomyEntity) => ({
+      id: item.id,
+      name: item.attributes?.name || "",
       categoryId: categoryId,
     }));
     
@@ -685,9 +786,9 @@ export const fetchSubservicesByService = async (serviceId: string) => {
       },
     });
     
-    const subservices = response.data.data.map((item: Record<string, unknown>) => ({
-      id: item.id as string,
-      name: (item.attributes as Record<string, unknown>)?.name as string || "",
+    const subservices = response.data.data.map((item: TaxonomyEntity) => ({
+      id: item.id,
+      name: item.attributes?.name || "",
       serviceId: serviceId,
     }));
     
@@ -698,7 +799,7 @@ export const fetchSubservicesByService = async (serviceId: string) => {
   }
 };
 
-// Función para obtener subservicio con información de servicio padre y categoría
+// Function to get subservice with its parent service and category information
 export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
   try {
     const response = await api.get(`/api/taxonomy_term/category/${subserviceId}`, {
@@ -709,10 +810,10 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
     
     const subservice = response.data.data;
     const parentService = response.data.included?.find(
-      (item: Record<string, unknown>) => item.type === "taxonomy_term--category" && item.id === subservice.relationships?.parent?.data?.[0]?.id
+      (item: TaxonomyEntity) => item.type === "taxonomy_term--category" && item.id === subservice.relationships?.parent?.data?.[0]?.id
     );
     const parentCategory = response.data.included?.find(
-      (item: Record<string, unknown>) => item.type === "taxonomy_term--category" && item.id === parentService?.relationships?.parent?.data?.[0]?.id
+      (item: TaxonomyEntity) => item.type === "taxonomy_term--category" && item.id === parentService?.relationships?.parent?.data?.[0]?.id
     );
     
     return {
@@ -735,28 +836,6 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
   } catch (error) {
     console.error("Error fetching subservice hierarchy:", error);
     return null;
-  }
-};
-
-// Función para obtener áreas de cobertura
-export const fetchCoverageAreas = async () => {
-  try {
-    const accessToken = localStorage.getItem("peretantico_access_token");
-    if (!accessToken) {
-      return { coverageAreas: [] };
-    }
-
-    const response = await api.get("/jsonapi/taxonomy_term/coverage_area", {
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Accept": "application/vnd.api+json",
-      },
-    });
-
-    return response.data;
-  } catch {
-    // Retornar datos vacíos en lugar de lanzar error
-    return { coverageAreas: [] };
   }
 };
 

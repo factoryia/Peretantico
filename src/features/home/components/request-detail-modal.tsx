@@ -16,7 +16,7 @@ import {
   FileText,
   FileCheck,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { Request } from "@/features/home/types/request";
 import api from "@/api";
 
@@ -254,30 +254,376 @@ export function RequestDetailModal({
     }
   };
 
-  // Función para obtener el schema del subservicio
-  const fetchSubserviceSchema = async (subserviceType: string) => {
+  // Función para mapear nombres de subservicios a tipos (igual que en new-request-modal)
+  const mapSubserviceNameToType = useCallback(
+    (subserviceName: string): string | null => {
+      const mapping: Record<string, string> = {
+        // Certificaciones y Propiedades
+        "Certificación de propiedad": "property_certification",
+
+        // Farmacia y Medicamentos
+        "Reclamos de farmacia": "pharmacy_claims",
+        "Reclamo de medicamentos": "pharmacy_claims",
+        "Reclamo en una (1) o más farmacias": "pharmacy_claims",
+        "Diferentes farmacias de la mesa": "pharmacy_claims",
+        "Diferentes EPS la mesa": "authorizations_claims",
+
+        // Correspondencia y Documentos
+        "Radicación y sello de recibido": "document_processing",
+        "Con evidencia fotográfica": "mail_delivery",
+
+        // Transporte
+        "Bogotá-La Mesa o Viceversa": "transport_service",
+
+        // Registros Civiles y Documentos Legales
+        "Solicitud registros civiles": "civil_records_request",
+        "Partidas de matrimonio": "marriage_certificate",
+        "Partidas de defunción": "death_certificate",
+        "Copia de escrituras": "property_deed_copy",
+
+        // Trámites Catastrales
+        "Certificado de solvencia": "desenglobes_solicit",
+        "Plan de estudios": "planos_solicit",
+        "Solicitudes desenglobes": "desenglobes_solicit",
+        "Solicitudes planes": "planos_solicit",
+        "Solicitudes planos": "planos_solicit",
+        "Solicitud de planos": "planos_solicit",
+
+        // Agregar más mapeos según sea necesario
+      };
+
+      return mapping[subserviceName] || null;
+    },
+    []
+  );
+
+  // Función para crear schema por defecto cuando no esté disponible (igual que en new-request-modal)
+  const createDefaultSchema = useCallback((subserviceType: string): SubserviceSchema => {
+    const defaultSchemas: Record<string, SubserviceSchema> = {
+      pharmacy_claims: {
+        bundle: "pharmacy_claims",
+        label: "Reclamos de Farmacia",
+        description: "Información adicional para reclamos de farmacia",
+        schema: {
+          field_eps: {
+            label: "Nombre de la EPS",
+            description: "Nombre de la EPS autorizada",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_drugstore: {
+            label: "Nombre de la Droguería",
+            description: "Dirección donde se entregará el medicamento",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_ips_address: {
+            label: "Dirección de la IPS",
+            description: "Dirección de la IPS",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_path: {
+            label: "Adjunta tu orden medica, MIPRES o autorización si es el caso",
+            description: "Archivos adjuntos (jpg, jpeg, png, pdf)",
+            required: true,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      authorizations_claims: {
+        bundle: "authorizations_claims",
+        label: "Autorizaciones EPS",
+        description: "Información adicional para autorizaciones EPS",
+        schema: {
+          field_eps: {
+            label: "Nombre de la EPS",
+            description: "Nombre de la EPS",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_path: {
+            label: "Adjunta tu historia clínica, orden médica y MIPRES si es el caso",
+            description: "Archivos adjuntos (jpg, jpeg, png, pdf)",
+            required: true,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      mail_delivery: {
+        bundle: "mail_delivery",
+        label: "Entrega de Correspondencia",
+        description: "Información adicional para entrega de correspondencia por paquete",
+        schema: {
+          field_sender_address: {
+            label: "Dirección del remitente",
+            description: "Dirección completa del remitente",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_recipient_name: {
+            label: "Nombre del destinatario",
+            description: "Nombre completo de quien recibe la correspondencia",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_delivery_address: {
+            label: "Dirección del destinatario",
+            description: "Dirección completa del destinatario",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_package_description: {
+            label: "Descripcion del paquete",
+            description: "Descripcion del paquete a entregar",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_package_weight: {
+            label: "Peso del paquete",
+            description: "Peso aproximado del paquete en kilogramos",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_priority_value: {
+            label: "Entrega urgente",
+            description: "Indica si la entrega es urgente",
+            required: false,
+            multiple: false,
+            type: "boolean",
+          },
+          field_files: {
+            label: "Adjunte fotos del paquete",
+            description: "Envíe fotografía del paquete a entregar (jpg, png, pdf)",
+            required: false,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      document_processing: {
+        bundle: "document_processing",
+        label: "Radicación y sello de recibido",
+        description: "Información adicional para entrega de correspondencia",
+        schema: {
+          field_recipient_name: {
+            label: "Nombre completo del destinatario",
+            description: "Nombre y apellido del destinatario",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_delivery_address: {
+            label: "Dirección del destinatario",
+            description: "Dirección completa del destinatario",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_recipient_phone: {
+            label: "Teléfono de contacto del destinatario",
+            description: "Número de teléfono de contacto",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_required_stamp: {
+            label: "Requiere radicado",
+            description: "Indica si el envío requiere radicado",
+            required: false,
+            multiple: false,
+            type: "boolean",
+          },
+          field_files: {
+            label: "Adjunte documentos",
+            description: "Envíe fotografía del radicado/sello (jpg, png, pdf)",
+            required: false,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      civil_records_request: {
+        bundle: "civil_records_request",
+        label: "Solicitud de Registros Civiles",
+        description: "Información adicional para solicitud de registros civiles",
+        schema: {
+          field_registrant_full_name: {
+            label: "Nombre(s) y apellido(s) de quien pertenece el registro",
+            description: "Nombre de quien pertenece el registro",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_registrant_registration_co: {
+            label: "Número de registro",
+            description: "Número del registro civil",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_registry_notary_number: {
+            label: "Número de la notaria",
+            description: "Número de la notaria",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_registry_tome_number: {
+            label: "Número del tomo",
+            description: "Número del tomo",
+            required: false,
+            multiple: false,
+            type: "number",
+          },
+          field_registry_folio_number: {
+            label: "Número del folio",
+            description: "Número del folio",
+            required: false,
+            multiple: false,
+            type: "number",
+          },
+          field_registry_serial_number: {
+            label: "Número del serial",
+            description: "Número del serial",
+            required: false,
+            multiple: false,
+            type: "number",
+          },
+          field_path: {
+            label: "Adjunte documentos",
+            description: "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
+            required: false,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      marriage_certificate: {
+        bundle: "marriage_certificate",
+        label: "Partida de Matrimonio",
+        description: "Información adicional para partida de matrimonio",
+        schema: {
+          field_marriage_type: {
+            label: "Tipo partida de matrimonio",
+            description: "Seleccione el tipo de partida de matrimonio",
+            required: true,
+            multiple: false,
+            type: "select",
+          },
+          field_motive_type: {
+            label: "Solicitud de divorcio o juicio de separación",
+            description: "Seleccione el tipo de solicitud de divorcio o juicio de separación",
+            required: true,
+            multiple: false,
+            type: "select",
+          },
+          field_path: {
+            label: "Adjunte documentos",
+            description: "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
+            required: false,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      death_certificate: {
+        bundle: "death_certificate",
+        label: "Partida de Defunción",
+        description: "Información adicional para partida de defunción",
+        schema: {
+          field_motive_type: {
+            label: "Motivo de la partida de defunción",
+            description: "Motivo de la partida de defunción",
+            required: true,
+            multiple: false,
+            type: "string",
+          },
+          field_path: {
+            label: "Adjunte documentos",
+            description: "Adjunte copia de identidad y otros documentos (jpg, png, pdf)",
+            required: false,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      property_deed_copy: {
+        bundle: "property_deed_copy",
+        label: "Copia de Escrituras",
+        description: "Información adicional para copia de escrituras",
+        schema: {
+          field_type_property: {
+            label: "Tipo de persona",
+            description: "Seleccione el tipo de persona",
+            required: true,
+            multiple: false,
+            type: "select",
+          },
+          field_deed_number: {
+            label: "Número de escritura",
+            description: "Número de la escritura pública",
+            required: true,
+            multiple: false,
+            type: "number",
+          },
+          field_deed_year: {
+            label: "Año de la escritura",
+            description: "Año en que se otorgó la escritura",
+            required: false,
+            multiple: false,
+            type: "date",
+          },
+          field_deed_city: {
+            label: "Ciudad donde se otorgó la escritura",
+            description: "Ciudad donde se otorgó la escritura",
+            required: false,
+            multiple: false,
+            type: "string",
+          },
+          field_path: {
+            label: "Adjunte documentos",
+            description: "Adjunte copia de la escritura y otros documentos (jpg, png, pdf)",
+            required: false,
+            multiple: true,
+            type: "file",
+          },
+        },
+      },
+      // Agregar más schemas según sea necesario...
+    };
+
+    return (
+      defaultSchemas[subserviceType] || {
+        bundle: subserviceType,
+        label: `Subservicio ${subserviceType}`,
+        description: `Información adicional para ${subserviceType}`,
+        schema: {},
+      }
+    );
+  }, []);
+
+  // Función para obtener el schema del subservicio formato (usando el mismo mapeo que en new-request-modal)
+  const fetchSubserviceSchema = useCallback(async (subserviceType: string) => {
     try {
       const response = await api.get(`/api/node-type-schema/${subserviceType}`);
       return response.data;
     } catch {
-      return null;
+      // Si no encontramos el schema en el API, usar los schemas por defecto del new-request-modal
+      return createDefaultSchema(subserviceType);
     }
-  };
-
-  // Función para obtener los campos específicos del subservicio
-  const fetchSubserviceFields = async (
-    subserviceId: string
-  ) => {
-    try {
-      const response = await api.get(`/node/${subserviceId}?_format=json`);
-      const subservice = response.data;
-
-      // Devolver todos los campos del subservicio
-      return subservice;
-    } catch {
-      return {};
-    }
-  };
+  }, [createDefaultSchema]);
 
   useEffect(() => {
     if (!isOpen || !request) return;
@@ -383,66 +729,64 @@ export function RequestDetailModal({
   useEffect(() => {
     const loadSubserviceSchema = async () => {
       try {
-        let subserviceData = null;
-        let subserviceId = null;
-
-        // Intentar obtener desde field_info_service (que es el nodo real del subservicio)
-        if (
-          request?.relationships?.field_info_service?.data &&
-          request.relationships.field_info_service.data.meta
-            ?.drupal_internal__target_id
-        ) {
-          const serviceId = String(
-            request.relationships.field_info_service.data.meta
-              .drupal_internal__target_id
-          );
-          const serviceType =
-            request.relationships.field_info_service.data.type;
-
-          // Solo procesar si es un subservicio (no un servicio médico)
-          if (serviceType && serviceType.includes("property_certification")) {
-            subserviceData = await fetchSubserviceFields(serviceId);
-            subserviceId = serviceId;
-          }
+        // Verificar si tenemos información del subservicio en las relaciones
+        const subserviceId = request?.relationships?.field_subservice?.data?.id;
+        
+        if (!subserviceId) {
+          setSubserviceSchema(null);
+          setSubserviceFields({});
+          return;
         }
 
-        if (subserviceData && subserviceId) {
-          // Buscar el tipo en los datos del subservicio
-          const subserviceType = subserviceData.type?.[0]?.target_id;
+        // Necesitamos obtener el nombre del subservicio para mapearlo al tipo
+        try {
+          const subserviceResponse = await api.get(`/api/taxonomy_term/category/${subserviceId}`);
+          const subserviceName = subserviceResponse.data.data.attributes?.name || "";
+          
+          // Mapear el nombre a tipo
+          const subserviceType = mapSubserviceNameToType(subserviceName);
 
           if (subserviceType) {
-            // Ahora obtener el schema usando el tipo correcto
+            // Obtener el schema usando el tipo
             const schema = await fetchSubserviceSchema(subserviceType);
 
             if (schema) {
               setSubserviceSchema(schema);
-              setSubserviceFields(subserviceData);
+              
+              // Los campos específicos están en los atributos de la solicitud
+              const requestSpecificFields = {};
+              
+              // Extraer campos específicos del subservicio desde request.attributes
+              Object.keys(schema.schema).forEach(fieldKey => {
+                if (request?.attributes && fieldKey in request.attributes) {
+                  (requestSpecificFields as Record<string, unknown>)[fieldKey] = (request.attributes as Record<string, unknown>)[fieldKey];
+                }
+              });
+              
+              setSubserviceFields(requestSpecificFields);
             }
           }
+        } catch (error) {
+          console.warn("Error obteniendo información del subservicio:", error);
+          // Limpiar el estado en caso de error
+          setSubserviceSchema(null);
+          setSubserviceFields({});
         }
       } catch {
         // Manejar error silenciosamente
+        setSubserviceSchema(null);
+        setSubserviceFields({});
       }
     };
 
-    // Solo ejecutar si tenemos field_info_service y es un subservicio
-    const hasInfoService =
-      request?.relationships?.field_info_service?.data &&
-      request.relationships.field_info_service.data.meta
-        ?.drupal_internal__target_id;
-    const isPropertyCertification =
-      request?.relationships?.field_info_service?.data?.type?.includes(
-        "property_certification"
-      );
-
-    if (hasInfoService && isPropertyCertification) {
+    // Ejecutar solo si tenemos una solicitud
+    if (request) {
       loadSubserviceSchema();
     } else {
-      // Limpiar el estado si no hay subservicio
       setSubserviceSchema(null);
       setSubserviceFields({});
     }
-  }, [request]);
+  }, [request, mapSubserviceNameToType, fetchSubserviceSchema]);
 
   if (!request || !isOpen) return null;
 
@@ -487,6 +831,81 @@ export function RequestDetailModal({
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  // Función helper para renderizar valores de campos específicos
+  const renderFieldValue = (fieldValue: unknown, fieldType?: string) => {
+    // Si es un array (formato antiguo con objetos {uri, title, options})
+    if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+      return fieldValue.map((fieldData: Record<string, unknown>, index: number) => {
+        if (fieldData.uri) {
+          // Campo de tipo archivo/enlace
+          return (
+            <div key={index} className="mb-2">
+              <a
+                href={fieldData.uri as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 underline text-sm"
+              >
+                {fieldData.title as string || "Ver archivo"}
+              </a>
+            </div>
+          );
+        } else if (typeof fieldData.value === "boolean") {
+          // Campo booleano
+          return (
+            <Badge
+              key={index}
+              variant="outline"
+              className="text-sm"
+            >
+              {fieldData.value ? "Sí" : "No"}
+            </Badge>
+          );
+        } else if (fieldData.value) {
+          // Campo de texto/número
+          return (
+            <p key={index} className="text-base">
+              {String(fieldData.value)}
+            </p>
+          );
+        }
+        return null;
+      });
+    }
+    
+    // Si es un valor directo (nuevo formato)
+    if (fieldType === "boolean" || typeof fieldValue === "boolean") {
+      return (
+        <Badge variant="outline" className="text-sm">
+          {fieldValue ? "Sí" : "No"}
+        </Badge>
+      );
+    }
+    
+    if (fieldType === "file" && typeof fieldValue === "string" && fieldValue.includes("data:")) {
+      // Campo de archivo en Base64
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center">
+            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <span className="text-sm text-gray-700">
+            Archivo adjunto (Base64)
+          </span>
+        </div>
+      );
+    }
+    
+    // Campo de texto/número normal
+    return (
+      <p className="text-base">
+        {String(fieldValue)}
+      </p>
+    );
   };
 
   // Verificar que request tenga los datos necesarios
@@ -997,17 +1416,15 @@ export function RequestDetailModal({
                   {/* Campos Específicos del Schema */}
                   <div>
                     <h4 className="text-md font-medium text-gray-700 mb-3">
-                      Campos Específicos
+                      Campos Específicos del Subservicio: {subserviceSchema.label}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {Object.entries(subserviceFields).map(
-                        ([fieldKey, fieldValues]: [string, unknown]) => {
+                        ([fieldKey, fieldValue]: [string, unknown]) => {
                           // Solo mostrar campos que empiecen con "field_" y tengan valores
                           if (
                             !fieldKey.startsWith("field_") ||
-                            !fieldValues ||
-                            !Array.isArray(fieldValues) ||
-                            fieldValues.length === 0
+                            (fieldValue === null || fieldValue === undefined || fieldValue === "")
                           )
                             return null;
 
@@ -1025,46 +1442,7 @@ export function RequestDetailModal({
                                 )}
                               </Label>
                               <div className="bg-white p-2 rounded border">
-                                {fieldValues.map(
-                                  (fieldValue: Record<string, unknown>, index: number) => {
-                                    if (fieldValue.uri) {
-                                      // Campo de tipo archivo/enlace
-                                      return (
-                                        <div key={index} className="mb-2">
-                                          <a
-                                            href={fieldValue.uri as string}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800 underline text-sm"
-                                          >
-                                            {fieldValue.title as string || "Ver archivo"}
-                                          </a>
-                                        </div>
-                                      );
-                                    } else if (
-                                      typeof fieldValue.value === "boolean"
-                                    ) {
-                                      // Campo booleano
-                                      return (
-                                        <Badge
-                                          key={index}
-                                          variant="outline"
-                                          className="text-sm"
-                                        >
-                                          {fieldValue.value ? "Sí" : "No"}
-                                        </Badge>
-                                      );
-                                    } else if (fieldValue.value) {
-                                      // Campo de texto/número
-                                      return (
-                                        <p key={index} className="text-base">
-                                          {String(fieldValue.value)}
-                                        </p>
-                                      );
-                                    }
-                                    return null;
-                                  }
-                                )}
+                                {renderFieldValue(fieldValue, fieldSchema?.type)}
                               </div>
                               {fieldSchema?.description && (
                                 <p className="text-xs text-gray-500 italic">
