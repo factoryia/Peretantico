@@ -161,9 +161,8 @@ export function PaymentCalculationModal({
       toast.success("Cálculo de pago guardado correctamente");
       onOpenChange(false);
       form.reset();
-    } catch (error) {
+    } catch {
       toast.error("Error al guardar el cálculo de pago");
-      console.error("Error saving payment calculation:", error);
     }
   };
 
@@ -286,8 +285,10 @@ export function PaymentCalculationModal({
                       <Input
                         type="number"
                         placeholder="0"
+                        disabled
                         {...field}
                         onChange={(e) => field.onChange(Number(e.target.value))}
+                        className=" "
                       />
                     </FormControl>
                     <FormMessage />

@@ -34,10 +34,6 @@ export default function CostManagementPage() {
   interface DistributorFilters {
     coverageAreaId: string;
     status: string;
-    fullName: string;
-    documentNumber: string;
-    page: number;
-    limit: number;
   }
 
   // --- Estados locales ---
@@ -52,17 +48,12 @@ export default function CostManagementPage() {
   const [filters, setFilters] = useState<DistributorFilters>({
     coverageAreaId: "all",
     status: "all",
-    fullName: "",
-    documentNumber: "",
-    page: 1,
-    limit: 10,
   });
 
   const updateFilters = (newFilters: Partial<DistributorFilters>) => {
     setFilters((prev) => ({
       ...prev,
       ...newFilters,
-      page: newFilters.page !== undefined ? newFilters.page : 1, // reset de página al cambiar filtros
     }));
   };
 

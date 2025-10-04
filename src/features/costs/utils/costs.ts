@@ -155,8 +155,6 @@ export const fetchDistributors = async (): Promise<Distributor[]> => {
 // Función para obtener solicitudes asignadas a un distribuidor
 export const fetchAssignedRequests = async (distributorId: string): Promise<Request[]> => {
   try {
-    console.log("Fetching requests for distributor:", distributorId);
-    
     // Intentar diferentes filtros para encontrar el correcto
     const filterOptions = [
       // Opción 1: Filtro directo por ID
@@ -178,8 +176,6 @@ export const fetchAssignedRequests = async (distributorId: string): Promise<Requ
 
     for (let i = 0; i < filterOptions.length; i++) {
       try {
-        console.log(`Trying filter option ${i + 1}:`, filterOptions[i]);
-        
         response = await api.get("/api/node/request", {
           params: {
             "page[limit]": 100,
@@ -189,10 +185,8 @@ export const fetchAssignedRequests = async (distributorId: string): Promise<Requ
           },
         });
 
-        console.log(`Filter option ${i + 1} success:`, response?.data);
         break; // Si funciona, salir del loop
       } catch (error) {
-        console.log(`Filter option ${i + 1} failed:`, error);
         lastError = error;
         continue;
       }
@@ -275,29 +269,11 @@ export const fetchAssignedRequests = async (distributorId: string): Promise<Requ
       }
     });
 
-    // Debug: Verificar los datos de las solicitudes
-    console.log("🔍 Debug - DistributorId buscado:", distributorId);
-    console.log("🔍 Debug - API Response included:", response.data.included);
-    console.log("🔍 Debug - Requests procesadas:", requests.map(r => ({
-      id: r.id,
-      title: r.title,
-      distributorId: r.distributor?.id,
-      distributorTitle: r.distributor?.title,
-      hasDistributor: !!r.distributor
-    })));
-
     // Filtrar por distribuidor en el frontend como respaldo
     const filteredRequests = requests.filter(request => {
       const requestDistributorId = request.distributor?.id;
-      const matches = requestDistributorId === distributorId;
-      console.log(`🔍 Debug - Request ${request.id}: distributorId=${requestDistributorId}, buscado=${distributorId}, matches=${matches}`);
-      console.log(`🔍 Debug - Request distributor object:`, request.distributor);
-      return matches;
+      return requestDistributorId === distributorId;
     });
-
-    console.log("Processed requests:", requests.length);
-    console.log("Filtered requests:", filteredRequests.length);
-    console.log("Filtered requests details:", filteredRequests);
     
     return filteredRequests;
   } catch (error) {
@@ -306,109 +282,6 @@ export const fetchAssignedRequests = async (distributorId: string): Promise<Requ
   }
 };
 
-// Función alternativa para obtener todas las solicitudes y filtrar en el frontend
-export const fetchAllRequestsAndFilter = async (distributorId: string): Promise<Request[]> => {
-  try {
-    console.log("Fetching all requests and filtering for distributor:", distributorId);
-    
-    const response: AxiosResponse<RequestsApiResponse> = await api.get("/api/node/request", {
-      params: {
-        "page[limit]": 100,
-        include: "field_subservice,field_distributor_data,field_payment_status",
-        sort: "-created",
-      },
-    });
-
-    console.log("All requests API Response:", response.data);
-
-    // Procesar todas las solicitudes
-    const allRequests: Request[] = response.data.data.map((item) => {
-      // Buscar datos relacionados en el array included
-      const applicant = response.data.included?.find(
-        (included) =>
-          included.type === "node--profile" &&
-          included.id === item.relationships.field_applicant?.data?.id
-      );
-      const distributor = response.data.included?.find(
-        (included) =>
-          included.type === "node--distributor" &&
-          included.id === item.relationships.field_distributor_data?.data?.id
-      );
-      const subservice = response.data.included?.find(
-        (included) =>
-          included.type === "taxonomy_term--category" &&
-          included.id === item.relationships.field_subservice?.data?.id
-      );
-      // Como solo incluimos field_subservice, usamos valores por defecto para service y category
-
-      return {
-        id: item.id,
-        title: item.attributes.title,
-        applicationNumber: item.attributes.field_application_number,
-        status: "pending", // Valor por defecto ya que no incluimos status
-        entryDate: item.attributes.field_entry_date,
-        estimatedApplicationHour: item.attributes.field_estimated_application_hour,
-        logisticsCosts: item.attributes.field_logistics_costs,
-        serviceValue: item.attributes.field_service_value,
-        applicant: {
-          id: item.relationships.field_applicant?.data?.id || "",
-          fullName: applicant?.attributes.field_full_name as string || "Unknown",
-          documentNumber: applicant?.attributes.field_document_number as string || "",
-          phoneNumber: applicant?.attributes.field_phone_number as string || "",
-          email: applicant?.attributes.field_mail as string || "",
-        },
-        category: {
-          id: item.relationships.field_category?.data?.id || "",
-          name: "Categoría", // Valor por defecto ya que no lo incluimos
-        },
-        service: {
-          id: item.relationships.field_service?.data?.id || "",
-          name: "Servicio", // Valor por defecto ya que no lo incluimos
-        },
-        subservice: {
-          id: item.relationships.field_subservice?.data?.id || "",
-          name: subservice?.attributes.name as string || "Unknown",
-        },
-        distributor: distributor ? {
-          id: distributor.id,
-          title: distributor.attributes.title as string,
-        } : undefined,
-        paymentStatus: item.relationships.field_payment_status?.data?.id
-          ? {
-              id: item.relationships.field_payment_status.data.id,
-              name: "Unknown",
-            }
-          : undefined,
-      };
-    });
-
-    // Buscar nombres de estados de pago en included y actualizar
-    allRequests.forEach((request) => {
-      if (request.paymentStatus?.id) {
-        const paymentStatusIncluded = response.data.included?.find(
-          (inc) => inc.id === request.paymentStatus!.id && inc.type === "taxonomy_term--payment_status"
-        );
-        if (paymentStatusIncluded?.attributes?.name) {
-          request.paymentStatus.name = paymentStatusIncluded.attributes.name as string;
-        }
-      }
-    });
-
-    // Filtrar por distribuidor en el frontend
-    const assignedRequests = allRequests.filter(request => 
-      request.distributor?.id === distributorId
-    );
-
-    console.log("All requests:", allRequests.length);
-    console.log("Assigned requests:", assignedRequests.length);
-    console.log("Assigned requests details:", assignedRequests);
-
-    return assignedRequests;
-  } catch (error) {
-    console.error("Error fetching all requests:", error);
-    throw error;
-  }
-};
 
 // Función para calcular el total de pago
 export const calculatePayment = (baseValue: number, additionalValue: number, discountValue: number): PaymentCalculation => {
@@ -550,8 +423,7 @@ export const saveCostRecord = async (costData: {
       // Después de crear el pago exitosamente, actualizar el estado de la solicitud a "Recibido"
       try {
         await updateRequestPaymentStatus(costData.requestId, "recibido");
-      } catch (updateError) {
-        console.error("Error updating request payment status:", updateError);
+      } catch {
         // No lanzar el error para que el pago se guarde aunque falle la actualización del estado
       }
 
@@ -632,43 +504,6 @@ export const updateRequestPaymentStatus = async (requestId: string, statusName: 
   }
 };
 
-// Cambiar estado de pago de la solicitud a "Pagado"
-export const markRequestPaymentAsPaid = async (requestId: string): Promise<void> => {
-  try {
-    // Obtener taxonomías de estados de pago y buscar "Pagado"
-    const statusesResponse = await api.get("/api/taxonomy_term/payment_status", {
-      params: { "page[limit]": 100 },
-    });
-    const statuses: Array<{ id: string; attributes: { name?: string } }> = statusesResponse?.data?.data || [];
-    const paid = statuses.find((s) => (s.attributes?.name || "").toLowerCase() === "pagado");
-
-    if (!paid?.id) {
-      throw new Error("No se encontró el estado de pago 'Pagado'");
-    }
-
-    const payload = {
-      data: {
-        type: "node--request",
-        id: requestId,
-        relationships: {
-          field_payment_status: {
-            data: { type: "taxonomy_term--payment_status", id: paid.id },
-          },
-        },
-      },
-    };
-
-    await api.patch(`/api/node/request/${requestId}`, payload, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-        "X-Csrf-Token": localStorage.getItem("csrf_token") || "",
-      },
-    });
-  } catch (error) {
-    console.error("Error marcando solicitud como pagada:", error);
-    throw error;
-  }
-};
 
 // Función para obtener historial de pagos de un distribuidor
 export const fetchPaymentHistory = async (distributorId: string, limit: number = 5): Promise<CostRecord[]> => {
@@ -737,7 +572,3 @@ export const fetchPaymentHistory = async (distributorId: string, limit: number =
   }
 };
 
-// Función para obtener registros de costos de un distribuidor (mantener compatibilidad)
-export const fetchCostRecords = async (distributorId: string): Promise<CostRecord[]> => {
-  return fetchPaymentHistory(distributorId, 10);
-};
