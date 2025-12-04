@@ -40,7 +40,7 @@ import type {
 } from "../types/request";
 import { useRequestsQuery } from "../hooks/use-request-query";
 import { useDeleteRequestMutation } from "../hooks/use-request-mutations";
-import { RequestDetailModal } from "./request-detail-modal";
+import { RequestDetailViewModal } from "./request-detail-view-example";
 import { AssignDistributorModal } from "./assign-distributor-modal";
 import { AssignApplicantModal } from "./assign-applicant-modal";
 import { EditRequestModal } from "./edit-request-modal";
@@ -448,9 +448,11 @@ export function RequestsTable({
       </CardContent>
 
       {/* Modales */}
-      <RequestDetailModal
+      <RequestDetailViewModal
         isOpen={modals.detail}
-        onOpenChange={() => handleCloseModal("detail")}
+        onOpenChange={(open) => {
+          if (!open) handleCloseModal("detail");
+        }}
         request={selectedRequest}
       />
 
