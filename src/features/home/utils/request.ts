@@ -53,7 +53,6 @@ interface ApiError {
   };
 }
 
-
 export const fetchRequests = async (
   filters: RequestFilters = {}
 ): Promise<RequestsApiResponse> => {
@@ -72,7 +71,8 @@ export const fetchRequests = async (
     const params: Record<string, string | number> = {
       "page[limit]": limit,
       "page[offset]": offset,
-      include: "field_applicant,field_distributor_data,field_subservice,field_application_statuses,field_service_status,field_payment_status,field_used_channel",
+      include:
+        "field_applicant,field_distributor_data,field_subservice,field_application_statuses,field_service_status,field_payment_status,field_used_channel",
       sort: "-created",
     };
 
@@ -90,15 +90,21 @@ export const fetchRequests = async (
     }
 
     if (requestNumber) {
-      params["filter[field_application_number][condition][path]"] = "field_application_number";
-      params["filter[field_application_number][condition][operator]"] = "CONTAINS";
-      params["filter[field_application_number][condition][value]"] = requestNumber;
+      params["filter[field_application_number][condition][path]"] =
+        "field_application_number";
+      params["filter[field_application_number][condition][operator]"] =
+        "CONTAINS";
+      params["filter[field_application_number][condition][value]"] =
+        requestNumber;
     }
 
     if (applicantName) {
-      params["filter[field_applicant.field_full_name][condition][path]"] = "field_applicant.field_full_name";
-      params["filter[field_applicant.field_full_name][condition][operator]"] = "CONTAINS";
-      params["filter[field_applicant.field_full_name][condition][value]"] = applicantName;
+      params["filter[field_applicant.field_full_name][condition][path]"] =
+        "field_applicant.field_full_name";
+      params["filter[field_applicant.field_full_name][condition][operator]"] =
+        "CONTAINS";
+      params["filter[field_applicant.field_full_name][condition][value]"] =
+        applicantName;
     }
 
     const response = await api.get<RequestsApiResponse>("/api/node/request", {
@@ -106,33 +112,40 @@ export const fetchRequests = async (
     });
 
     // Obtener entidades relacionadas si no están incluidas
-    if (response.data.data && (!response.data.included || response.data.included.length === 0)) {
+    if (
+      response.data.data &&
+      (!response.data.included || response.data.included.length === 0)
+    ) {
       const requests = response.data.data;
       const allIncluded: ApiEntity[] = [];
-      
+
       const applicantIds = new Set<string>();
       const distributorIds = new Set<string>();
       const subserviceIds = new Set<string>();
       const statusIds = new Set<string>();
-      
-      requests.forEach(request => {
+
+      requests.forEach((request) => {
         if (request.relationships.field_applicant?.data?.id) {
           applicantIds.add(request.relationships.field_applicant.data.id);
         }
         if (request.relationships.field_distributor_data?.data?.id) {
-          distributorIds.add(request.relationships.field_distributor_data.data.id);
+          distributorIds.add(
+            request.relationships.field_distributor_data.data.id
+          );
         }
         if (request.relationships.field_subservice?.data?.id) {
           subserviceIds.add(request.relationships.field_subservice.data.id);
         }
         if (request.relationships.field_application_statuses?.data?.id) {
-          statusIds.add(request.relationships.field_application_statuses.data.id);
+          statusIds.add(
+            request.relationships.field_application_statuses.data.id
+          );
         }
         if (request.relationships.field_service_status?.data?.id) {
           statusIds.add(request.relationships.field_service_status.data.id);
         }
       });
-      
+
       try {
         // Obtener clientes
         if (applicantIds.size > 0) {
@@ -140,90 +153,100 @@ export const fetchRequests = async (
             params: {
               "filter[id][condition][path]": "id",
               "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]": Array.from(applicantIds).join(","),
+              "filter[id][condition][value]":
+                Array.from(applicantIds).join(","),
               "page[limit]": 100,
-            }
+            },
           });
-          
+
           if (applicantsResponse.data?.data) {
             applicantsResponse.data.data.forEach((item: ProfileEntity) => {
               allIncluded.push({
                 id: item.id,
                 type: "node--profile",
-                attributes: { name: item.attributes.field_full_name }
+                attributes: { name: item.attributes.field_full_name },
               });
             });
           }
         }
-        
+
         // Obtener repartidores
         if (distributorIds.size > 0) {
           const distributorsResponse = await api.get("/api/node/distributor", {
             params: {
               "filter[id][condition][path]": "id",
               "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]": Array.from(distributorIds).join(","),
+              "filter[id][condition][value]":
+                Array.from(distributorIds).join(","),
               "page[limit]": 100,
-            }
+            },
           });
-          
+
           if (distributorsResponse.data?.data) {
-            distributorsResponse.data.data.forEach((item: DistributorEntity) => {
-              allIncluded.push({
-                id: item.id,
-                type: "node--distributor",
-                attributes: { name: item.attributes.title }
-              });
-            });
+            distributorsResponse.data.data.forEach(
+              (item: DistributorEntity) => {
+                allIncluded.push({
+                  id: item.id,
+                  type: "node--distributor",
+                  attributes: { name: item.attributes.title },
+                });
+              }
+            );
           }
         }
-        
+
         // Obtener subservicios
         if (subserviceIds.size > 0) {
-          const subservicesResponse = await api.get("/api/taxonomy_term/category", {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]": Array.from(subserviceIds).join(","),
-              "page[limit]": 100,
+          const subservicesResponse = await api.get(
+            "/api/taxonomy_term/category",
+            {
+              params: {
+                "filter[id][condition][path]": "id",
+                "filter[id][condition][operator]": "IN",
+                "filter[id][condition][value]":
+                  Array.from(subserviceIds).join(","),
+                "page[limit]": 100,
+              },
             }
-          });
-          
+          );
+
           if (subservicesResponse.data?.data) {
             subservicesResponse.data.data.forEach((item: TaxonomyEntity) => {
               allIncluded.push({
                 id: item.id,
                 type: "taxonomy_term--category",
-                attributes: { name: item.attributes.name }
+                attributes: { name: item.attributes.name },
               });
             });
           }
         }
-        
+
         // Obtener estados
         if (statusIds.size > 0) {
-          const statusResponse = await api.get("/api/taxonomy_term/application_statuses", {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]": Array.from(statusIds).join(","),
-              "page[limit]": 100,
+          const statusResponse = await api.get(
+            "/api/taxonomy_term/application_statuses",
+            {
+              params: {
+                "filter[id][condition][path]": "id",
+                "filter[id][condition][operator]": "IN",
+                "filter[id][condition][value]": Array.from(statusIds).join(","),
+                "page[limit]": 100,
+              },
             }
-          });
-          
+          );
+
           if (statusResponse.data?.data) {
             statusResponse.data.data.forEach((item: TaxonomyEntity) => {
               allIncluded.push({
                 id: item.id,
                 type: "taxonomy_term--application_statuses",
-                attributes: { name: item.attributes.name }
+                attributes: { name: item.attributes.name },
               });
             });
           }
         }
-        
+
         response.data.included = allIncluded;
-        
       } catch (error) {
         console.warn("Error obteniendo entidades relacionadas:", error);
       }
@@ -241,6 +264,7 @@ export const updateRequest = async (
   data: UpdateRequestPayload
 ) => {
   try {
+    console.log(requestId);
     return api.patch(`/api/node/request/${requestId}`, data, {
       headers: {
         "Content-Type": "application/vnd.api+json",
@@ -252,14 +276,15 @@ export const updateRequest = async (
   }
 };
 
-
-
 export const createRequest = async (payload: CreateRequestPayload) => {
   try {
-    console.log("Creating request with payload:", JSON.stringify(payload, null, 2));
-    
+    console.log(
+      "Creating request with payload:",
+      JSON.stringify(payload, null, 2)
+    );
+
     let response;
-    
+
     // Try JSON:API first
     try {
       console.log("Trying JSON:API endpoint: /api/node/request");
@@ -273,17 +298,19 @@ export const createRequest = async (payload: CreateRequestPayload) => {
     } catch (jsonApiError: unknown) {
       const error = jsonApiError as ApiError;
       console.log("JSON:API failed:", error.message);
-      
+
       if (error.response?.status === 404) {
-        console.log("JSON:API endpoint not found, trying alternative endpoints...");
-        
+        console.log(
+          "JSON:API endpoint not found, trying alternative endpoints..."
+        );
+
         // Try alternative JSON:API endpoints
         const alternativeEndpoints = [
           "/api/node/requests",
           "/api/node/application",
-          "/api/node/applications"
+          "/api/node/applications",
         ];
-        
+
         for (const endpoint of alternativeEndpoints) {
           try {
             console.log(`Trying alternative endpoint: ${endpoint}`);
@@ -292,7 +319,10 @@ export const createRequest = async (payload: CreateRequestPayload) => {
                 "Content-Type": "application/vnd.api+json",
               },
             });
-            console.log(`Request created successfully via ${endpoint}:`, response.data);
+            console.log(
+              `Request created successfully via ${endpoint}:`,
+              response.data
+            );
             return response;
           } catch (altError: unknown) {
             const altErr = altError as ApiError;
@@ -300,39 +330,62 @@ export const createRequest = async (payload: CreateRequestPayload) => {
             continue;
           }
         }
-        
+
         // If all JSON:API endpoints fail, try Drupal REST API
         console.log("All JSON:API endpoints failed, trying Drupal REST API...");
-        
+
         // Convert JSON:API payload to Drupal REST API format
         const drupalPayload: Record<string, unknown> = {
           type: [{ target_id: "request" }], // Use the correct content type
           title: [{ value: payload.data.attributes.title }],
-          field_application_number: [{ value: payload.data.attributes.field_application_number }],
-          field_application_score: [{ value: payload.data.attributes.field_application_score }],
-          field_entry_date: [{ value: payload.data.attributes.field_entry_date }],
-          field_estimated_application_hour: [{ value: payload.data.attributes.field_estimated_application_hour }],
-          field_logistics_costs: [{ value: payload.data.attributes.field_logistics_costs }],
-          field_service_value: [{ value: payload.data.attributes.field_service_value }],
-          field_estimated_prioritized_hour: payload.data.attributes.field_estimated_prioritized_hour !== null 
-            ? [{ value: payload.data.attributes.field_estimated_prioritized_hour }] 
-            : null,
-          field_prioritized_value: payload.data.attributes.field_prioritized_value !== null 
-            ? [{ value: payload.data.attributes.field_prioritized_value }] 
-            : null,
-          field_is_recurring: [{ value: payload.data.attributes.field_is_recurring ? 1 : 0 }],
+          field_application_number: [
+            { value: payload.data.attributes.field_application_number },
+          ],
+          field_application_score: [
+            { value: payload.data.attributes.field_application_score },
+          ],
+          field_entry_date: [
+            { value: payload.data.attributes.field_entry_date },
+          ],
+          field_estimated_application_hour: [
+            { value: payload.data.attributes.field_estimated_application_hour },
+          ],
+          field_logistics_costs: [
+            { value: payload.data.attributes.field_logistics_costs },
+          ],
+          field_service_value: [
+            { value: payload.data.attributes.field_service_value },
+          ],
+          field_estimated_prioritized_hour:
+            payload.data.attributes.field_estimated_prioritized_hour !== null
+              ? [
+                  {
+                    value:
+                      payload.data.attributes.field_estimated_prioritized_hour,
+                  },
+                ]
+              : null,
+          field_prioritized_value:
+            payload.data.attributes.field_prioritized_value !== null
+              ? [{ value: payload.data.attributes.field_prioritized_value }]
+              : null,
+          field_is_recurring: [
+            { value: payload.data.attributes.field_is_recurring ? 1 : 0 },
+          ],
           status: [{ value: payload.data.attributes.status ? 1 : 0 }],
           promote: [{ value: payload.data.attributes.promote ? 1 : 0 }],
           sticky: [{ value: payload.data.attributes.sticky ? 1 : 0 }],
         };
-        
+
         if (payload.data.attributes.field_observations) {
-          drupalPayload.field_observations = [{ value: payload.data.attributes.field_observations }];
+          drupalPayload.field_observations = [
+            { value: payload.data.attributes.field_observations },
+          ];
         }
-        
+
         // Add dynamic subservice fields
-        Object.keys(payload.data.attributes).forEach(key => {
-          if (key.startsWith('field_') && !drupalPayload[key]) {
+        Object.keys(payload.data.attributes).forEach((key) => {
+          if (key.startsWith("field_") && !drupalPayload[key]) {
             const value = payload.data.attributes[key];
             if (value !== undefined && value !== null) {
               if (Array.isArray(value)) {
@@ -344,115 +397,173 @@ export const createRequest = async (payload: CreateRequestPayload) => {
             }
           }
         });
-        
+
         // Add relationships - convert to Drupal format
         if (payload.data.relationships) {
           // Required relationships
           if (payload.data.relationships.field_applicant?.data?.id) {
-            drupalPayload.field_applicant = [{ target_id: payload.data.relationships.field_applicant.data.id }];
+            drupalPayload.field_applicant = [
+              { target_id: payload.data.relationships.field_applicant.data.id },
+            ];
           }
-          
+
           // Optional relationships
           if (payload.data.relationships.field_distributor_data?.data?.id) {
-            drupalPayload.field_distributor_data = [{ target_id: payload.data.relationships.field_distributor_data.data.id }];
+            drupalPayload.field_distributor_data = [
+              {
+                target_id:
+                  payload.data.relationships.field_distributor_data.data.id,
+              },
+            ];
           } else {
             drupalPayload.field_distributor_data = null;
           }
-          
+
           if (payload.data.relationships.field_category?.data?.id) {
-            drupalPayload.field_category = [{ target_id: payload.data.relationships.field_category.data.id }];
+            drupalPayload.field_category = [
+              { target_id: payload.data.relationships.field_category.data.id },
+            ];
           }
-          
+
           if (payload.data.relationships.field_service?.data?.id) {
-            drupalPayload.field_service = [{ target_id: payload.data.relationships.field_service.data.id }];
+            drupalPayload.field_service = [
+              { target_id: payload.data.relationships.field_service.data.id },
+            ];
           }
-          
+
           if (payload.data.relationships.field_subservice?.data?.id) {
-            drupalPayload.field_subservice = [{ target_id: payload.data.relationships.field_subservice.data.id }];
+            drupalPayload.field_subservice = [
+              {
+                target_id: payload.data.relationships.field_subservice.data.id,
+              },
+            ];
           }
-          
+
           if (payload.data.relationships.field_coverage_area?.data?.id) {
-            drupalPayload.field_coverage_area = [{ target_id: payload.data.relationships.field_coverage_area.data.id }];
+            drupalPayload.field_coverage_area = [
+              {
+                target_id:
+                  payload.data.relationships.field_coverage_area.data.id,
+              },
+            ];
           }
-          
+
           // Required status relationships
           if (payload.data.relationships.field_application_statuses?.data?.id) {
-            drupalPayload.field_application_statuses = [{ target_id: payload.data.relationships.field_application_statuses.data.id }];
+            drupalPayload.field_application_statuses = [
+              {
+                target_id:
+                  payload.data.relationships.field_application_statuses.data.id,
+              },
+            ];
           }
-          
+
           if (payload.data.relationships.field_service_status?.data?.id) {
-            drupalPayload.field_service_status = [{ target_id: payload.data.relationships.field_service_status.data.id }];
+            drupalPayload.field_service_status = [
+              {
+                target_id:
+                  payload.data.relationships.field_service_status.data.id,
+              },
+            ];
           }
-          
+
           // Optional status relationships
           if (payload.data.relationships.field_payment_status?.data?.id) {
-            drupalPayload.field_payment_status = [{ target_id: payload.data.relationships.field_payment_status.data.id }];
+            drupalPayload.field_payment_status = [
+              {
+                target_id:
+                  payload.data.relationships.field_payment_status.data.id,
+              },
+            ];
           } else {
             drupalPayload.field_payment_status = null;
           }
-          
+
           if (payload.data.relationships.field_used_channel?.data?.id) {
-            drupalPayload.field_used_channel = [{ target_id: payload.data.relationships.field_used_channel.data.id }];
+            drupalPayload.field_used_channel = [
+              {
+                target_id:
+                  payload.data.relationships.field_used_channel.data.id,
+              },
+            ];
           } else {
             drupalPayload.field_used_channel = null;
           }
-          
+
           if (payload.data.relationships.field_info_service?.data?.id) {
-            drupalPayload.field_info_service = [{ target_id: payload.data.relationships.field_info_service.data.id }];
+            drupalPayload.field_info_service = [
+              {
+                target_id:
+                  payload.data.relationships.field_info_service.data.id,
+              },
+            ];
           } else {
             drupalPayload.field_info_service = null;
           }
         }
-        
+
         console.log("Drupal REST API payload with request:", drupalPayload);
-        
+
         response = await api.post("/node?_format=json", drupalPayload, {
           headers: {
             "Content-Type": "application/json",
           },
         });
-        
-        console.log("Request created successfully via Drupal REST API with request:", response.data);
+
+        console.log(
+          "Request created successfully via Drupal REST API with request:",
+          response.data
+        );
         return response;
       }
-      
+
       // Re-throw the original error if it's not a 404
       throw jsonApiError;
     }
   } catch (error: unknown) {
     const apiError = error as ApiError;
     console.error("Error creating request:", apiError);
-    
+
     if (apiError.response?.status === 403) {
-      throw new Error("Error de permisos: No tienes autorización para crear solicitudes. Verifica tu autenticación.");
+      throw new Error(
+        "Error de permisos: No tienes autorización para crear solicitudes. Verifica tu autenticación."
+      );
     }
-    
+
     if (apiError.response?.status === 422) {
       const validationErrors = apiError.response.data?.errors || [];
-      const errorMessages = validationErrors.map((err) => err.detail || err.title).join(", ");
-      
+      const errorMessages = validationErrors
+        .map((err) => err.detail || err.title)
+        .join(", ");
+
       if (errorMessages) {
         throw new Error(`Error de validación: ${errorMessages}`);
       } else {
-        throw new Error("Error de validación: Los datos enviados no son válidos. Verifica que todos los campos requeridos estén completos.");
+        throw new Error(
+          "Error de validación: Los datos enviados no son válidos. Verifica que todos los campos requeridos estén completos."
+        );
       }
     }
-    
+
     if (apiError.response?.status === 400) {
       const errorData = apiError.response.data;
-      
+
       if (errorData?.errors && Array.isArray(errorData.errors)) {
-        const errorMessages = errorData.errors.map((err) => err.detail || err.title).join(", ");
+        const errorMessages = errorData.errors
+          .map((err) => err.detail || err.title)
+          .join(", ");
         throw new Error(`Error en la solicitud: ${errorMessages}`);
       } else if (errorData?.message) {
         throw new Error(`Error en la solicitud: ${errorData.message}`);
       } else if (errorData?.error) {
         throw new Error(`Error en la solicitud: ${errorData.error}`);
       } else {
-        throw new Error("Error en la solicitud: Los datos enviados no son válidos. Verifica que todos los campos requeridos estén completos.");
+        throw new Error(
+          "Error en la solicitud: Los datos enviados no son válidos. Verifica que todos los campos requeridos estén completos."
+        );
       }
     }
-    
+
     throw error;
   }
 };
@@ -477,10 +588,10 @@ export const assignDistributorToRequest = async (
         id: requestId,
         relationships: {
           field_distributor_data: {
-            data: { type: "node--distributor", id: distributorId }
-          }
-        }
-      }
+            data: { type: "node--distributor", id: distributorId },
+          },
+        },
+      },
     };
 
     return api.patch(`/api/node/request/${requestId}`, payload, {
@@ -506,10 +617,10 @@ export const assignApplicantToRequest = async (
         id: requestId,
         relationships: {
           field_applicant: {
-            data: { type: "node--profile", id: applicantId }
-          }
-        }
-      }
+            data: { type: "node--profile", id: applicantId },
+          },
+        },
+      },
     };
 
     return api.patch(`/api/node/request/${requestId}`, payload, {
@@ -535,49 +646,99 @@ export const transformRequestForDisplay = (
       included?: RequestsApiResponse["included"]
     ): string => {
       if (!included || !entityId) return "";
-      
+
       const entity = included.find(
         (item) => item.id === entityId && item.type === entityType
       );
-      
+
       if (entity) {
         if (entityType === "node--profile") {
-          return (entity.attributes?.field_full_name as string) || (entity.attributes?.title as string) || "";
+          return (
+            (entity.attributes?.field_full_name as string) ||
+            (entity.attributes?.title as string) ||
+            ""
+          );
         } else if (entityType === "node--distributor") {
-          return (entity.attributes?.title as string) || (entity.attributes?.name as string) || "";
+          return (
+            (entity.attributes?.title as string) ||
+            (entity.attributes?.name as string) ||
+            ""
+          );
         } else if (entityType.startsWith("taxonomy_term--")) {
-          return (entity.attributes?.name as string) || (entity.attributes?.title as string) || "";
+          return (
+            (entity.attributes?.name as string) ||
+            (entity.attributes?.title as string) ||
+            ""
+          );
         }
-        return (entity.attributes?.name as string) || (entity.attributes?.title as string) || "";
+        return (
+          (entity.attributes?.name as string) ||
+          (entity.attributes?.title as string) ||
+          ""
+        );
       }
       return "";
     };
 
     const applicantId = request.relationships?.field_applicant?.data?.id;
-    const distributorId = request.relationships?.field_distributor_data?.data?.id;
+    const distributorId =
+      request.relationships?.field_distributor_data?.data?.id;
     const subserviceId = request.relationships?.field_subservice?.data?.id;
-    const applicationStatusId = request.relationships?.field_application_statuses?.data?.id;
-    const serviceStatusId = request.relationships?.field_service_status?.data?.id;
+    const applicationStatusId =
+      request.relationships?.field_application_statuses?.data?.id;
+    const serviceStatusId =
+      request.relationships?.field_service_status?.data?.id;
 
-    const applicantName = included && included.length > 0 
-      ? getIncludedEntityName(applicantId || "", "node--profile", included)
-      : applicantId ? `Cliente ID: ${applicantId}` : "Sin asignar";
-      
-    const distributorName = included && included.length > 0
-      ? getIncludedEntityName(distributorId || "", "node--distributor", included)
-      : distributorId ? `Repartidor ID: ${distributorId}` : "Sin asignar";
-      
-    const subserviceName = included && included.length > 0
-      ? getIncludedEntityName(subserviceId || "", "taxonomy_term--category", included)
-      : subserviceId ? `Servicio ID: ${subserviceId}` : "Sin especificar";
-      
-    const statusName = included && included.length > 0
-      ? getIncludedEntityName(applicationStatusId || "", "taxonomy_term--application_statuses", included)
-      : applicationStatusId ? `Estado ID: ${applicationStatusId}` : "Sin estado";
-      
-    const serviceStatusName = included && included.length > 0
-      ? getIncludedEntityName(serviceStatusId || "", "taxonomy_term--application_statuses", included)
-      : serviceStatusId ? `Estado Servicio ID: ${serviceStatusId}` : "Sin estado";
+    const applicantName =
+      included && included.length > 0
+        ? getIncludedEntityName(applicantId || "", "node--profile", included)
+        : applicantId
+        ? `Cliente ID: ${applicantId}`
+        : "Sin asignar";
+
+    const distributorName =
+      included && included.length > 0
+        ? getIncludedEntityName(
+            distributorId || "",
+            "node--distributor",
+            included
+          )
+        : distributorId
+        ? `Repartidor ID: ${distributorId}`
+        : "Sin asignar";
+
+    const subserviceName =
+      included && included.length > 0
+        ? getIncludedEntityName(
+            subserviceId || "",
+            "taxonomy_term--category",
+            included
+          )
+        : subserviceId
+        ? `Servicio ID: ${subserviceId}`
+        : "Sin especificar";
+
+    const statusName =
+      included && included.length > 0
+        ? getIncludedEntityName(
+            applicationStatusId || "",
+            "taxonomy_term--application_statuses",
+            included
+          )
+        : applicationStatusId
+        ? `Estado ID: ${applicationStatusId}`
+        : "Sin estado";
+
+    const serviceStatusName =
+      included && included.length > 0
+        ? getIncludedEntityName(
+            serviceStatusId || "",
+            "taxonomy_term--application_statuses",
+            included
+          )
+        : serviceStatusId
+        ? `Estado Servicio ID: ${serviceStatusId}`
+        : "Sin estado";
 
     return {
       id: request.id,
@@ -714,17 +875,23 @@ export const fetchApplicationStatuses = async () => {
 };
 
 // Funciones para obtener nombres por ID
-export const getCustomerNameById = async (customerId: string): Promise<string> => {
+export const getCustomerNameById = async (
+  customerId: string
+): Promise<string> => {
   try {
     const response = await api.get(`/api/node/profile/${customerId}`);
-    return response.data.data.attributes.field_full_name || "Cliente no encontrado";
+    return (
+      response.data.data.attributes.field_full_name || "Cliente no encontrado"
+    );
   } catch (error) {
     console.warn(`Error obteniendo cliente ${customerId}:`, error);
     return "Cliente no encontrado";
   }
 };
 
-export const getDistributorNameById = async (distributorId: string): Promise<string> => {
+export const getDistributorNameById = async (
+  distributorId: string
+): Promise<string> => {
   try {
     const response = await api.get(`/api/node/distributor/${distributorId}`);
     return response.data.data.attributes.title || "Repartidor no encontrado";
@@ -734,9 +901,13 @@ export const getDistributorNameById = async (distributorId: string): Promise<str
   }
 };
 
-export const getSubserviceNameById = async (subserviceId: string): Promise<string> => {
+export const getSubserviceNameById = async (
+  subserviceId: string
+): Promise<string> => {
   try {
-    const response = await api.get(`/api/taxonomy_term/category/${subserviceId}`);
+    const response = await api.get(
+      `/api/taxonomy_term/category/${subserviceId}`
+    );
     return response.data.data.attributes.name || "Servicio no encontrado";
   } catch (error) {
     console.warn(`Error obteniendo subservicio ${subserviceId}:`, error);
@@ -746,7 +917,9 @@ export const getSubserviceNameById = async (subserviceId: string): Promise<strin
 
 export const getStatusNameById = async (statusId: string): Promise<string> => {
   try {
-    const response = await api.get(`/api/taxonomy_term/application_statuses/${statusId}`);
+    const response = await api.get(
+      `/api/taxonomy_term/application_statuses/${statusId}`
+    );
     return response.data.data.attributes.name || "Estado no encontrado";
   } catch (error) {
     console.warn(`Error obteniendo estado ${statusId}:`, error);
@@ -763,13 +936,13 @@ export const fetchServicesByCategory = async (categoryId: string) => {
         "page[limit]": 100,
       },
     });
-    
+
     const services = response.data.data.map((item: TaxonomyEntity) => ({
       id: item.id,
       name: item.attributes?.name || "",
       categoryId: categoryId,
     }));
-    
+
     return { services, totalPages: 1 };
   } catch (error) {
     console.error("Error fetching services by category:", error);
@@ -785,13 +958,13 @@ export const fetchSubservicesByService = async (serviceId: string) => {
         "page[limit]": 100,
       },
     });
-    
+
     const subservices = response.data.data.map((item: TaxonomyEntity) => ({
       id: item.id,
       name: item.attributes?.name || "",
       serviceId: serviceId,
     }));
-    
+
     return { subservices, totalPages: 1 };
   } catch (error) {
     console.error("Error fetching subservices by service:", error);
@@ -802,20 +975,27 @@ export const fetchSubservicesByService = async (serviceId: string) => {
 // Function to get subservice with its parent service and category information
 export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
   try {
-    const response = await api.get(`/api/taxonomy_term/category/${subserviceId}`, {
-      params: {
-        include: "parent,parent.parent",
-      },
-    });
-    
+    const response = await api.get(
+      `/api/taxonomy_term/category/${subserviceId}`,
+      {
+        params: {
+          include: "parent,parent.parent",
+        },
+      }
+    );
+
     const subservice = response.data.data;
     const parentService = response.data.included?.find(
-      (item: TaxonomyEntity) => item.type === "taxonomy_term--category" && item.id === subservice.relationships?.parent?.data?.[0]?.id
+      (item: TaxonomyEntity) =>
+        item.type === "taxonomy_term--category" &&
+        item.id === subservice.relationships?.parent?.data?.[0]?.id
     );
     const parentCategory = response.data.included?.find(
-      (item: TaxonomyEntity) => item.type === "taxonomy_term--category" && item.id === parentService?.relationships?.parent?.data?.[0]?.id
+      (item: TaxonomyEntity) =>
+        item.type === "taxonomy_term--category" &&
+        item.id === parentService?.relationships?.parent?.data?.[0]?.id
     );
-    
+
     return {
       subservice: {
         id: subservice.id,
@@ -823,19 +1003,22 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
         serviceId: parentService?.id || "",
         categoryId: parentCategory?.id || "",
       },
-      service: parentService ? {
-        id: parentService.id,
-        name: parentService.attributes?.name || "",
-        categoryId: parentCategory?.id || "",
-      } : null,
-      category: parentCategory ? {
-        uuid: parentCategory.id,
-        name: parentCategory.attributes?.name || "",
-      } : null,
+      service: parentService
+        ? {
+            id: parentService.id,
+            name: parentService.attributes?.name || "",
+            categoryId: parentCategory?.id || "",
+          }
+        : null,
+      category: parentCategory
+        ? {
+            uuid: parentCategory.id,
+            name: parentCategory.attributes?.name || "",
+          }
+        : null,
     };
   } catch (error) {
     console.error("Error fetching subservice hierarchy:", error);
     return null;
   }
 };
-

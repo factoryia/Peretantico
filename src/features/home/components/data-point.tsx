@@ -18,7 +18,7 @@ export function DataPoint({
   return (
     <div
       className={cn(
-        "mb-4 pb-2.5",
+        "mb-4 pb-2.5 last:pb-0",
         !noBorder && "border-b border-dotted border-gray-200",
         className
       )}

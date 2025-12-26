@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -17,35 +17,26 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Eye, Trash2, AlertCircle, Edit, Truck } from "lucide-react";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Eye, Trash2, AlertCircle, Edit,  Truck } from "lucide-react";
-import {
-  transformRequestForDisplay,
   assignDistributorToRequest,
   assignApplicantToRequest,
+  updateRequest,
 } from "../utils/request";
 import type {
   RequestFilters,
-  Request,
   AssignmentModalData,
+  UpdateRequestPayload,
 } from "../types/request";
-import { useRequestsQuery } from "../hooks/use-request-query";
 import { useDeleteRequestMutation } from "../hooks/use-request-mutations";
-import { RequestDetailViewModal } from "./request-detail-view-example";
-import { AssignDistributorModal } from "./assign-distributor-modal";
-import { AssignApplicantModal } from "./assign-applicant-modal";
-import { EditRequestModal } from "./edit-request-modal";
 import { TableSkeleton } from "./skeletons/table-skeleton";
 import { EmptyState } from "./empty-state";
+import {
+  useCompleteRequests,
+  type CompleteRequest,
+} from "../utils/complete-request";
+import { RequestsTableDialogs } from "./requests-table-dialogs";
+import { RequestsTablePagination } from "./requests-table-pagination";
 
 interface RequestsTableProps {
   filters?: RequestFilters;
@@ -67,16 +58,27 @@ export function RequestsTable({
     assignApplicant: false,
     edit: false,
   });
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
+  const [selectedRequest, setSelectedRequest] =
+    useState<CompleteRequest | null>(null);
   const [assignmentData, setAssignmentData] =
     useState<AssignmentModalData | null>(null);
-  const [editingRequest, setEditingRequest] = useState<Request | null>(null);
+  const [editingRequest, setEditingRequest] = useState<CompleteRequest | null>(
+    null
+  );
 
-  const { data, isLoading, error, refetch, isFetching } = useRequestsQuery({
+  const {
+    data: completeRequestsData,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useCompleteRequests({
     ...filters,
     page: currentPage,
     limit: 10,
   });
+
+  console.log(completeRequestsData);
 
   const deleteRequestMutation = useDeleteRequestMutation();
 
@@ -106,47 +108,6 @@ export function RequestsTable({
     };
   }, [clearAllModalStates]);
 
-  // Transformar solicitudes con manejo de errores mejorado
-  const displayRequests = useMemo(() => {
-    if (!data?.data || !Array.isArray(data.data)) {
-      return [];
-    }
-
-    return data.data.map((request: Request) => {
-      try {
-        return transformRequestForDisplay(request, data?.included);
-      } catch (error) {
-        console.error("Error transforming request:", request.id, error);
-        // Retornar un objeto básico si hay error en la transformación
-        return {
-          id: request.id,
-          number: request.attributes?.field_application_number || "Sin número",
-          title: request.attributes?.title || "Sin título",
-          applicantName: "Error en datos",
-          applicantId: request.relationships?.field_applicant?.data?.id || "",
-          subserviceName: "Error en datos",
-          subserviceId: request.relationships?.field_subservice?.data?.id || "",
-          distributorName: "Error en datos",
-          distributorId:
-            request.relationships?.field_distributor_data?.data?.id || "",
-          statusName: "Error en datos",
-          statusId:
-            request.relationships?.field_application_statuses?.data?.id || "",
-          serviceStatusName: "Error en datos",
-          serviceStatusId:
-            request.relationships?.field_service_status?.data?.id || "",
-          score: request.attributes?.field_application_score || 0,
-          entryDate: request.attributes?.field_entry_date || "",
-          estimatedHours:
-            request.attributes?.field_estimated_application_hour || 0,
-          logisticsCosts: request.attributes?.field_logistics_costs || 0,
-          serviceValue: request.attributes?.field_service_value || 0,
-          status: request.attributes?.status || false,
-        };
-      }
-    });
-  }, [data?.data, data?.included]);
-
   const handleDeleteRequest = async () => {
     if (!deleteRequestId) return;
 
@@ -159,9 +120,53 @@ export function RequestsTable({
     }
   };
 
+  // Handlers para la asignación (extraídos de los props inline)
+  // Handlers para la asignación (extraídos de los props inline)
+  const handleAssignDistributorSubmit = async (distributorId: string) => {
+    try {
+      const requestId = assignmentData?.requestId || selectedRequest?.id;
+
+      if (requestId) {
+        await assignDistributorToRequest(requestId, distributorId);
+        await refetch();
+      }
+      handleCloseModal("assignDistributor");
+    } catch (error) {
+      console.error("Error al asignar repartidor:", error);
+    }
+  };
+
+  const handleAssignApplicantSubmit = async (applicantId: string) => {
+    try {
+      const requestId = assignmentData?.requestId || selectedRequest?.id;
+
+      if (requestId) {
+        await assignApplicantToRequest(requestId, applicantId);
+        await refetch();
+      }
+      handleCloseModal("assignApplicant");
+    } catch (error) {
+      console.error("Error al asignar solicitante:", error);
+    }
+  };
+
+  const handleUpdateRequest = async (
+    requestId: string,
+    data: UpdateRequestPayload
+  ) => {
+    try {
+      if (requestId) {
+        await updateRequest(requestId, data);
+        await refetch();
+      }
+    } catch (error) {
+      console.error("Error al actualizar la solicitud:", error);
+    }
+  };
+
   // Handlers optimizados para modales
   const handleViewDetail = useCallback(
-    (request: Request) => {
+    (request: CompleteRequest) => {
       clearAllModalStates();
       setTimeout(() => {
         setSelectedRequest(request);
@@ -172,15 +177,13 @@ export function RequestsTable({
   );
 
   const handleAssignDistributor = useCallback(
-    (request: Request) => {
+    (request: CompleteRequest) => {
       clearAllModalStates();
       setTimeout(() => {
         setAssignmentData({
           requestId: request.id,
-          requestNumber:
-            request.attributes?.field_application_number || "Sin número",
-          currentDistributor:
-            request.relationships?.field_distributor_data?.data?.id,
+          requestNumber: request.field_application_number || "Sin número",
+          currentDistributor: request.distributor?.id,
         });
         setModals((prev) => ({ ...prev, assignDistributor: true }));
       }, 0);
@@ -189,7 +192,7 @@ export function RequestsTable({
   );
 
   const handleEditRequest = useCallback(
-    (request: Request) => {
+    (request: CompleteRequest) => {
       clearAllModalStates();
       setTimeout(() => {
         setEditingRequest(request);
@@ -212,19 +215,6 @@ export function RequestsTable({
     [currentPage, clearAllModalStates]
   );
 
-  const handlePreviousPage = useCallback(() => {
-    if (currentPage > 1) {
-      handlePageChange(currentPage - 1);
-    }
-  }, [currentPage, handlePageChange]);
-
-  const handleNextPage = useCallback(() => {
-    const totalPages = Math.ceil((data?.meta?.count || 0) / 10);
-    if (currentPage < totalPages) {
-      handlePageChange(currentPage + 1);
-    }
-  }, [currentPage, data?.meta?.count, handlePageChange]);
-
   // Handlers para cerrar modales
   const handleCloseModal = useCallback((modalName: keyof typeof modals) => {
     setModals((prev) => ({ ...prev, [modalName]: false }));
@@ -238,10 +228,15 @@ export function RequestsTable({
     }, 300);
   }, []);
 
+  const totalItems = completeRequestsData?.meta?.count || 0;
+  const totalPages = Math.ceil(totalItems / 10);
+
+  // Estado de carga
   if (isLoading) {
     return <TableSkeleton />;
   }
 
+  // Estado de error
   if (error) {
     return (
       <Card>
@@ -261,42 +256,8 @@ export function RequestsTable({
     );
   }
 
-  // Verificar que los datos sean válidos antes de renderizar
-  if (!data || !Array.isArray(data.data)) {
-    return (
-      <EmptyState
-        title="Sin datos"
-        description="No hay solicitudes disponibles en el sistema"
-        showRefreshButton={false}
-        onCreateNew={onCreateNew}
-      />
-    );
-  }
-
-  const totalItems = data?.meta?.count || 0;
-  const totalPages = Math.ceil(totalItems / 10);
-
-  // Validar que displayRequests sea un array válido
-  if (!Array.isArray(displayRequests)) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Error en los datos</CardTitle>
-          <CardDescription>
-            Ha ocurrido un error al procesar las solicitudes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-red-500">
-            Error al transformar los datos de las solicitudes
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Mostrar estado vacío cuando no hay resultados
-  if (displayRequests.length === 0) {
+  // Estado vacío cuando no hay resultados
+  if (completeRequestsData?.data.length === 0) {
     return (
       <EmptyState
         title="No se encontraron resultados"
@@ -328,27 +289,24 @@ export function RequestsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayRequests.map((displayRequest) => {
-              const request = data.data.find((r: Request) => r.id === displayRequest.id);
-              if (!request) return null;
-
+            {completeRequestsData?.data.map((requestData) => {
               return (
-                <TableRow key={displayRequest.id}>
+                <TableRow key={requestData.id}>
                   <TableCell className="max-w-[200px] truncate">
-                    {displayRequest.number}
+                    {requestData.field_application_number}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">
-                        {displayRequest.applicantName}
+                        {requestData.applicant?.name}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span>
-                        {displayRequest.subserviceName
-                          ? displayRequest.subserviceName
+                        {requestData.subservice
+                          ? requestData.subservice?.name
                           : "Sin asignar"}
                       </span>
                     </div>
@@ -356,8 +314,8 @@ export function RequestsTable({
                   <TableCell>
                     <div className="flex flex-col">
                       <span>
-                        {displayRequest.distributorName
-                          ? displayRequest.distributorName
+                        {requestData.distributor?.name
+                          ? requestData.distributor?.name
                           : "Sin asignar"}
                       </span>
                     </div>
@@ -365,8 +323,8 @@ export function RequestsTable({
                   <TableCell>
                     <div className="flex flex-col">
                       <span>
-                        {displayRequest.statusName
-                          ? displayRequest.statusName
+                        {requestData.applicationStatus?.name
+                          ? requestData.applicationStatus?.name
                           : "Sin asignar"}
                       </span>
                     </div>
@@ -377,7 +335,7 @@ export function RequestsTable({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleViewDetail(request)}
+                        onClick={() => handleViewDetail(requestData)}
                         className="h-8 w-8 p-0"
                         disabled={isFetching}
                       >
@@ -386,7 +344,7 @@ export function RequestsTable({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEditRequest(request)}
+                        onClick={() => handleEditRequest(requestData)}
                         className="h-8 w-8 p-0"
                         disabled={isFetching}
                       >
@@ -396,7 +354,7 @@ export function RequestsTable({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleAssignDistributor(request)}
+                        onClick={() => handleAssignDistributor(requestData)}
                         className="h-8 w-8 p-0"
                         disabled={isFetching}
                       >
@@ -405,7 +363,7 @@ export function RequestsTable({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setDeleteRequestId(request.id)}
+                        onClick={() => setDeleteRequestId(requestData.id)}
                         className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                         disabled={isFetching}
                       >
@@ -419,113 +377,27 @@ export function RequestsTable({
           </TableBody>
         </Table>
 
-        {/* Paginación simple */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Página {currentPage} de {totalPages}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousPage}
-                disabled={currentPage === 1 || isFetching}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages || isFetching}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
+        <RequestsTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          isFetching={isFetching}
+        />
       </CardContent>
 
-      {/* Modales */}
-      <RequestDetailViewModal
-        isOpen={modals.detail}
-        onOpenChange={(open) => {
-          if (!open) handleCloseModal("detail");
-        }}
-        request={selectedRequest}
+      <RequestsTableDialogs
+        modals={modals}
+        selectedRequest={selectedRequest}
+        editingRequest={editingRequest}
+        assignmentData={assignmentData}
+        deleteRequestId={deleteRequestId}
+        onCloseModal={handleCloseModal}
+        onAssignDistributor={handleAssignDistributorSubmit}
+        onAssignApplicant={handleAssignApplicantSubmit}
+        onConfirmDelete={handleDeleteRequest}
+        setDeleteRequestId={setDeleteRequestId}
+        onUpdateRequest={handleUpdateRequest}
       />
-
-      <AssignDistributorModal
-        isOpen={modals.assignDistributor}
-        onClose={() => handleCloseModal("assignDistributor")}
-        data={assignmentData}
-        onAssign={async (distributorId: string) => {
-          try {
-            if (assignmentData) {
-              await assignDistributorToRequest(
-                assignmentData.requestId,
-                distributorId
-              );
-              await refetch();
-            }
-            handleCloseModal("assignDistributor");
-          } catch (error) {
-            console.error("Error al asignar repartidor:", error);
-          }
-        }}
-      />
-
-      <AssignApplicantModal
-        isOpen={modals.assignApplicant}
-        onClose={() => handleCloseModal("assignApplicant")}
-        data={assignmentData}
-        onAssign={async (applicantId: string) => {
-          try {
-            if (assignmentData) {
-              await assignApplicantToRequest(
-                assignmentData.requestId,
-                applicantId
-              );
-              await refetch();
-            }
-            handleCloseModal("assignApplicant");
-          } catch (error) {
-            console.error("Error al asignar solicitante:", error);
-          }
-        }}
-      />
-
-      <EditRequestModal
-        isOpen={modals.edit}
-        onOpenChange={(open) => !open && handleCloseModal("edit")}
-        request={editingRequest}
-      />
-
-      {/* Modal de confirmación de eliminación */}
-      <AlertDialog
-        open={!!deleteRequestId}
-        onOpenChange={() => setDeleteRequestId(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente la
-              solicitud.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteRequest}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 }

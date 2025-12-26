@@ -50,7 +50,6 @@ import {
   useSubservicesByServiceQuery,
 } from "@/features/home/hooks/use-request-query";
 import type {
-  Request,
   EditRequestFormData,
   Category,
   Service,
@@ -58,11 +57,12 @@ import type {
   Applicant,
   Distributor,
 } from "@/features/home/types/request";
+import type { CompleteRequest } from "../utils/complete-request";
 
 interface EditRequestModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  request: Request | null;
+  request: CompleteRequest | null;
 }
 
 export function EditRequestModal({
@@ -209,46 +209,42 @@ export function EditRequestModal({
   useEffect(() => {
     const loadRequestData = async () => {
       if (request && isOpen) {
-        const subserviceId =
-          request.relationships?.field_subservice?.data?.id || "";
+        const subserviceId = request.subservice?.id || "";
 
         form.reset({
           // Campos del solicitante
-          applicantId: request.relationships?.field_applicant?.data?.id || "",
+          applicantId: request.applicant?.id || "",
 
           // Campos de la solicitud
-          title: request.attributes?.title || "",
-          applicationNumber: request.attributes?.field_application_number || "",
-          applicationScore: request.attributes?.field_application_score || 4,
-          entryDate: request.attributes?.field_entry_date || "",
+          title: request.title || "",
+          applicationNumber: request.field_application_number || "",
+          applicationScore: request.field_application_score || 4,
+          entryDate: request.field_entry_date || "",
           categoryId: "", // Se determinará basado en el subservicio
           serviceId: "", // Se determinará basado en el subservicio
           subserviceId: subserviceId,
           serviceCode: "", // TODO: Implementar cuando esté disponible en la API
-          serviceValue: request.attributes?.field_service_value || 0,
-          priorityValue: request.attributes?.field_priority_value || 0,
-          paymentStatus: request.attributes?.field_payment_status || "",
-          usedChannel: request.attributes?.field_used_channel || "",
-          estimatedHours:
-            request.attributes?.field_estimated_application_hour || 0,
-          priorityEstimatedHours:
-            request.attributes?.field_priority_estimated_hours || 0,
-          logisticsCosts: request.attributes?.field_logistics_costs || 0,
-          isRecurring: request.attributes?.field_is_recurring || false,
+          serviceValue: request.field_service_value || 0,
+          priorityValue: request.field_priority_value || 0,
+          paymentStatus: request.field_payment_status_id || "",
+          usedChannel: request.field_used_channel || "",
+          estimatedHours: request.field_estimated_application_hour || 0,
+          priorityEstimatedHours: request.field_estimated_prioritized_hour || 0,
+          logisticsCosts: request.field_logistics_costs || 0,
+          isRecurring: request.field_is_recurring || false,
 
           // Campos del repartidor
-          distributorId:
-            request.relationships?.field_distributor_data?.data?.id || "",
+          distributorId: request.distributor?.id || "",
 
           // Gestión de solicitud
-          serviceStatus: request.attributes?.field_service_status || "",
-          requestStatus: request.attributes?.field_request_status || "",
-          observations: request.attributes?.field_observations || "",
+          serviceStatus: request.field_service_status || "",
+          requestStatus: request.field_request_status || "",
+          observations: request.field_observations || "",
 
           // Configuración
-          status: request.attributes?.status ?? true,
-          promote: request.attributes?.promote ?? false,
-          sticky: request.attributes?.sticky ?? false,
+          status: request.status ?? true,
+          promote: request.promote ?? false,
+          sticky: request.sticky ?? false,
         });
 
         // Si hay subservicio, determinar categoría y servicio
@@ -300,7 +296,10 @@ export function EditRequestModal({
 
     setIsSubmitting(true);
     try {
-      const relationships: Record<string, { data: { type: string; id: string } }> = {};
+      const relationships: Record<
+        string,
+        { data: { type: string; id: string } }
+      > = {};
 
       if (data.applicantId) {
         relationships.field_applicant = {
@@ -341,9 +340,9 @@ export function EditRequestModal({
       };
 
       await updateRequest(request.id, requestData);
-      
+
       onOpenChange(false);
-      
+
       requestAnimationFrame(() => {
         toast.success("Solicitud actualizada correctamente");
         queryClient.invalidateQueries({ queryKey: ["requests"] });
@@ -613,7 +612,9 @@ export function EditRequestModal({
                         <SelectContent>
                           {applicants.map((applicant) => (
                             <SelectItem key={applicant.id} value={applicant.id}>
-                              {applicant.fullName ?? "Sin nombre"} - {applicant.documentNumber ?? "Sin número de documento"}
+                              {applicant.fullName ?? "Sin nombre"} -{" "}
+                              {applicant.documentNumber ??
+                                "Sin número de documento"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -645,7 +646,9 @@ export function EditRequestModal({
                               key={distributor.id}
                               value={distributor.id}
                             >
-                              {distributor.title ?? "Sin nombre"} - {distributor.documentNumber ?? "Sin número de documento"}
+                              {distributor.title ?? "Sin nombre"} -{" "}
+                              {distributor.documentNumber ??
+                                "Sin número de documento"}
                             </SelectItem>
                           ))}
                         </SelectContent>

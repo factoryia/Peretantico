@@ -41,12 +41,12 @@ export function RequestManagementCard({
   };
 
   return (
-    <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-200 overflow-hidden h-full">
-      <div className="px-5 py-4 bg-blue-100 border-b border-blue-200 text-lg font-semibold flex items-center gap-2.5 text-blue-900">
+    <div className="bg-[#F8F9FA] overflow-hidden h-full px-6 py-7">
+      <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold flex items-center gap-2.5 pb-4">
         <ClipboardCheck className="w-5 h-5" />
-        Gestión de la Solicitud
+        Gestión / Asignación
       </div>
-      <div className="p-5">
+      <div>
         <form onSubmit={handleSubmit}>
           <div className="flex gap-5 mb-5">
             <div className="flex-1">
@@ -59,7 +59,7 @@ export function RequestManagementCard({
               <input
                 type="number"
                 id="valorServicio"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600 bg-white"
                 placeholder="Ej: 15000"
                 value={formData.serviceValue}
                 onChange={(e) =>
@@ -67,7 +67,7 @@ export function RequestManagementCard({
                 }
               />
             </div>
-            <div className="flex-1">
+            {/* <div className="flex-1">
               <label
                 htmlFor="costoLogistica"
                 className="block mb-2 font-medium text-gray-800"
@@ -84,7 +84,7 @@ export function RequestManagementCard({
                   setFormData({ ...formData, logisticsCost: e.target.value })
                 }
               />
-            </div>
+            </div> */}
           </div>
 
           <div className="mb-6">
@@ -96,7 +96,7 @@ export function RequestManagementCard({
             </label>
             <select
               id="asignarRepartidor"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600"
+              className="bg-white w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600"
               value={formData.distributorId}
               onChange={(e) =>
                 setFormData({ ...formData, distributorId: e.target.value })
@@ -113,7 +113,7 @@ export function RequestManagementCard({
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white border-none px-6 py-3 rounded-lg text-base font-medium cursor-pointer transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
+            className="w-full bg-[#2563EB] text-white border-none px-6 py-3 rounded-lg text-base font-medium cursor-pointer transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
           >
             <Save className="w-5 h-5" />
             Guardar y Actualizar Solicitud

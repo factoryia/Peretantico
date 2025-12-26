@@ -24,16 +24,17 @@ export function PaymentPriorityCard({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-full">
-      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 text-lg font-semibold flex items-center gap-2.5">
+    <div className="bg-white overflow-hidden h-full px-6 py-5 border-b">
+      <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold flex items-center gap-2.5 pb-4">
         <DollarSign className="w-5 h-5 text-blue-600" />
         Pago y Prioridad
       </div>
-      <div className="p-5">
-        <div className="flex justify-between gap-5 mb-3">
+      <div>
+        <div className="flex justify-between gap-5">
           <div className="flex-1">
             <DataPoint
-              label="Prioridad del Servicio"
+              noBorder
+              label="Tipo de Servicio"
               value={
                 <span
                   className={cn(
@@ -48,6 +49,7 @@ export function PaymentPriorityCard({
           </div>
           <div className="flex-1">
             <DataPoint
+              noBorder
               label="Método de Pago Preferido"
               value={paymentMethod}
             />

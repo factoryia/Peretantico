@@ -2,6 +2,7 @@ export interface Request {
   id: string
   type: string
   attributes: {
+    drupal_internal__nid: number
     title: string
     field_application_number: string
     field_application_score?: number
@@ -101,7 +102,14 @@ export interface RequestsApiResponse {
       name?: string
       drupal_internal__tid?: number
       [key: string]: unknown;
-
+    }
+    relationships?: {
+      [key: string]: {
+        data?: {
+          id: string
+          type: string
+        }
+      }
     }
   }>
   meta?: {
