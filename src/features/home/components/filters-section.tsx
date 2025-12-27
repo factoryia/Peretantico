@@ -1,27 +1,42 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, Plus, Search, Filter } from "lucide-react"
-import type { RequestFilters } from "../types/request"
-import { useSubservicesQuery, useDistributorsQuery } from "../hooks/use-request-query"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { X, Plus, Search, Filter } from "lucide-react";
+import type { RequestFilters } from "../types/request";
+import {
+  useSubservicesQuery,
+  useDistributorsQuery,
+} from "../hooks/use-request-query";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface FiltersSectionProps {
-  filters: RequestFilters
-  onFiltersChange: (filters: RequestFilters) => void
-  onNewRequest: () => void
+  filters: RequestFilters;
+  onFiltersChange: (filters: RequestFilters) => void;
+  onNewRequest: () => void;
 }
 
-export function FiltersSection({ filters, onFiltersChange, onNewRequest }: FiltersSectionProps) {
-  const { data: subservicesData, isLoading: isLoadingSubservices } = useSubservicesQuery()
-  const { data: distributorsData, isLoading: isLoadingDistributors } = useDistributorsQuery()
+export function FiltersSection({
+  filters,
+  onFiltersChange,
+  onNewRequest,
+}: FiltersSectionProps) {
+  const { data: subservicesData, isLoading: isLoadingSubservices } =
+    useSubservicesQuery();
+  const { data: distributorsData, isLoading: isLoadingDistributors } =
+    useDistributorsQuery();
 
   const handleFilterChange = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value }
-    onFiltersChange(newFilters)
-  }
+    const newFilters = { ...filters, [key]: value };
+    onFiltersChange(newFilters);
+  };
 
   const clearFilters = () => {
     const emptyFilters: RequestFilters = {
@@ -30,157 +45,209 @@ export function FiltersSection({ filters, onFiltersChange, onNewRequest }: Filte
       assignedDistributor: "all",
       requestNumber: "",
       applicantName: "",
-    }
-    onFiltersChange(emptyFilters)
-  }
+    };
+    onFiltersChange(emptyFilters);
+  };
 
-  const hasActiveFilters = Object.values(filters).some((value) => value !== "" && value !== "all")
+  const hasActiveFilters = Object.values(filters).some(
+    (value) => value !== "" && value !== "all"
+  );
 
   // Estados predefinidos para los filtros
   const statusOptions = [
-    { value: "all", label: "Todos los estados" },
+    { value: "all", label: "Todos" },
     { value: "pendiente", label: "Pendiente" },
     { value: "en_proceso", label: "En Proceso" },
     { value: "asignada", label: "Asignada" },
     { value: "completada", label: "Completada" },
     { value: "cancelada", label: "Cancelada" },
-  ]
+  ];
 
   return (
-    <Card className="border-2 border-gray-100 shadow-sm">
-      <CardHeader   >
-        <div className="flex flex-row items-center justify-between space-y-0">
-          <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-lg border shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-50 rounded-md">
             <Filter className="h-5 w-5 text-blue-600" />
-            <CardTitle className="text-lg font-semibold text-gray-800">Filtros de Búsqueda</CardTitle>
           </div>
-          <div className="flex gap-2">
-            {hasActiveFilters && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={clearFilters} 
-                className="h-8 bg-white hover:bg-gray-50 border-gray-300 text-gray-700"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Limpiar filtros
-              </Button>
-            )}
-            <Button 
-              onClick={onNewRequest} 
-              size="sm" 
-              className="h-8 bg-blue-600 hover:bg-blue-700 text-white shadow-md"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Nueva Solicitud
-            </Button>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 tracking-tight">
+              Filtros
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              refina tu búsqueda de solicitudes
+            </p>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-          {/* Estado de la solicitud */}
-          <div className="space-y-2">
-            <Label htmlFor="status" className="text-sm font-medium text-gray-700">
-              Estado de la solicitud
-            </Label>
-            <select
-              id="status"
-              value={filters.status || "all"}
-              onChange={(e) => handleFilterChange("status", e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm transition-all duration-200 hover:border-gray-400"
+
+        <div className="flex gap-2 w-full sm:w-auto">
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              className="h-9 bg-white hover:bg-gray-50 border-gray-200 text-gray-700 w-full sm:w-auto"
             >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <X className="h-4 w-4 mr-2" />
+              Limpiar
+            </Button>
+          )}
+          <Button
+            onClick={onNewRequest}
+            size="sm"
+            className="h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-sm w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva Solicitud
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg border shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+          {/* Estado de la solicitud */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="status"
+              className="text-xs font-semibold text-gray-500 uppercase tracking-wide"
+            >
+              Estado
+            </Label>
+            <Select
+              value={filters.status || "all"}
+              onValueChange={(value) => handleFilterChange("status", value)}
+            >
+              <SelectTrigger
+                id="status"
+                className="bg-gray-50/50 border-gray-200 h-10"
+              >
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Subservicio */}
-          <div className="space-y-2">
-            <Label htmlFor="subservice" className="text-sm font-medium text-gray-700">
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="subservice"
+              className="text-xs font-semibold text-gray-500 uppercase tracking-wide"
+            >
               Subservicio
             </Label>
-            <select
-              id="subservice"
+            <Select
               value={filters.subservice || "all"}
-              onChange={(e) => handleFilterChange("subservice", e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm transition-all duration-200 hover:border-gray-400"
+              onValueChange={(value) => handleFilterChange("subservice", value)}
               disabled={isLoadingSubservices}
             >
-              <option value="all">
-                {isLoadingSubservices ? "Cargando..." : "Todos los subservicios"}
-              </option>
-              {subservicesData?.data?.map((subservice: any) => (
-                <option key={subservice.id} value={subservice.id}>
-                  {subservice.attributes?.name || subservice.attributes?.title || "Sin nombre"}
-                </option>
-              )) || []}
-            </select>
+              <SelectTrigger
+                id="subservice"
+                className="bg-gray-50/50 border-gray-200 h-10"
+              >
+                <SelectValue placeholder="Subservicio" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {isLoadingSubservices ? "Cargando..." : "Todos"}
+                </SelectItem>
+                {subservicesData?.data?.map((subservice: any) => (
+                  <SelectItem key={subservice.id} value={subservice.id}>
+                    {subservice.attributes?.name ||
+                      subservice.attributes?.title ||
+                      "Sin nombre"}
+                  </SelectItem>
+                )) || []}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Repartidor asignado */}
-          <div className="space-y-2">
-            <Label htmlFor="assignedDistributor" className="text-sm font-medium text-gray-700">
-              Repartidor asignado
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="assignedDistributor"
+              className="text-xs font-semibold text-gray-500 uppercase tracking-wide"
+            >
+              Repartidor
             </Label>
-            <select
-              id="assignedDistributor"
+            <Select
               value={filters.assignedDistributor || "all"}
-              onChange={(e) => handleFilterChange("assignedDistributor", e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm transition-all duration-200 hover:border-gray-400"
+              onValueChange={(value) =>
+                handleFilterChange("assignedDistributor", value)
+              }
               disabled={isLoadingDistributors}
             >
-              <option value="all">
-                {isLoadingDistributors ? "Cargando..." : "Todos los repartidores"}
-              </option>
-              {distributorsData?.data?.map((distributor: any) => (
-                <option key={distributor.id} value={distributor.id}>
-                  {distributor.attributes?.title || distributor.attributes?.name || "Sin nombre"}
-                </option>
-              )) || []}
-            </select>
+              <SelectTrigger
+                id="assignedDistributor"
+                className="bg-gray-50/50 border-gray-200 h-10"
+              >
+                <SelectValue placeholder="Repartidor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {isLoadingDistributors ? "Cargando..." : "Todos"}
+                </SelectItem>
+                {distributorsData?.data?.map((distributor: any) => (
+                  <SelectItem key={distributor.id} value={distributor.id}>
+                    {distributor.attributes?.title ||
+                      distributor.attributes?.name ||
+                      "Sin nombre"}
+                  </SelectItem>
+                )) || []}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Número de solicitud */}
-          <div className="space-y-2">
-            <Label htmlFor="requestNumber" className="text-sm font-medium text-gray-700">
-              Número de solicitud
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="requestNumber"
+              className="text-xs font-semibold text-gray-500 uppercase tracking-wide"
+            >
+              N° Solicitud
             </Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
               <Input
                 id="requestNumber"
-                placeholder="Buscar por número"
+                placeholder="Buscar..."
                 value={filters.requestNumber || ""}
-                onChange={(e) => handleFilterChange("requestNumber", e.target.value)}
-                className="pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm transition-all duration-200 hover:border-gray-400"
+                onChange={(e) =>
+                  handleFilterChange("requestNumber", e.target.value)
+                }
+                className="pl-9 pr-3 py-2.5 h-10 bg-gray-50/50 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-gray-50 shadow-none"
               />
             </div>
           </div>
 
           {/* Nombre del solicitante */}
-          <div className="space-y-2">
-            <Label htmlFor="applicantName" className="text-sm font-medium text-gray-700">
-              Nombre del solicitante
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="applicantName"
+              className="text-xs font-semibold text-gray-500 uppercase tracking-wide"
+            >
+              Solicitante
             </Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
               <Input
                 id="applicantName"
-                placeholder="Buscar por nombre"
+                placeholder="Buscar..."
                 value={filters.applicantName || ""}
-                onChange={(e) => handleFilterChange("applicantName", e.target.value)}
-                className="pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm transition-all duration-200 hover:border-gray-400"
+                onChange={(e) =>
+                  handleFilterChange("applicantName", e.target.value)
+                }
+                className="pl-9 pr-3 py-2.5 h-10 bg-gray-50/50 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-gray-50 shadow-none"
               />
             </div>
           </div>
         </div>
-
-      
-      </CardContent>
-    </Card>
-  )
+      </div>
+    </div>
+  );
 }

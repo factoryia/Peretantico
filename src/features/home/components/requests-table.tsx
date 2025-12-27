@@ -10,13 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Eye, Trash2, AlertCircle, Edit, Truck } from "lucide-react";
 import {
   assignDistributorToRequest,
@@ -36,7 +31,7 @@ import {
   type CompleteRequest,
 } from "../utils/complete-request";
 import { RequestsTableDialogs } from "./requests-table-dialogs";
-import { RequestsTablePagination } from "./requests-table-pagination";
+import { Paginator } from "@/components/common/paginator";
 
 interface RequestsTableProps {
   filters?: RequestFilters;
@@ -50,6 +45,7 @@ export function RequestsTable({
 }: RequestsTableProps) {
   const [deleteRequestId, setDeleteRequestId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Estados para los modales - inicializados como false
   const [modals, setModals] = useState({
@@ -75,7 +71,7 @@ export function RequestsTable({
   } = useCompleteRequests({
     ...filters,
     page: currentPage,
-    limit: 10,
+    limit: pageSize,
   });
 
   console.log(completeRequestsData);
@@ -215,6 +211,15 @@ export function RequestsTable({
     [currentPage, clearAllModalStates]
   );
 
+  const handlePageSizeChange = useCallback(
+    (newSize: number) => {
+      setPageSize(newSize);
+      setCurrentPage(1);
+      clearAllModalStates();
+    },
+    [clearAllModalStates]
+  );
+
   // Handlers para cerrar modales
   const handleCloseModal = useCallback((modalName: keyof typeof modals) => {
     setModals((prev) => ({ ...prev, [modalName]: false }));
@@ -229,7 +234,7 @@ export function RequestsTable({
   }, []);
 
   const totalItems = completeRequestsData?.meta?.count || 0;
-  const totalPages = Math.ceil(totalItems / 10);
+  const totalPages = Math.ceil(totalItems / pageSize);
 
   // Estado de carga
   if (isLoading) {
@@ -269,83 +274,136 @@ export function RequestsTable({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Solicitudes</CardTitle>
-        <CardDescription>
-          Gestiona todas las solicitudes del sistema
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table className="rounded-md border">
-          <TableHeader>
+    <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+      <div className="p-6 border-b bg-white">
+        <h3 className="text-lg font-semibold leading-none tracking-tight">
+          Solicitudes
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          {totalItems} solicitud(es) encontrada(s)
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader className="bg-gray-100">
             <TableRow>
-              <TableHead>Número de solicitud</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Subservicio</TableHead>
-              <TableHead>Repartidor</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-center">Acciones</TableHead>
+              <TableHead className="w-[150px] font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
+                Número
+              </TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
+                Cliente
+              </TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
+                Subservicio
+              </TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
+                Repartidor
+              </TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
+                Estado
+              </TableHead>
+              <TableHead className="text-center font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {completeRequestsData?.data.map((requestData) => {
+              const statusName =
+                requestData.applicationStatus?.name || "Sin asignar";
+
+              const getStatusVariant = (status: string) => {
+                const lowerStatus = status.toLowerCase();
+                if (
+                  lowerStatus.includes("rechaz") ||
+                  lowerStatus.includes("cancel")
+                )
+                  return "cancelado";
+                if (lowerStatus.includes("nuevo")) return "nuevo";
+                if (
+                  lowerStatus.includes("proceso") ||
+                  lowerStatus.includes("asignado") ||
+                  lowerStatus.includes("camino") ||
+                  lowerStatus.includes("pendiente")
+                )
+                  return "en-proceso";
+                if (
+                  lowerStatus.includes("completado") ||
+                  lowerStatus.includes("entregado")
+                )
+                  return "completado";
+                return "nuevo";
+              };
+
+              const variant = getStatusVariant(statusName);
+
+              const statusStyles = {
+                nuevo:
+                  "bg-green-100 text-green-900 hover:bg-green-100/80 border-none",
+                "en-proceso":
+                  "bg-yellow-100 text-yellow-900 hover:bg-yellow-100/80 border-none",
+                completado:
+                  "bg-gray-200 text-gray-800 hover:bg-gray-200/80 border-none",
+                cancelado:
+                  "bg-red-100 text-red-900 hover:bg-red-100/80 border-none",
+              };
+
               return (
-                <TableRow key={requestData.id}>
-                  <TableCell className="max-w-[200px] truncate">
+                <TableRow
+                  key={requestData.id}
+                  className="hover:bg-muted/30 transition-colors even:bg-gray-100"
+                >
+                  <TableCell className="font-medium text-sm py-4 px-6">
                     {requestData.field_application_number}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4 px-6">
                     <div className="flex flex-col">
-                      <span className="font-medium">
+                      <span className="font-bold text-gray-900">
                         {requestData.applicant?.name}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>
-                        {requestData.subservice
-                          ? requestData.subservice?.name
-                          : "Sin asignar"}
-                      </span>
-                    </div>
+                  <TableCell className="py-4 px-6">
+                    <span className="text-muted-foreground text-sm">
+                      {requestData.subservice
+                        ? requestData.subservice?.name
+                        : "Sin asignar"}
+                    </span>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>
-                        {requestData.distributor?.name
-                          ? requestData.distributor?.name
-                          : "Sin asignar"}
-                      </span>
-                    </div>
+                  <TableCell className="py-4 px-6">
+                    <span className="text-muted-foreground text-sm">
+                      {requestData.distributor?.name
+                        ? requestData.distributor?.name
+                        : "Sin asignar"}
+                    </span>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>
-                        {requestData.applicationStatus?.name
-                          ? requestData.applicationStatus?.name
-                          : "Sin asignar"}
-                      </span>
-                    </div>
+                  <TableCell className="py-4 px-6">
+                    <Badge
+                      variant="outline"
+                      className={`rounded-full shadow-none font-medium ${statusStyles[variant]}`}
+                    >
+                      {statusName}
+                    </Badge>
                   </TableCell>
 
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+                  <TableCell className="py-4 px-6">
+                    <div className="flex items-center justify-center gap-1">
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => handleViewDetail(requestData)}
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50"
+                        title="Ver detalle"
                         disabled={isFetching}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => handleEditRequest(requestData)}
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
+                        title="Editar"
                         disabled={isFetching}
                       >
                         <Edit className="h-4 w-4" />
@@ -353,18 +411,20 @@ export function RequestsTable({
 
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => handleAssignDistributor(requestData)}
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8 text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50"
+                        title="Asignar repartidor"
                         disabled={isFetching}
                       >
                         <Truck className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => setDeleteRequestId(requestData.id)}
-                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                        title="Eliminar"
                         disabled={isFetching}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -376,14 +436,17 @@ export function RequestsTable({
             })}
           </TableBody>
         </Table>
+      </div>
 
-        <RequestsTablePagination
+      <div className="p-4 border-t">
+        <Paginator
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={handlePageChange}
-          isFetching={isFetching}
+          pageSize={pageSize}
+          onPageSizeChange={handlePageSizeChange}
         />
-      </CardContent>
+      </div>
 
       <RequestsTableDialogs
         modals={modals}
@@ -398,6 +461,6 @@ export function RequestsTable({
         setDeleteRequestId={setDeleteRequestId}
         onUpdateRequest={handleUpdateRequest}
       />
-    </Card>
+    </div>
   );
 }

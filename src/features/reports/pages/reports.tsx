@@ -1,4 +1,3 @@
-
 import {
   Package,
   CheckCircle,
@@ -19,8 +18,6 @@ import { cn } from "@/lib/utils";
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
 import { useCoverageAreasQuery } from "@/features/distributors/hooks/taxonomies";
 import { type TaxonomyTerm } from "@/types/global";
-
-
 
 const reportStats = [
   {
@@ -56,7 +53,7 @@ const reportStats = [
 export function Reports() {
   const { data: coverageAreasData } = useCoverageAreasQuery();
   return (
-    <div className="pt-[65px] overflow-y-auto h-full">
+    <div className=" overflow-y-auto h-full">
       <SidebarHeader title="Gestión de reportes" />
       <div className="flex flex-1 flex-col gap-6 p-6 bg-gray-50">
         {/* Stats Cards */}

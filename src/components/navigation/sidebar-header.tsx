@@ -1,43 +1,37 @@
 import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { User } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useSidebar } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { ChevronsLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SidebarHeaderProps {
   title: string;
 }
 
 export function SidebarHeader({ title }: SidebarHeaderProps) {
-  const { open } = useSidebar();
-  const isMobile = useIsMobile();
-
-  // En móvil, el sidebar debe estar sobrepuesto, en desktop desplazado
-  const sidebarWidth = isMobile ? 0 : (open ? 256 : 0);
+  const { open, toggleSidebar } = useSidebar();
 
   return (
-    <header
-      style={{
-        left: sidebarWidth,
-        width: isMobile ? "100%" : `calc(100% - ${sidebarWidth}px)`,
-      }}
-      className="fixed top-0 z-20 h-[64.8px] bg-background border-b flex items-center transition-all duration-300"
-    >
-      <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-        <SidebarTrigger className="-ml-1" />
-        <Separator
-          orientation="vertical"
-          className="mx-2 data-[orientation=vertical]:h-4"
-        />
-        <div className="flex flex-1 items-center justify-between">
-          <h1 className="text-xl font-semibold">{title}</h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full">
-                <User className="h-4 w-4" />
-              </div>
-            </div>
-          </div>
-        </div>
+    <header className="sticky top-0 z-10 w-full bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b flex items-center h-[64.8px] px-4 lg:px-6 shrink-0 gap-2">
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleSidebar}
+          className="h-7 w-7"
+        >
+          <ChevronsLeft
+            className={cn(
+              "h-4 w-4 transition-transform",
+              !open && "rotate-180"
+            )}
+          />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <h1 className="text-base font-medium leading-none text-foreground/90 tracking-tight">
+          {title}
+        </h1>
       </div>
     </header>
   );

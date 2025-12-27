@@ -26,7 +26,7 @@ export function Configuration() {
   };
 
   return (
-    <div className="h-dvh pt-[65px]">
+    <div className="h-dvh">
       <SidebarHeader title="Configuración" />
       {/* Desktop view */}
       <div className="hidden lg:flex flex-1 overflow-hidden h-full">

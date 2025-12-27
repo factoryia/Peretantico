@@ -2,6 +2,14 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMemo } from "react";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 interface PaginatorProps {
   currentPage: number;
   totalPages: number;
@@ -55,22 +63,28 @@ export function Paginator({
   return (
     <div className="flex items-center justify-between gap-4 mt-4 select-none">
       {/* Page size selector */}
-      <div>
-        <select
-          className="border border-gray-300 rounded px-2 py-1 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-          value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+      <div className="flex items-center gap-2">
+        <Select
+          value={pageSize.toString()}
+          onValueChange={(value) => onPageSizeChange(Number(value))}
         >
-          {pageSizeOptions.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt} / página
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-[140px] h-9 bg-white border-gray-300">
+            <SelectValue placeholder={`${pageSize} / página`} />
+          </SelectTrigger>
+          <SelectContent>
+            {pageSizeOptions.map((opt) => (
+              <SelectItem key={opt} value={opt.toString()}>
+                {opt} / página
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Pagination */}
-      <div className={cn("flex items-center gap-1", totalPages <= 1 && "hidden")}>
+      <div
+        className={cn("flex items-center gap-1", totalPages <= 1 && "hidden")}
+      >
         <button
           className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 bg-white hover:bg-gray-100 transition disabled:opacity-50"
           onClick={() => onPageChange(currentPage - 1)}
