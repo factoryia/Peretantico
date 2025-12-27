@@ -62,7 +62,7 @@ export function Login() {
         localStorage.setItem(CSRF_TOKEN, res.data.csrf_token);
         localStorage.setItem(LOGOUT_TOKEN, res.data.logout_token);
 
-        console.log(res.data)
+        console.log(res.data);
 
         setAuthUser(res.data.current_user);
         setIsAuthorized(true);

@@ -1,4 +1,4 @@
-import { Images, ExternalLink, FolderOpen } from "lucide-react";
+import { ExternalLink, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ServiceType } from "@/types/global";
 

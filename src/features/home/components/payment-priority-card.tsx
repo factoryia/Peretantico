@@ -24,7 +24,7 @@ export function PaymentPriorityCard({
   };
 
   return (
-    <div className="bg-white overflow-hidden h-full px-6 py-5 border-b">
+    <div className="bg-white overflow-hidden h-full px-6 py-7 border-b">
       <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold flex items-center gap-2.5 pb-4">
         <DollarSign className="w-5 h-5 text-blue-600" />
         Pago y Prioridad
