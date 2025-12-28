@@ -1,4 +1,4 @@
-import { ClipboardCheck, Save } from "lucide-react";
+import { ClipboardCheck, Save, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 export interface Distributor {
@@ -15,7 +15,7 @@ interface RequestManagementCardProps {
     serviceValue: number;
     logisticsCost: number;
     distributorId: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export function RequestManagementCard({
@@ -30,14 +30,20 @@ export function RequestManagementCard({
     logisticsCost: logisticsCost || "",
     distributorId: assignedDistributor || "",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      serviceValue: Number(formData.serviceValue),
-      logisticsCost: Number(formData.logisticsCost),
-      distributorId: formData.distributorId,
-    });
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        serviceValue: Number(formData.serviceValue),
+        logisticsCost: Number(formData.logisticsCost),
+        distributorId: formData.distributorId,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -59,7 +65,8 @@ export function RequestManagementCard({
               <input
                 type="number"
                 id="valorServicio"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600 bg-white"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder="Ej: 15000"
                 value={formData.serviceValue}
                 onChange={(e) =>
@@ -78,7 +85,8 @@ export function RequestManagementCard({
             </label>
             <select
               id="asignarRepartidor"
-              className="bg-white w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600"
+              disabled={isSubmitting}
+              className="bg-white w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
               value={formData.distributorId}
               onChange={(e) =>
                 setFormData({ ...formData, distributorId: e.target.value })
@@ -95,10 +103,15 @@ export function RequestManagementCard({
 
           <button
             type="submit"
-            className="w-full bg-[#2563EB] text-white border-none px-6 py-3 rounded-lg text-base font-medium cursor-pointer transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
+            disabled={isSubmitting}
+            className="w-full bg-[#2563EB] text-white border-none px-6 py-3 rounded-lg text-base font-medium cursor-pointer transition-all hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            <Save className="w-5 h-5" />
-            Guardar y Actualizar Solicitud
+            {isSubmitting ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            {isSubmitting ? "Guardando..." : "Guardar y Actualizar Solicitud"}
           </button>
         </form>
       </div>
