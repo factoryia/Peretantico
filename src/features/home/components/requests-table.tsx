@@ -116,8 +116,6 @@ export function RequestsTable({
     }
   };
 
-  // Handlers para la asignación (extraídos de los props inline)
-  // Handlers para la asignación (extraídos de los props inline)
   const handleAssignDistributorSubmit = async (distributorId: string) => {
     try {
       const requestId = assignmentData?.requestId || selectedRequest?.id;

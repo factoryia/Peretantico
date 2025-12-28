@@ -243,9 +243,12 @@ export function RequestDetailViewModal({
           {/* Segunda fila de tarjetas */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))]">
             <PaymentPriorityCard
-              priority="normal"
+              priority={
+                request.infoService?.priority ? "prioritario" : "normal"
+              }
               paymentMethod={
-                request.paymentStatus?.name || "Sin método de pago"
+                request.paymentInfo?.field_payment_method?.name ||
+                "Sin método de pago"
               }
             />
 

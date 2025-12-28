@@ -48,11 +48,7 @@ export function PaymentPriorityCard({
             />
           </div>
           <div className="flex-1">
-            <DataPoint
-              noBorder
-              label="Método de Pago Preferido"
-              value={paymentMethod}
-            />
+            <DataPoint noBorder label="Método de Pago" value={paymentMethod} />
           </div>
         </div>
       </div>

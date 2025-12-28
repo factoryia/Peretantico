@@ -2,9 +2,12 @@ import api from "@/api";
 import { useQuery } from "@tanstack/react-query";
 import type { RequestsApiResponse } from "../types/request";
 import type { ServiceType } from "@/types/global";
+import { fetchPaymentByRequest, type PaymentDTO } from "./get-payment-method";
 
-// Interfaz extendida para respuesta con paginación
+// --- Interfaces ---
+
 interface CompleteRequestsApiResponse extends RequestsApiResponse {
+  payments?: Record<string, PaymentDTO | null>;
   meta: {
     count: number;
     page?: number;
@@ -42,7 +45,6 @@ export interface CompleteRequest {
     id: string;
   };
 
-  // Resolved relationships
   applicant?: {
     id: string;
     name: string;
@@ -55,11 +57,9 @@ export interface CompleteRequest {
   distributor?: { id: string; name: string };
   paymentStatus?: { id: string; name: string };
   subservice?: { id: string; name: string };
-  // Reformed Info Service with Union Type
   infoService?: InfoService;
+  paymentInfo?: PaymentDTO | null;
 }
-
-// Specific Info Service Interfaces
 
 export interface BaseInfoService {
   id: string;
@@ -127,87 +127,174 @@ export interface CompleteRequestFilters {
   limit?: number;
 }
 
-// Interfaces for specific types
-interface ApiEntity {
-  id: string;
-  type: string;
-  attributes: {
-    [key: string]: unknown;
-  };
-  relationships?: {
-    [key: string]: {
-      data?: {
-        id: string;
-        type: string;
-      };
-    };
-  };
-}
+// interface ApiEntity {
+//   id: string;
+//   type: string;
+//   attributes: { [key: string]: unknown };
+//   relationships?: {
+//     [key: string]: {
+//       data?: { id: string; type: string };
+//     };
+//   };
+// }
 
-interface ProfileEntity extends ApiEntity {
-  type: "node--profile";
-  attributes: {
-    field_full_name?: string;
-    title?: string;
-  };
-}
+// --- Helper Functions ---
 
-interface DistributorEntity extends ApiEntity {
-  type: "node--distributor";
-  attributes: {
-    title?: string;
-    name?: string;
+const fetchRelatedEntities = async (
+  _type: string,
+  ids: Set<string>,
+  endpoint: string,
+  includes?: string
+) => {
+  if (ids.size === 0) return { data: [], included: [] };
+  const res = await api.get(endpoint, {
+    params: {
+      "filter[id][condition][path]": "id",
+      "filter[id][condition][operator]": "IN",
+      "filter[id][condition][value]": Array.from(ids).join(","),
+      ...(includes && { include: includes }),
+      "page[limit]": 100,
+    },
+  });
+  return {
+    data: res.data?.data || [],
+    included: res.data?.included || [],
   };
-}
+};
 
-interface TaxonomyEntity extends ApiEntity {
-  attributes: {
-    name?: string;
-    title?: string;
+const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
+  const idsMap: Record<string, Set<string>> = {
+    applicant: new Set(),
+    distributor: new Set(),
+    subservice: new Set(),
+    status: new Set(),
+    paymentStatus: new Set(),
   };
-}
+
+  const infoServicesByType: Record<string, Set<string>> = {};
+
+  requests.forEach((req) => {
+    const rels = req.relationships;
+    if (rels.field_applicant?.data?.id)
+      idsMap.applicant.add(rels.field_applicant.data.id);
+    if (rels.field_distributor_data?.data?.id)
+      idsMap.distributor.add(rels.field_distributor_data.data.id);
+    if (rels.field_subservice?.data?.id)
+      idsMap.subservice.add(rels.field_subservice.data.id);
+    if (rels.field_application_statuses?.data?.id)
+      idsMap.status.add(rels.field_application_statuses.data.id);
+    if (rels.field_payment_status?.data?.id)
+      idsMap.paymentStatus.add(rels.field_payment_status.data.id);
+
+    const info = rels.field_info_service?.data;
+    if (info) {
+      if (!infoServicesByType[info.type])
+        infoServicesByType[info.type] = new Set();
+      infoServicesByType[info.type].add(info.id);
+    }
+  });
+
+  const allInclusions: any[] = [];
+
+  // Fetch standard entities
+  const baseFetches = [
+    fetchRelatedEntities(
+      "node--profile",
+      idsMap.applicant,
+      "/api/node/profile",
+      "field_type_document"
+    ),
+    fetchRelatedEntities(
+      "node--distributor",
+      idsMap.distributor,
+      "/api/node/distributor"
+    ),
+    fetchRelatedEntities(
+      "taxonomy_term--category",
+      idsMap.subservice,
+      "/api/taxonomy_term/category"
+    ),
+    fetchRelatedEntities(
+      "taxonomy_term--application_statuses",
+      idsMap.status,
+      "/api/taxonomy_term/application_statuses"
+    ),
+    fetchRelatedEntities(
+      "taxonomy_term--payment_status",
+      idsMap.paymentStatus,
+      "/api/taxonomy_term/payment_status"
+    ),
+  ];
+
+  // Fetch info services
+  const infoServiceConfig: Record<
+    string,
+    { endpoint: string; includes?: string }
+  > = {
+    "node--marriage_certificate_request": {
+      endpoint: "/api/node/marriage_certificate_request",
+      includes:
+        "field_marriage_case,field_marriage_registry,field_marriage_type",
+    },
+    "node--request_medication": { endpoint: "/api/node/request_medication" },
+    "node--civil_registry_request": {
+      endpoint: "/api/node/civil_registry_request",
+    },
+    "node--death_certificate_request": {
+      endpoint: "/api/node/death_certificate_request",
+    },
+  };
+
+  const infoFetches = Object.entries(infoServicesByType).map(([type, ids]) => {
+    const config = infoServiceConfig[type];
+    return config
+      ? fetchRelatedEntities(type, ids, config.endpoint, config.includes)
+      : Promise.resolve({ data: [], included: [] });
+  });
+
+  const results = await Promise.all([...baseFetches, ...infoFetches]);
+  results.forEach((res) => {
+    allInclusions.push(...res.data, ...res.included);
+  });
+
+  return allInclusions;
+};
+
+// --- Main Service Logic ---
 
 export const fetchCompleteRequests = async (
   filters: CompleteRequestFilters = {}
 ): Promise<CompleteRequestsApiResponse> => {
   try {
     const {
+      page = 1,
+      limit = 50,
       status,
       subservice,
       assignedDistributor,
       requestNumber,
       applicantName,
-      page = 1,
-      limit = 50,
     } = filters;
-
     const offset = (page - 1) * limit;
+
     const params: Record<string, string | number> = {
       include:
         "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_payment_status,field_subservice",
-      sort: "created", // Oldest to newest
+      sort: "created",
       "page[limit]": limit,
       "page[offset]": offset,
       "filter[field_info_service][condition][path]": "field_info_service.id",
       "filter[field_info_service][condition][operator]": "IS NOT NULL",
     };
 
-    // Apply filters
-    if (status && status !== "all") {
+    if (status && status !== "all")
       params["filter[field_application_statuses.name]"] = status;
-    } else {
-      // Default filter if no specific status is requested, or keep it if "all" implies no filter
-      // The original code had "filter[status]": "1" which likely meant published status.
-      params["filter[status]"] = "1";
-    }
+    else params["filter[status]"] = "1";
 
-    if (subservice && subservice !== "all") {
+    if (subservice && subservice !== "all")
       params["filter[field_subservice.id]"] = subservice;
-    }
-
-    if (assignedDistributor && assignedDistributor !== "all") {
+    if (assignedDistributor && assignedDistributor !== "all")
       params["filter[field_distributor_data.id]"] = assignedDistributor;
-    }
 
     if (requestNumber) {
       params["filter[field_application_number][condition][path]"] =
@@ -231,246 +318,33 @@ export const fetchCompleteRequests = async (
       params,
     });
 
-    // Fetch related entities if they are not included
     if (
       response.data.data &&
       (!response.data.included || response.data.included.length === 0)
     ) {
-      const requests = response.data.data;
-      const allIncluded: ApiEntity[] = [];
-
-      const applicantIds = new Set<string>();
-      const distributorIds = new Set<string>();
-      const subserviceIds = new Set<string>();
-      const statusIds = new Set<string>();
-      const paymentStatusIds = new Set<string>();
-
-      requests.forEach((request) => {
-        if (request.relationships.field_applicant?.data?.id) {
-          applicantIds.add(request.relationships.field_applicant.data.id);
-        }
-        if (request.relationships.field_distributor_data?.data?.id) {
-          distributorIds.add(
-            request.relationships.field_distributor_data.data.id
-          );
-        }
-        if (request.relationships.field_subservice?.data?.id) {
-          subserviceIds.add(request.relationships.field_subservice.data.id);
-        }
-        if (request.relationships.field_application_statuses?.data?.id) {
-          statusIds.add(
-            request.relationships.field_application_statuses.data.id
-          );
-        }
-        if (request.relationships.field_payment_status?.data?.id) {
-          paymentStatusIds.add(
-            request.relationships.field_payment_status.data.id
-          );
-        }
-      });
-
-      // Group by type to fetch specific info services
-      const infoServicesByType: Record<string, Set<string>> = {};
-      requests.forEach((r) => {
-        const d = r.relationships.field_info_service?.data;
-        if (d) {
-          if (!infoServicesByType[d.type])
-            infoServicesByType[d.type] = new Set();
-          infoServicesByType[d.type].add(d.id);
-        }
-      });
-
-      // Fetch each type
-      for (const [type, ids] of Object.entries(infoServicesByType)) {
-        // Map type to endpoint
-        let endpoint = "";
-        let includes = "";
-        if (type === "node--marriage_certificate_request") {
-          endpoint = "/api/node/marriage_certificate_request";
-          includes =
-            "field_marriage_case,field_marriage_registry,field_marriage_type";
-        } else if (type === "node--request_medication") {
-          endpoint = "/api/node/request_medication";
-        } else if (type === "node--civil_registry_request") {
-          endpoint = "/api/node/civil_registry_request";
-        } else if (type === "node--death_certificate_request") {
-          endpoint = "/api/node/death_certificate_request";
-        }
-
-        if (endpoint && ids.size > 0) {
-          const isRes = await api.get(endpoint, {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]": Array.from(ids).join(","),
-              include: includes,
-              "page[limit]": 100,
-            },
-          });
-          if (isRes.data?.data) {
-            isRes.data.data.forEach((item: any) => {
-              allIncluded.push(item);
-              // And their includes
-              if (isRes.data.included) {
-                isRes.data.included.forEach((inc: any) => {
-                  if (!allIncluded.find((i) => i.id === inc.id)) {
-                    allIncluded.push(inc);
-                  }
-                });
-              }
-            });
-          }
-        }
-      }
-
-      try {
-        // Fetch Applicants
-        if (applicantIds.size > 0) {
-          const applicantsResponse = await api.get("/api/node/profile", {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]":
-                Array.from(applicantIds).join(","),
-              include: "field_type_document", // We need document type for complete request
-              "page[limit]": 100,
-            },
-          });
-
-          if (applicantsResponse.data?.data) {
-            applicantsResponse.data.data.forEach((item: ProfileEntity) => {
-              allIncluded.push(item);
-              // Also add included document types if any
-              if (applicantsResponse.data.included) {
-                applicantsResponse.data.included.forEach((inc: ApiEntity) => {
-                  if (!allIncluded.find((i) => i.id === inc.id)) {
-                    allIncluded.push(inc);
-                  }
-                });
-              }
-            });
-          }
-        }
-
-        // Fetch Distributors
-        if (distributorIds.size > 0) {
-          const distributorsResponse = await api.get("/api/node/distributor", {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]":
-                Array.from(distributorIds).join(","),
-              "page[limit]": 100,
-            },
-          });
-
-          if (distributorsResponse.data?.data) {
-            distributorsResponse.data.data.forEach(
-              (item: DistributorEntity) => {
-                allIncluded.push({
-                  id: item.id,
-                  type: "node--distributor",
-                  attributes: item.attributes,
-                });
-              }
-            );
-          }
-        }
-
-        // Fetch Subservices
-        if (subserviceIds.size > 0) {
-          const subservicesResponse = await api.get(
-            "/api/taxonomy_term/category",
-            {
-              params: {
-                "filter[id][condition][path]": "id",
-                "filter[id][condition][operator]": "IN",
-                "filter[id][condition][value]":
-                  Array.from(subserviceIds).join(","),
-                "page[limit]": 100,
-              },
-            }
-          );
-
-          if (subservicesResponse.data?.data) {
-            subservicesResponse.data.data.forEach((item: TaxonomyEntity) => {
-              allIncluded.push({
-                id: item.id,
-                type: "taxonomy_term--category",
-                attributes: item.attributes,
-              });
-            });
-          }
-        }
-
-        // Fetch Statuses
-        if (statusIds.size > 0) {
-          const statusResponse = await api.get(
-            "/api/taxonomy_term/application_statuses",
-            {
-              params: {
-                "filter[id][condition][path]": "id",
-                "filter[id][condition][operator]": "IN",
-                "filter[id][condition][value]": Array.from(statusIds).join(","),
-                "page[limit]": 100,
-              },
-            }
-          );
-
-          if (statusResponse.data?.data) {
-            statusResponse.data.data.forEach((item: TaxonomyEntity) => {
-              allIncluded.push({
-                id: item.id,
-                type: "taxonomy_term--application_statuses",
-                attributes: item.attributes,
-              });
-            });
-          }
-        }
-
-        // Fetch Payment Statuses
-        if (paymentStatusIds.size > 0) {
-          const paymentStatusResponse = await api.get(
-            "/api/taxonomy_term/payment_status",
-            {
-              params: {
-                "filter[id][condition][path]": "id",
-                "filter[id][condition][operator]": "IN",
-                "filter[id][condition][value]":
-                  Array.from(paymentStatusIds).join(","),
-                "page[limit]": 100,
-              },
-            }
-          );
-
-          if (paymentStatusResponse.data?.data) {
-            paymentStatusResponse.data.data.forEach((item: TaxonomyEntity) => {
-              allIncluded.push({
-                id: item.id,
-                type: "taxonomy_term--payment_status",
-                attributes: item.attributes,
-              });
-            });
-          }
-        }
-
-        response.data.included = allIncluded;
-      } catch (error) {
-        console.warn("Error fetching related entities:", error);
-      }
+      response.data.included = await fetchMissingInclusions(response.data.data);
     }
 
-    // Add pagination info to response
-    const totalCount = response.data.meta?.count || 0;
-    const totalPages = Math.ceil(totalCount / limit);
+    const payments: Record<string, PaymentDTO | null> = {};
+    if (response.data.data?.length) {
+      const results = await Promise.all(
+        response.data.data.map(async (req) => ({
+          id: req.id,
+          payment: await fetchPaymentByRequest(req.id).catch(() => null),
+        }))
+      );
+      results.forEach((res) => (payments[res.id] = res.payment));
+    }
 
+    const totalCount = response.data.meta?.count || 0;
     return {
       ...response.data,
+      payments,
       meta: {
         count: totalCount,
         page,
         limit,
-        totalPages,
+        totalPages: Math.ceil(totalCount / limit),
       },
     } as CompleteRequestsApiResponse;
   } catch (error) {
@@ -485,245 +359,210 @@ export const transformCompleteRequests = (
   if (!response?.data) return { data: [], meta: {} };
 
   const { data, included = [], meta } = response;
+  const payments = (response as CompleteRequestsApiResponse).payments || {};
 
-  const getIncludedAttribute = (
-    id: string | undefined,
-    type: string,
-    attribute: string
-  ) => {
-    if (!id) return undefined;
-    const entity = included.find(
-      (item) => item.id === id && item.type === type
-    );
-    return entity?.attributes?.[attribute] as string | undefined;
-  };
+  const getEntity = (id: string | undefined, type: string) =>
+    id
+      ? included.find((item) => item.id === id && item.type === type)
+      : undefined;
 
-  const getIncludedEntity = (id: string | undefined, type: string) => {
-    if (!id) return undefined;
-    return included.find((item) => item.id === id && item.type === type);
-  };
+  const getAttr = (id: string | undefined, type: string, attr: string) =>
+    getEntity(id, type)?.attributes?.[attr] as string | undefined;
 
   const transformedData = data.map((request) => {
     const rels = request.relationships;
     const attrs = request.attributes;
 
-    // Resolve Applicant
-    const applicantId = rels.field_applicant?.data?.id;
-    const applicantEntity = getIncludedEntity(applicantId, "node--profile");
-
-    let applicantData = undefined;
-    if (applicantId && applicantEntity) {
-      const applicantAttrs = applicantEntity.attributes;
-      const docTypeId =
-        applicantEntity.relationships?.field_type_document?.data?.id;
-      const docTypeName = getIncludedAttribute(
-        docTypeId,
-        "taxonomy_term--document_type",
-        "name"
-      );
-
-      applicantData = {
-        id: applicantId,
-        name:
-          (applicantAttrs?.field_full_name as string) ||
-          (applicantAttrs?.title as string) ||
-          "Unknown",
-        documentNumber: applicantAttrs?.field_document_number as string,
-        phoneNumber: applicantAttrs?.field_phone_number as string,
-        address: applicantAttrs?.field_address as string,
-        documentType: docTypeId
-          ? { id: docTypeId, name: docTypeName || "Unknown" }
-          : undefined,
-      };
-    }
-
-    // Resolve Application Status
-    const statusId = rels.field_application_statuses?.data?.id;
-    const statusName = getIncludedAttribute(
-      statusId,
-      "taxonomy_term--application_statuses",
-      "name"
+    // Resolve Relationships
+    const applicant = getEntity(
+      rels.field_applicant?.data?.id,
+      "node--profile"
     );
+    const docTypeId = applicant?.relationships?.field_type_document?.data?.id;
 
-    // Resolve Distributor
-    const distributorId = rels.field_distributor_data?.data?.id;
-    const distributorName =
-      getIncludedAttribute(distributorId, "node--distributor", "title") ||
-      getIncludedAttribute(distributorId, "node--distributor", "name");
-
-    // Resolve Payment Status
-    const paymentStatusId = rels.field_payment_status?.data?.id;
-    const paymentStatusName = getIncludedAttribute(
-      paymentStatusId,
-      "taxonomy_term--payment_status",
-      "name"
+    const infoServiceEntity = getEntity(
+      rels.field_info_service?.data?.id,
+      rels.field_info_service?.data?.type || ""
     );
+    const infoAttrs = infoServiceEntity?.attributes as any;
+    const infoRels = infoServiceEntity?.relationships as any;
 
-    // Resolve Subservice
-    const subserviceId = rels.field_subservice?.data?.id;
-    const subserviceName = getIncludedAttribute(
-      subserviceId,
-      "taxonomy_term--category",
-      "name"
-    );
-
-    // Resolve Info Service
-    const infoServiceId = rels.field_info_service?.data?.id;
-    const infoServiceType = rels.field_info_service?.data?.type;
-    const infoServiceEntity = getIncludedEntity(
-      infoServiceId,
-      infoServiceType || ""
-    );
-
-    let infoServiceData: InfoService | undefined = undefined;
-    if (infoServiceId && infoServiceEntity) {
-      const infoAttrs = infoServiceEntity.attributes;
-      const infoRels = infoServiceEntity.relationships;
-
+    let infoServiceData: InfoService | undefined;
+    if (infoServiceEntity) {
       const baseInfo = {
-        id: infoServiceId,
-        title: infoAttrs?.title as string,
-        priority: infoAttrs?.field_priority as string,
+        id: infoServiceEntity.id,
+        title: infoAttrs?.title,
+        priority: infoAttrs?.field_priority,
       };
+      const type = infoServiceEntity.type;
 
-      switch (infoServiceType) {
-        case "node--request_medication":
-          infoServiceData = {
-            ...baseInfo,
-            type: "node--request_medication",
-            eps: infoAttrs?.field_eps as string,
-            drugstore: infoAttrs?.field_drugstore as string,
-            address: infoAttrs?.field_address as string,
-            phoneContact: infoAttrs?.field_phone_contact as string,
-            files: (infoAttrs?.field_path as any[]) || [],
-            observations: infoAttrs?.field_observations as string,
-          };
-          break;
-
-        case "node--civil_registry_request":
-          infoServiceData = {
-            ...baseInfo,
-            type: "node--civil_registry_request",
-            hasRegistrationNumber:
-              infoAttrs?.field_has_registration_number as boolean,
-            registrantFullName: infoAttrs?.field_registrant_full_name as string,
-            registrantRegistrationCode:
-              infoAttrs?.field_registrant_registration_co as string,
-            registryFolioNumber:
-              infoAttrs?.field_registry_folio_number as string,
-            registryInscriptionDate:
-              infoAttrs?.field_registry_inscription_date as string,
-            registryNotaryNumber:
-              infoAttrs?.field_registry_notary_number as string,
-            registryTomeNumber: infoAttrs?.field_registry_tome_number as string,
-            registrySerialNumber:
-              infoAttrs?.field_registry_serial_number as string,
-            files: (infoAttrs?.field_path as any[]) || [],
-          };
-          break;
-
-        case "node--death_certificate_request":
-          infoServiceData = {
-            ...baseInfo,
-            type: "node--death_certificate_request",
-            documentNumber: infoAttrs?.field_document_number as string,
-            hasOriginalDeathCertificate:
-              infoAttrs?.field_has_original_death_certifi as boolean,
-            registrantFullName: infoAttrs?.field_registrant_full_name as string,
-            registrySerialNumber:
-              infoAttrs?.field_registry_serial_number as string,
-            signedAuthorization: infoAttrs?.field_signed_authorization as any,
-          };
-          break;
-
-        case "node--marriage_certificate_request":
-          // Resolve Marriage Relationships
-          const marriageCaseId = infoRels?.field_marriage_case?.data?.id;
-          const marriageCaseName = getIncludedAttribute(
-            marriageCaseId,
+      if (type === "node--request_medication") {
+        infoServiceData = {
+          ...baseInfo,
+          type,
+          eps: infoAttrs.field_eps,
+          drugstore: infoAttrs.field_drugstore,
+          address: infoAttrs.field_address,
+          phoneContact: infoAttrs.field_phone_contact,
+          files: infoAttrs.field_path || [],
+          observations: infoAttrs.field_observations,
+        };
+      } else if (type === "node--civil_registry_request") {
+        infoServiceData = {
+          ...baseInfo,
+          type,
+          hasRegistrationNumber: infoAttrs.field_has_registration_number,
+          registrantFullName: infoAttrs.field_registrant_full_name,
+          registrantRegistrationCode:
+            infoAttrs.field_registrant_registration_co,
+          registryFolioNumber: infoAttrs.field_registry_folio_number,
+          registryInscriptionDate: infoAttrs.field_registry_inscription_date,
+          registryNotaryNumber: infoAttrs.field_registry_notary_number,
+          registryTomeNumber: infoAttrs.field_registry_tome_number,
+          registrySerialNumber: infoAttrs.field_registry_serial_number,
+          files: infoAttrs.field_path || [],
+        };
+      } else if (type === "node--death_certificate_request") {
+        infoServiceData = {
+          ...baseInfo,
+          type,
+          documentNumber: infoAttrs.field_document_number,
+          hasOriginalDeathCertificate:
+            infoAttrs.field_has_original_death_certifi,
+          registrantFullName: infoAttrs.field_registrant_full_name,
+          registrySerialNumber: infoAttrs.field_registry_serial_number,
+          signedAuthorization: infoAttrs.field_signed_authorization,
+        };
+      } else if (type === "node--marriage_certificate_request") {
+        infoServiceData = {
+          ...baseInfo,
+          type,
+          applicantIdCopy: infoAttrs.field_applicant_id_copy || [],
+          marriageCertificate: infoAttrs.field_marriage_certificate,
+          signedAuthorization: infoAttrs.field_signed_authorization,
+          marriageCase: getAttr(
+            infoRels?.field_marriage_case?.data?.id,
             "taxonomy_term--marriage_case",
             "name"
-          );
-
-          const marriageRegistryId =
-            infoRels?.field_marriage_registry?.data?.id;
-          const marriageRegistryName = getIncludedAttribute(
-            marriageRegistryId,
+          ),
+          marriageRegistry: getAttr(
+            infoRels?.field_marriage_registry?.data?.id,
             "taxonomy_term--marriage_registration_status",
             "name"
-          );
-
-          const marriageTypeId = infoRels?.field_marriage_type?.data?.id;
-          const marriageTypeName = getIncludedAttribute(
-            marriageTypeId,
+          ),
+          marriageType: getAttr(
+            infoRels?.field_marriage_type?.data?.id,
             "taxonomy_term--marriage_certificate_type",
             "name"
-          );
-
-          infoServiceData = {
-            ...baseInfo,
-            type: "node--marriage_certificate_request",
-            applicantIdCopy:
-              (infoAttrs?.field_applicant_id_copy as any[]) || [],
-            marriageCertificate: infoAttrs?.field_marriage_certificate as any,
-            signedAuthorization: infoAttrs?.field_signed_authorization as any,
-            marriageCase: marriageCaseName,
-            marriageRegistry: marriageRegistryName,
-            marriageType: marriageTypeName,
-          };
-          break;
-
-        default:
-          infoServiceData = {
-            ...baseInfo,
-            type: infoServiceType || "unknown",
-          };
+          ),
+        };
+      } else {
+        infoServiceData = { ...baseInfo, type: type || "unknown" };
       }
     }
 
     return {
       id: request.id,
-      drupal_internal__nid: attrs.drupal_internal__nid,
-      title: attrs.title,
-      created: attrs.created,
-      field_application_number: attrs.field_application_number,
-      field_application_score: attrs.field_application_score,
-      field_entry_date: attrs.field_entry_date,
-      field_estimated_application_hour: attrs.field_estimated_application_hour,
-      field_estimated_prioritized_hour: attrs.field_estimated_prioritized_hour,
-      field_is_recurring: attrs.field_is_recurring,
-      field_logistics_costs: attrs.field_logistics_costs,
-      field_prioritized_value: attrs.field_prioritized_value || 0,
-      field_service_value: attrs.field_prioritized_value,
-      field_observations: attrs.field_observations as string | undefined, // Mapping observation
+      drupal_internal__nid: attrs.drupal_internal__nid as number,
+      title: attrs.title as string,
+      created: attrs.created as string,
+      field_application_number: attrs.field_application_number as string,
+      field_application_score: attrs.field_application_score as number,
+      field_entry_date: attrs.field_entry_date as string,
+      field_estimated_application_hour:
+        attrs.field_estimated_application_hour as number,
+      field_estimated_prioritized_hour:
+        attrs.field_estimated_prioritized_hour as number,
+      field_is_recurring: attrs.field_is_recurring as boolean,
+      field_logistics_costs: attrs.field_logistics_costs as number,
+      field_prioritized_value: (attrs.field_prioritized_value as number) || 0,
+      field_service_value: attrs.field_prioritized_value as number,
+      field_observations: attrs.field_observations as string,
       field_info_service: rels.field_info_service?.data
         ? {
-            type: rels.field_info_service.data.type,
+            type: rels.field_info_service.data.type as ServiceType,
             id: rels.field_info_service.data.id,
           }
         : undefined,
-
-      applicant: applicantData,
-      applicationStatus: statusId
-        ? { id: statusId, name: statusName || "Unknown" }
+      applicant: applicant
+        ? {
+            id: applicant.id,
+            name: (applicant.attributes.field_full_name ||
+              applicant.attributes.title ||
+              "Unknown") as string,
+            documentNumber: applicant.attributes
+              .field_document_number as string,
+            phoneNumber: applicant.attributes.field_phone_number as string,
+            address: applicant.attributes.field_address as string,
+            documentType: docTypeId
+              ? {
+                  id: docTypeId,
+                  name:
+                    getAttr(
+                      docTypeId,
+                      "taxonomy_term--document_type",
+                      "name"
+                    ) || "Unknown",
+                }
+              : undefined,
+          }
         : undefined,
-      distributor: distributorId
-        ? { id: distributorId, name: distributorName || "Unknown" }
+      applicationStatus: rels.field_application_statuses?.data?.id
+        ? {
+            id: rels.field_application_statuses.data.id,
+            name:
+              getAttr(
+                rels.field_application_statuses.data.id,
+                "taxonomy_term--application_statuses",
+                "name"
+              ) || "Unknown",
+          }
         : undefined,
-      paymentStatus: paymentStatusId
-        ? { id: paymentStatusId, name: paymentStatusName || "Unknown" }
+      distributor: rels.field_distributor_data?.data?.id
+        ? {
+            id: rels.field_distributor_data.data.id,
+            name:
+              getAttr(
+                rels.field_distributor_data.data.id,
+                "node--distributor",
+                "title"
+              ) ||
+              getAttr(
+                rels.field_distributor_data.data.id,
+                "node--distributor",
+                "name"
+              ) ||
+              "Unknown",
+          }
         : undefined,
-      subservice: subserviceId
-        ? { id: subserviceId, name: subserviceName || "Unknown" }
+      paymentStatus: rels.field_payment_status?.data?.id
+        ? {
+            id: rels.field_payment_status.data.id,
+            name:
+              getAttr(
+                rels.field_payment_status.data.id,
+                "taxonomy_term--payment_status",
+                "name"
+              ) || "Unknown",
+          }
+        : undefined,
+      subservice: rels.field_subservice?.data?.id
+        ? {
+            id: rels.field_subservice.data.id,
+            name:
+              getAttr(
+                rels.field_subservice.data.id,
+                "taxonomy_term--category",
+                "name"
+              ) || "Unknown",
+          }
         : undefined,
       infoService: infoServiceData,
+      paymentInfo: payments[request.id] || null,
     };
   });
 
-  return {
-    data: transformedData,
-    meta: meta || {},
-  };
+  return { data: transformedData, meta: meta || {} };
 };
 
 export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
