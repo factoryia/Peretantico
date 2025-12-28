@@ -139,7 +139,7 @@ export function Distributors() {
       />
       <div className="h-dvh ">
         <SidebarHeader title="Configuración" />
-        <div className="h-full overflow-y-auto p-4 md:px-6">
+        <div className="h-full overflow-y-auto p-4 pb-20 md:px-6">
           {isLoadingDistributors && (
             <div className="text-center">Cargando...</div>
           )}

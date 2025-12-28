@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CustomerDetailView } from "./customer-detail-view";
 import { CustomerForm } from "./customer-form";
 import type { Customer, FormMode } from "../types";
 
@@ -46,7 +47,7 @@ export function CustomerFormDialog({
       case "edit":
         return "Modifique la información del cliente y guarde los cambios.";
       case "view":
-        return "Información detallada del cliente (solo lectura).";
+        return "Información detallada del cliente.";
       default:
         return "";
     }
@@ -62,16 +63,31 @@ export function CustomerFormDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className={`${
+          mode === "view" ? "sm:max-w-[700px]" : "sm:max-w-[800px]"
+        } max-h-[90vh] overflow-y-auto`}
+      >
         <DialogHeader>
-          <DialogTitle>{getTitle()}</DialogTitle>
-          <DialogDescription>{getDescription()}</DialogDescription>
+          <DialogTitle
+            className={mode === "view" ? "text-slate-500 font-normal" : ""}
+          >
+            {getTitle()}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {getDescription()}
+          </DialogDescription>
         </DialogHeader>
-        <CustomerForm
-          customer={customer}
-          mode={mode}
-          onCancel={handleCancel}
-        />
+
+        {mode === "view" && customer ? (
+          <CustomerDetailView customer={customer} onClose={handleCancel} />
+        ) : (
+          <CustomerForm
+            customer={customer}
+            mode={mode}
+            onCancel={handleCancel}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
