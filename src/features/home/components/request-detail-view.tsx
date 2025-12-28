@@ -74,7 +74,7 @@ export function RequestDetailViewModal({
           id: request.id,
           attributes: {
             title: request.title,
-            field_service_value: data.serviceValue,
+            field_prioritized_value: data.serviceValue,
             field_logistics_costs: data.logisticsCost,
           },
         },

@@ -67,24 +67,6 @@ export function RequestManagementCard({
                 }
               />
             </div>
-            {/* <div className="flex-1">
-              <label
-                htmlFor="costoLogistica"
-                className="block mb-2 font-medium text-gray-800"
-              >
-                Costo Logística ($)
-              </label>
-              <input
-                type="number"
-                id="costoLogistica"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-inherit text-base transition-colors focus:outline-none focus:border-blue-600"
-                placeholder="Ej: 5000"
-                value={formData.logisticsCost}
-                onChange={(e) =>
-                  setFormData({ ...formData, logisticsCost: e.target.value })
-                }
-              />
-            </div> */}
           </div>
 
           <div className="mb-6">
