@@ -11,7 +11,7 @@ import { fetchProfiles } from "../utils/customer";
 import { CustomerTable } from "./customer-table";
 import { CustomerFormDialog } from "./customer-dialog";
 import { Paginator } from "@/components/common/paginator";
-import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
+import { CustomerTableSkeleton } from "./skeletons/customer-skeleton";
 import { PROFILE_QUERY_KEY } from "../constants";
 
 export default function CustomerManagementPage() {
@@ -138,9 +138,7 @@ export default function CustomerManagementPage() {
 
           <div className="p-0">
             {isLoadingCustomers ? (
-              <div className="p-6">
-                <TableSkeleton />
-              </div>
+              <CustomerTableSkeleton />
             ) : (
               <>
                 <CustomerTable
