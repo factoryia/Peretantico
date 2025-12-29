@@ -6,7 +6,16 @@ import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import {
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  FileText,
+  Upload,
+  X,
+  CheckCircle2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +53,7 @@ function normalizeCustomerData(customer?: Customer) {
   return {
     ...customer,
     email: customer.email || "",
+    photo_document: customer.photo_document || undefined,
   };
 }
 
@@ -121,326 +131,399 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
     queryFn: fetchDocumentTypeTaxonomy,
   });
 
+  const sectionHeader = (icon: any, title: string) => {
+    const Icon = icon;
+    return (
+      <div className="flex items-center gap-2.5 pb-2 mb-4 border-b border-gray-100">
+        <Icon className="size-5 text-blue-600" />
+        <h3 className="text-[#6B7280] text-[12.8px] uppercase font-bold tracking-wide">
+          {title}
+        </h3>
+      </div>
+    );
+  };
+
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleSubmit)}
-        className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4"
+        className="space-y-8 animate-in fade-in duration-500 font-['Poppins',sans-serif]"
       >
-        {/* Nombre */}
-        <FormField
-          control={form.control}
-          name="fullName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Nombre completo <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Ingrese su nombre y apellido.
-              </p>
-              <FormControl>
-                <Input
-                  placeholder="Ej: Juan Pérez"
-                  maxLength={100}
-                  disabled={isFieldDisabled()}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-1 gap-10">
+          {/* PERSONAL SECTION */}
+          <div className="space-y-6">
+            {sectionHeader(User, "Datos de Identificación")}
 
-        {/* Tipo de documento */}
-        <FormField
-          control={form.control}
-          name="documentType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Tipo de documento <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Seleccione el tipo de documento.
-              </p>
-              <Select
-                onValueChange={field.onChange}
-                value={field.value}
-                disabled={isFieldDisabled()}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione tipo de documento" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {documentTypeOptions.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Número de documento */}
-        <FormField
-          control={form.control}
-          name="documentNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Número de documento <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Ingrese su número de documento del seleccionado.
-              </p>
-              <FormControl>
-                <Input
-                  placeholder="Ej: 1234567890"
-                  maxLength={15}
-                  pattern="[0-9]*"
-                  inputMode="numeric"
-                  disabled={isFieldDisabled()}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Teléfono */}
-        <FormField
-          control={form.control}
-          name="phoneNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Teléfono de contacto <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Ingrese su teléfono de contacto.
-              </p>
-              <FormControl>
-                <Input
-                  placeholder="Ej: 3101234567"
-                  maxLength={15}
-                  pattern="[0-9]*"
-                  inputMode="tel"
-                  disabled={isFieldDisabled()}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Departamento */}
-        <FormField
-          control={form.control}
-          name="department"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Departamento <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Seleccione el departamento de su residencia.
-              </p>
-              <Select
-                value={field.value}
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  setSelectedDepto(value);
-                  form.setValue("municipality", "");
-                }}
-                disabled={isFieldDisabled()}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione un departamento" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {departamento.map((d) => (
-                    <SelectItem key={d.id} value={d.departamento}>
-                      {d.departamento}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Municipio */}
-        <FormField
-          control={form.control}
-          name="municipality"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Municipio <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Seleccione el municipio de su residencia.
-              </p>
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={!selectedDepto || isFieldDisabled()}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione un municipio" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {departamento
-                    .find((d) => d.departamento === selectedDepto)
-                    ?.ciudades.map((ciudad) => (
-                      <SelectItem key={ciudad} value={ciudad}>
-                        {ciudad}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Dirección */}
-        <FormField
-          control={form.control}
-          name="address"
-          render={({ field }) => (
-            <FormItem className="md:col-span-2">
-              <FormLabel>
-                Dirección residencia <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Ingrese su dirección de residencia.
-              </p>
-              <FormControl>
-                <Input
-                  placeholder="Ej: Calle 123 #45-67, Bogotá"
-                  maxLength={200}
-                  disabled={isFieldDisabled()}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="photo_document"
-          render={({ field }) => (
-            <FormItem className="md:col-span-2">
-              <FormLabel>
-                Documento de identidad <RequiredDot />
-              </FormLabel>
-              <p className="text-xs text-gray-500">
-                Cargue una imagen o PDF de su documento de identidad por ambas
-                caras.
-              </p>
-
-              <FormControl>
-                <label
-                  htmlFor="photo_document"
-                  className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 cursor-pointer transition"
-                  onDragOver={(e) => {
-                    e.preventDefault(); // necesario para permitir drop
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const files = Array.from(e.dataTransfer.files);
-                    field.onChange(files); // guardamos los archivos arrastrados
-                  }}
-                >
-                  <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground mb-2 text-center">
-                    Haga clic para subir o arrastre el archivo aquí
-                  </p>
-
-                  <Input
-                    id="photo_document"
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept="image/*,application/pdf"
-                    disabled={isFieldDisabled()}
-                    onChange={(e) => {
-                      const files = e.target.files
-                        ? Array.from(e.target.files)
-                        : [];
-                      field.onChange(files);
-                    }}
-                  />
-                </label>
-              </FormControl>
-
-              {/* Lista de archivos seleccionados */}
-              {field.value &&
-                Array.isArray(field.value) &&
-                field.value.length > 0 && (
-                  <ul className="mt-3 space-y-1 text-sm text-gray-600">
-                    {field.value.map((file: File, idx: number) => (
-                      <li
-                        key={idx}
-                        className="flex items-center justify-between border rounded px-2 py-1"
-                      >
-                        <span className="truncate max-w-[200px]">
-                          {file.name}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {(file.size / 1024).toFixed(1)} KB
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+            <div className="space-y-5">
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Nombre Completo <RequiredDot />
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Ej: Juan Pérez"
+                        className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm"
+                        disabled={isFieldDisabled()}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[10px] font-bold" />
+                  </FormItem>
                 )}
+              />
 
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="documentType"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Tipo Doc. <RequiredDot />
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        disabled={isFieldDisabled()}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 transition-all font-medium text-sm">
+                            <SelectValue placeholder="Tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                          {documentTypeOptions.map((type) => (
+                            <SelectItem key={type.id} value={type.id}>
+                              {type.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage className="text-[10px] font-bold" />
+                    </FormItem>
+                  )}
+                />
 
-        {/* Botones */}
-        <div className="md:col-span-2 flex justify-end gap-2 mt-4">
-          {mode !== "view" ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCancel}
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting || !isValid}>
-                {isSubmitting
-                  ? "Guardando..."
-                  : mode === "create"
-                  ? "Crear Cliente"
-                  : "Guardar Cambios"}
-              </Button>
-            </>
-          ) : (
-            <Button type="button" onClick={onCancel}>
-              Cerrar
-            </Button>
-          )}
+                <FormField
+                  control={form.control}
+                  name="documentNumber"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Número <RequiredDot />
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="12345..."
+                          className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-mono font-bold text-slate-700 text-sm"
+                          disabled={isFieldDisabled()}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[10px] font-bold" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* COMMUNICATION & LOCATION SECTION (STACKED) */}
+          <div className="space-y-10">
+            <div className="space-y-6">
+              {sectionHeader(Phone, "Comunicación")}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="phoneNumber"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Teléfono / Celular <RequiredDot />
+                      </FormLabel>
+                      <div className="relative group">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 p-1 bg-white rounded-md border border-gray-100 shadow-2xs">
+                          <Phone className="h-3 w-3 text-blue-500 group-focus-within:text-blue-600 transition-colors" />
+                        </div>
+                        <FormControl>
+                          <Input
+                            placeholder="Ej: 3101234567"
+                            className="pl-11 h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm"
+                            disabled={isFieldDisabled()}
+                            {...field}
+                          />
+                        </FormControl>
+                      </div>
+                      <FormMessage className="text-[10px] font-bold" />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Correo Electrónico
+                      </FormLabel>
+                      <div className="relative group">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 p-1 bg-white rounded-md border border-gray-100 shadow-2xs">
+                          <Mail className="h-3 w-3 text-blue-500 group-focus-within:text-blue-600 transition-colors" />
+                        </div>
+                        <FormControl>
+                          <Input
+                            placeholder="cliente@ejemplo.com"
+                            className="pl-11 h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm"
+                            disabled={isFieldDisabled()}
+                            {...field}
+                          />
+                        </FormControl>
+                      </div>
+                      <FormMessage className="text-[10px] font-bold" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {sectionHeader(MapPin, "Ubicación")}
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="department"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Dpto <RequiredDot />
+                        </FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            setSelectedDepto(value);
+                            form.setValue("municipality", "");
+                          }}
+                          disabled={isFieldDisabled()}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 transition-all font-medium text-sm">
+                              <SelectValue placeholder="Dpto" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="rounded-xl border-gray-100 shadow-xl max-h-[250px]">
+                            {departamento.map((d) => (
+                              <SelectItem key={d.id} value={d.departamento}>
+                                {d.departamento}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage className="text-[10px] font-bold" />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="municipality"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Municipio <RequiredDot />
+                        </FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          disabled={!selectedDepto || isFieldDisabled()}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 transition-all font-medium text-sm">
+                              <SelectValue placeholder="Muni" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="rounded-xl border-gray-100 shadow-xl max-h-[250px]">
+                            {departamento
+                              .find((d) => d.departamento === selectedDepto)
+                              ?.ciudades.map((ciudad) => (
+                                <SelectItem key={ciudad} value={ciudad}>
+                                  {ciudad}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage className="text-[10px] font-bold" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Dirección Exacta <RequiredDot />
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: Calle 123 #45-67..."
+                          className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm"
+                          disabled={isFieldDisabled()}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[10px] font-bold" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* DOCUMENTATION SECTION */}
+          <div className="space-y-6">
+            {sectionHeader(FileText, "Documentación Soporte")}
+
+            <FormField
+              control={form.control}
+              name="photo_document"
+              render={({ field }) => (
+                <FormItem className="space-y-4">
+                  <FormControl>
+                    <div className="group relative">
+                      <label
+                        htmlFor="photo_document"
+                        className={`flex items-center gap-5 border border-dashed rounded-xl p-5 transition-all duration-300 ${
+                          isFieldDisabled()
+                            ? "bg-slate-50 border-slate-200 cursor-not-allowed"
+                            : "bg-slate-50/50 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30 cursor-pointer"
+                        }`}
+                      >
+                        <div className="p-3 bg-white rounded-lg shadow-2xs text-blue-500 border border-slate-100 group-hover:scale-105 transition-transform">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-xs font-bold text-slate-700 mb-0.5 uppercase tracking-tight">
+                            {field.value && field.value.length > 0
+                              ? "Añadir más archivos"
+                              : "Cargar Documento de Identidad"}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            Formatos permitidos: JPG, PNG, PDF. Imagen por ambas
+                            caras.
+                          </p>
+                        </div>
+
+                        <Input
+                          id="photo_document"
+                          type="file"
+                          className="hidden"
+                          multiple
+                          accept="image/*,application/pdf"
+                          disabled={isFieldDisabled()}
+                          onChange={(e) => {
+                            const files = e.target.files
+                              ? Array.from(e.target.files)
+                              : [];
+                            field.onChange(files);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </FormControl>
+
+                  {/* File List */}
+                  {field.value &&
+                    Array.isArray(field.value) &&
+                    field.value.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {field.value.map((file: File, idx: number) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-3 p-2.5 bg-white border border-slate-200 rounded-lg shadow-3xs group hover:border-blue-200 transition-colors"
+                          >
+                            <div className="p-2 bg-blue-50 rounded text-blue-600">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-bold text-slate-800 truncate">
+                                {file.name}
+                              </p>
+                              <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">
+                                {(file.size / 1024).toFixed(1)} KB
+                              </p>
+                            </div>
+                            {!isFieldDisabled() && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newFiles = [...field.value];
+                                  newFiles.splice(idx, 1);
+                                  field.onChange(newFiles);
+                                }}
+                                className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                  <FormMessage className="text-[10px] font-bold" />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* ACTIONS */}
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 mt-4 border-t border-slate-100">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="h-10 px-6 rounded-lg text-slate-500 font-bold text-[11px] uppercase tracking-widest hover:bg-slate-100 transition-all"
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            type="submit"
+            disabled={isSubmitting || !isValid}
+            className={`h-10 px-8 rounded-lg font-bold text-[11px] uppercase tracking-widest transition-all shadow-sm ${
+              mode === "create"
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-slate-900 hover:bg-slate-800 text-white"
+            }`}
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Enviando...
+              </span>
+            ) : mode === "create" ? (
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Crear Cliente
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Guardar Cambios
+              </span>
+            )}
+          </Button>
         </div>
       </form>
     </Form>

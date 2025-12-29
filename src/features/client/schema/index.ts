@@ -33,7 +33,9 @@ export const customerSchema = z.object({
       (files) =>
         files instanceof FileList ||
         files instanceof File ||
-        files === undefined,
+        Array.isArray(files) ||
+        files === undefined ||
+        files === null,
       { message: "Debe seleccionar un archivo válido" }
     )
     .optional(),

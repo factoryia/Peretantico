@@ -35,6 +35,8 @@ export default function CustomerManagementPage() {
   const customers = data?.customers ?? [];
   const totalPages = data?.totalPages ?? 1;
 
+  console.log("CLIENTS: ", customers);
+
   // --- Acciones ---
   const handleCreateClick = () => {
     setCurrentCustomer(undefined);

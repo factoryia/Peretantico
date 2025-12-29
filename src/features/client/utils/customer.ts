@@ -2,6 +2,7 @@
 import api from "@/api"; // Assuming this is an Axios instance or similar configured for your API base URL
 import type {
   ProfileApiResponse,
+  ProfileDataItem,
   Customer,
   CustomerFormValues,
 } from "../types";
@@ -63,18 +64,20 @@ export const fetchProfiles = async (
       params,
     });
 
-    const customers: Customer[] = response.data.data.map((item:any) => ({
-      id: item.id,
-      fullName: item.attributes.field_full_name,
-      documentNumber: item.attributes.field_document_number,
-      email: item.attributes.field_mail,
-      phoneNumber: item.attributes.field_phone_number,
-      documentType: item.relationships.field_type_document?.data?.id ?? "",
-      department: item.attributes.field_department || "",
-      municipality: item.attributes.field_municipality_residence || "",
-      address: item.attributes.field_address || "",
-      photo_document: null,
-    }));
+    const customers: Customer[] = response.data.data.map(
+      (item: ProfileDataItem) => ({
+        id: item.id,
+        fullName: item.attributes.field_full_name,
+        documentNumber: item.attributes.field_document_number,
+        email: item.attributes.field_mail,
+        phoneNumber: item.attributes.field_phone_number,
+        documentType: item.relationships.field_type_document?.data?.id ?? "",
+        department: item.attributes.field_department || "",
+        municipality: item.attributes.field_municipality_residence || "",
+        address: item.attributes.field_address || "",
+        photo_document: null,
+      })
+    );
 
     const totalItems = response.data.meta?.count ?? customers.length;
     const totalPages = Math.ceil(totalItems / limit);
@@ -96,6 +99,9 @@ export async function createProfile(data: CustomerFormValues) {
         field_document_number: data.documentNumber,
         field_phone_number: data.phoneNumber,
         field_mail: data.email,
+        field_department: data.department,
+        field_municipality_residence: data.municipality,
+        field_address: data.address,
         status: true, // always send status
       },
       relationships: {
@@ -126,6 +132,9 @@ export async function updateProfile(id: string, data: CustomerFormValues) {
         field_document_number: data.documentNumber,
         field_phone_number: data.phoneNumber,
         field_mail: data.email ?? null, // ensure email is sent as empty string if null
+        field_department: data.department,
+        field_municipality_residence: data.municipality,
+        field_address: data.address,
         status: true, // always send status
       },
       relationships: {
