@@ -1,6 +1,7 @@
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, Search, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useState, useTransition } from "react";
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
 import { useDistributorsQuery } from "../hooks/distributors";
@@ -9,9 +10,7 @@ import {
   useDocumentTypesQuery,
   useTransportationTypesQuery,
 } from "../hooks/taxonomies";
-import { FilterSelect } from "@/components/common/filter-select";
 import { DistributorCard } from "../components/distributor-card";
-import { SearchInput } from "@/components/common/search-input";
 import { DistributorDetailDialog } from "../components/distributor-detail-dialog";
 import type { Distributor } from "../types/distributors";
 import { DistributorDialog } from "../components/distributor-dialog";
@@ -22,6 +21,13 @@ import { deleteDistributor } from "../utils/distributors";
 import { DISTRIBUTORS_QUERY_KEY } from "../constants/query-keys";
 import type { AxiosError } from "axios";
 import { DistributorCardSkeleton } from "../components/distributor-card-skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface DistributorFilters {
   coverageAreaId: string;
@@ -62,28 +68,27 @@ export function Distributors() {
     setFilters((prev) => ({
       ...prev,
       ...newFilters,
-      page: newFilters.page !== undefined ? newFilters.page : 1, // Reset to page 1 on filter change
+      page: newFilters.page !== undefined ? newFilters.page : 1,
     }));
   };
 
-  // Fetch coverage areas
-  const {
-    data: coverageAreaOptions = [{ id: "all", name: "Todos" }],
-    isLoading: isLoadingCoverageAreas,
-  } = useCoverageAreasQuery();
+  const clearFilters = () => {
+    setFilters({
+      coverageAreaId: "all",
+      status: "all",
+      fullName: "",
+      documentNumber: "",
+      page: 1,
+      limit: 10,
+    });
+  };
 
-  // Fetch document types and transportation types
-  const { data: documentTypesOptions = [{ id: "all", name: "Todos" }] } =
-    useDocumentTypesQuery();
+  const { data: coverageAreaOptions = [] } = useCoverageAreasQuery();
 
-  const { data: transportationTypes = [{ id: "all", name: "Todos" }] } =
-    useTransportationTypesQuery();
+  const { data: documentTypesOptions = [] } = useDocumentTypesQuery();
+  const { data: transportationTypes = [] } = useTransportationTypesQuery();
 
-  const {
-    data,
-    isLoading: isLoadingDistributors,
-    error,
-  } = useDistributorsQuery({
+  const { data, isLoading: isLoadingDistributors } = useDistributorsQuery({
     coverageAreaId:
       filters.coverageAreaId !== "all" ? filters.coverageAreaId : undefined,
     status: filters.status !== "all" ? filters.status === "true" : undefined,
@@ -102,28 +107,26 @@ export function Distributors() {
     startTransition(async () => {
       try {
         await deleteDistributor(distributorId);
-
-        toast.success("Distribuidor eliminado", {
-          description: "El distribuidor fue eliminado correctamente.",
-        });
-
+        toast.success("Distribuidor eliminado");
         await queryClient.invalidateQueries({
           queryKey: [DISTRIBUTORS_QUERY_KEY],
           exact: false,
         });
       } catch (error) {
         const err = error as AxiosError<{ message: string }>;
-        toast.error("Error al eliminar el distribuidor", {
-          description:
-            err.response?.data?.message ??
-            "Ocurrió un error inesperado al eliminar el distribuidor.",
-        });
+        toast.error(err.response?.data?.message ?? "Error al eliminar");
       } finally {
         setDistributorId("");
         setIsAlertOpen(false);
       }
     });
   };
+
+  const hasActiveFilters =
+    filters.fullName ||
+    filters.documentNumber ||
+    filters.coverageAreaId !== "all" ||
+    filters.status !== "all";
 
   return (
     <>
@@ -137,112 +140,196 @@ export function Distributors() {
           setIsAlertOpen(open);
         }}
       />
-      <div className="h-dvh ">
-        <SidebarHeader title="Configuración" />
-        <div className="h-full overflow-y-auto p-4 pb-20 md:px-6">
-          {isLoadingDistributors && (
-            <div className="text-center">Cargando...</div>
-          )}
-          {error && (
-            <div className="text-center text-red-500">
-              Error: {error.message}
-            </div>
-          )}
 
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="h-dvh">
+        <SidebarHeader title="Configuración" />
+        <div className="h-full overflow-y-auto pb-20">
+          <div className="space-y-6 font-['Poppins',sans-serif] p-4 md:p-6">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-blue-600" />
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 rounded-lg">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
                 <div>
-                  <CardTitle className="text-lg">Repartidores</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {data?.distributors.length} repartidor(es) encontrado(s)
+                  <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+                    Repartidores
+                  </h2>
+                  <p className="text-sm text-gray-500 font-medium">
+                    {isLoadingDistributors
+                      ? "Cargando..."
+                      : `${
+                          data?.distributors?.length || 0
+                        } repartidor(es) gestionados`}
                   </p>
                 </div>
+              </div>
+
+              <div className="flex gap-2 w-full sm:w-auto">
+                {hasActiveFilters && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-10 bg-white hover:bg-gray-50 border-gray-200 text-gray-700 px-4 rounded-lg font-semibold"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Limpiar
+                  </Button>
+                )}
                 <Button
                   onClick={() => setIsDialogOpen(true)}
-                  className="w-full sm:w-auto"
+                  size="sm"
+                  className="h-10 bg-blue-600 hover:bg-blue-700 text-white shadow-sm px-4 rounded-lg font-semibold w-full sm:w-auto"
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Nuevo Repartidor
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-                <SearchInput
-                  placeholder="Buscar categorías..."
-                  value={filters.fullName}
-                  onValueChange={(value) => updateFilters({ fullName: value })}
-                  className="md:min-w-full"
-                />
-                <SearchInput
-                  placeholder="Buscar por documento..."
-                  value={filters.documentNumber}
-                  onValueChange={(value) =>
-                    updateFilters({ documentNumber: value })
-                  }
-                  className="md:min-w-full"
-                />
+            </div>
 
-                <FilterSelect
-                  placeholder="Zona de cobertura"
-                  options={[
-                    { id: "all", name: "Todas las zonas" },
-                    ...coverageAreaOptions,
-                  ]}
-                  value={filters.coverageAreaId}
-                  onValueChange={(value) =>
-                    updateFilters({ coverageAreaId: value })
-                  }
-                  className={isLoadingCoverageAreas ? "opacity-50" : ""}
-                  disabled={isLoadingCoverageAreas}
-                />
-                <FilterSelect
-                  placeholder="Estado"
-                  options={STATUS_OPTIONS}
-                  value={filters.status}
-                  onValueChange={(value) => updateFilters({ status: value })}
-                />
+            {/* Filters Section */}
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Filter className="h-4 w-4 text-blue-500" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  Filtrar Búsqueda
+                </span>
               </div>
 
-              {/* Grid de Cards */}
-              {isLoadingDistributors ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {Array.from({ length: 8 }).map((_, index) => (
-                    <DistributorCardSkeleton key={index} />
-                  ))}
-                </div>
-              ) : data?.distributors && data.distributors.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-                  {data.distributors.map((distributor) => (
-                    <DistributorCard
-                      key={distributor.id}
-                      distributor={distributor}
-                      onEdit={(distributor) => {
-                        setSelectedDistributor(distributor);
-                        setIsDialogOpen(true);
-                      }}
-                      onViewDetail={handleViewDetail}
-                      onDelete={(distributor) => {
-                        setDistributorId(distributor.id);
-                        setIsAlertOpen(true);
-                      }}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    NOMBRE COMPLETO
+                  </Label>
+                  <div className="relative group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      placeholder="Ej: Juan Pérez..."
+                      value={filters.fullName}
+                      onChange={(e) =>
+                        updateFilters({ fullName: e.target.value })
+                      }
+                      className="pl-10 h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                     />
-                  ))}
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-semibold">
-                    No se encontraron repartidores
-                  </h3>
-                  <p className="text-muted-foreground">
-                    No hay repartidores que coincidan con los filtros aplicados.
-                  </p>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    DOCUMENTO
+                  </Label>
+                  <div className="relative group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      placeholder="Número de identificación..."
+                      value={filters.documentNumber}
+                      onChange={(e) =>
+                        updateFilters({ documentNumber: e.target.value })
+                      }
+                      className="pl-10 h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                    />
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    COBERTURA
+                  </Label>
+                  <Select
+                    value={filters.coverageAreaId}
+                    onValueChange={(value) =>
+                      updateFilters({ coverageAreaId: value })
+                    }
+                  >
+                    <SelectTrigger className="h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 transition-all">
+                      <SelectValue placeholder="Todas las zonas" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                      <SelectItem value="all">Todas las zonas</SelectItem>
+                      {coverageAreaOptions.map((area) => (
+                        <SelectItem key={area.id} value={area.id}>
+                          {area.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    ESTADO
+                  </Label>
+                  <Select
+                    value={filters.status}
+                    onValueChange={(value) => updateFilters({ status: value })}
+                  >
+                    <SelectTrigger className="h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 transition-all">
+                      <SelectValue placeholder="Todos los estados" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                      {STATUS_OPTIONS.map((status) => (
+                        <SelectItem key={status.id} value={status.id}>
+                          {status.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Content Section */}
+            {isLoadingDistributors ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <DistributorCardSkeleton key={index} />
+                ))}
+              </div>
+            ) : data?.distributors && data.distributors.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
+                {data.distributors.map((distributor, index) => (
+                  <DistributorCard
+                    key={distributor.id}
+                    distributor={distributor}
+                    index={index}
+                    onEdit={(distributor) => {
+                      setSelectedDistributor(distributor);
+                      setIsDialogOpen(true);
+                    }}
+                    onViewDetail={handleViewDetail}
+                    onDelete={(distributor) => {
+                      setDistributorId(distributor.id);
+                      setIsAlertOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-200">
+                <div className="p-4 bg-gray-50 rounded-full w-fit mx-auto mb-4">
+                  <Users className="h-12 w-12 text-gray-300" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  No se encontraron repartidores
+                </h3>
+                <p className="text-gray-500 max-w-xs mx-auto mt-2">
+                  No hay repartidores registrados que coincidan con los
+                  criterios de búsqueda actuales.
+                </p>
+                {hasActiveFilters && (
+                  <Button
+                    variant="link"
+                    onClick={clearFilters}
+                    className="mt-4 text-blue-600 font-bold"
+                  >
+                    Limpiar todos los filtros
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
