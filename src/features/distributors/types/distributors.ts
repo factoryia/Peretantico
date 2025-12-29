@@ -7,8 +7,8 @@ export interface Distributor {
   currentAvailability: boolean;
   documentNumber: string;
   entryDate: string;
-  vehicleId: string;
-  email: string;
+  vehicleId: string | null;
+  email: string | null;
   observations: string | null;
   phoneNumber: string;
   documentType: TaxonomyTerm;

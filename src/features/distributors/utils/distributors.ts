@@ -5,6 +5,7 @@ import type {
   FetchDistributorsParams,
 } from "../types/distributors";
 import api from "@/api";
+import { CSRF_TOKEN } from "@/features/auth/constants";
 import type { DistributorFormValues } from "../schemas";
 
 export const fetchDistributors = async ({
@@ -83,9 +84,9 @@ export const fetchDistributors = async ({
         currentAvailability: item.attributes.field_current_availability,
         documentNumber: item.attributes.field_document_number,
         entryDate: item.attributes.field_entry_date,
-        vehicleId: item.attributes.field_id_vehicle,
-        email: item.attributes.field_mail,
-        observations: item.attributes.field_observations,
+        vehicleId: item.attributes.field_id_vehicle ?? null,
+        email: item.attributes.field_mail ?? null,
+        observations: item.attributes.field_observations ?? null,
         phoneNumber: item.attributes.field_phone_number,
         documentType: {
           id: item.relationships.field_type_document.data.id,
@@ -123,11 +124,11 @@ export const createDistributor = async (
         title: values.title,
         field_document_number: values.documentNumber,
         field_phone_number: values.phoneNumber,
-        field_mail: values.email,
-        field_id_vehicle: values.vehicleId,
+        field_mail: values.email || null,
+        field_id_vehicle: values.vehicleId || null,
         field_current_availability: values.currentAvailability,
         field_entry_date: values.entryDate,
-        field_observations: values.observations,
+        field_observations: values.observations || null,
         status: values.status,
       },
       relationships: {
@@ -153,11 +154,23 @@ export const createDistributor = async (
     },
   };
 
-  await api.post("/api/node/distributor", payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-    },
-  });
+  try {
+    const csrfToken = localStorage.getItem(CSRF_TOKEN);
+    const res = await api.post("/api/node/distributor", payload, {
+      headers: {
+        "Content-Type": "application/vnd.api+json",
+        Accept: "application/vnd.api+json",
+        "X-Csrf-Token": csrfToken || "",
+      },
+    });
+    console.log("RES: ", res);
+  } catch (error: any) {
+    if (error.response) {
+      console.error("DEBUG - API Error Data:", error.response.data);
+      console.error("DEBUG - API Error Status:", error.response.status);
+    }
+    throw error;
+  }
 };
 
 export const updateDistributor = async (
@@ -172,11 +185,11 @@ export const updateDistributor = async (
         title: values.title,
         field_document_number: values.documentNumber,
         field_phone_number: values.phoneNumber,
-        field_mail: values.email,
-        field_id_vehicle: values.vehicleId,
+        field_mail: values.email || null,
+        field_id_vehicle: values.vehicleId || null,
         field_current_availability: values.currentAvailability,
         field_entry_date: values.entryDate,
-        field_observations: values.observations,
+        field_observations: values.observations || null,
         status: values.status,
       },
       relationships: {
@@ -202,11 +215,22 @@ export const updateDistributor = async (
     },
   };
 
-  await api.patch(`/api/node/distributor/${distributorId}`, payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-    },
-  });
+  try {
+    const csrfToken = localStorage.getItem(CSRF_TOKEN);
+    await api.patch(`/api/node/distributor/${distributorId}`, payload, {
+      headers: {
+        "Content-Type": "application/vnd.api+json",
+        Accept: "application/vnd.api+json",
+        "X-Csrf-Token": csrfToken || "",
+      },
+    });
+  } catch (error: any) {
+    if (error.response) {
+      console.error("DEBUG - PATCH API Error Data:", error.response.data);
+      console.error("DEBUG - PATCH API Error Status:", error.response.status);
+    }
+    throw error;
+  }
 };
 
 export const deleteDistributor = async (
