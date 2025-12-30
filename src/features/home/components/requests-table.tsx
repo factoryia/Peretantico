@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Trash2, AlertCircle, Edit, Truck } from "lucide-react";
+import { Eye, Trash2, AlertCircle, Edit } from "lucide-react";
 import {
   assignDistributorToRequest,
   assignApplicantToRequest,
@@ -165,21 +165,6 @@ export function RequestsTable({
       setTimeout(() => {
         setSelectedRequest(request);
         setModals((prev) => ({ ...prev, detail: true }));
-      }, 0);
-    },
-    [clearAllModalStates]
-  );
-
-  const handleAssignDistributor = useCallback(
-    (request: CompleteRequest) => {
-      clearAllModalStates();
-      setTimeout(() => {
-        setAssignmentData({
-          requestId: request.id,
-          requestNumber: request.field_application_number || "Sin número",
-          currentDistributor: request.distributor?.id,
-        });
-        setModals((prev) => ({ ...prev, assignDistributor: true }));
       }, 0);
     },
     [clearAllModalStates]
@@ -407,16 +392,6 @@ export function RequestsTable({
                         <Edit className="h-4 w-4" />
                       </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleAssignDistributor(requestData)}
-                        className="h-8 w-8 text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50"
-                        title="Asignar repartidor"
-                        disabled={isFetching}
-                      >
-                        <Truck className="h-4 w-4" />
-                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

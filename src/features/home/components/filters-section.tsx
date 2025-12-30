@@ -8,6 +8,7 @@ import type { RequestFilters } from "../types/request";
 import {
   useSubservicesQuery,
   useDistributorsQuery,
+  useApplicationStatusesQuery,
 } from "../hooks/use-request-query";
 import {
   Select,
@@ -32,6 +33,8 @@ export function FiltersSection({
     useSubservicesQuery();
   const { data: distributorsData, isLoading: isLoadingDistributors } =
     useDistributorsQuery();
+  const { data: statusesData, isLoading: isLoadingStatuses } =
+    useApplicationStatusesQuery();
 
   const handleFilterChange = (key: string, value: string) => {
     const newFilters = { ...filters, [key]: value };
@@ -52,16 +55,6 @@ export function FiltersSection({
   const hasActiveFilters = Object.values(filters).some(
     (value) => value !== "" && value !== "all"
   );
-
-  // Estados predefinidos para los filtros
-  const statusOptions = [
-    { value: "all", label: "Todos" },
-    { value: "pendiente", label: "Pendiente" },
-    { value: "en_proceso", label: "En Proceso" },
-    { value: "asignada", label: "Asignada" },
-    { value: "completada", label: "Completada" },
-    { value: "cancelada", label: "Cancelada" },
-  ];
 
   return (
     <div className="space-y-4">
@@ -116,6 +109,7 @@ export function FiltersSection({
             <Select
               value={filters.status || "all"}
               onValueChange={(value) => handleFilterChange("status", value)}
+              disabled={isLoadingStatuses}
             >
               <SelectTrigger
                 id="status"
@@ -124,9 +118,12 @@ export function FiltersSection({
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                {statusOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                <SelectItem value="all">
+                  {isLoadingStatuses ? "Cargando..." : "Todos"}
+                </SelectItem>
+                {statusesData?.data?.map((status: any) => (
+                  <SelectItem key={status.id} value={status.id}>
+                    {status.attributes?.name || "Sin nombre"}
                   </SelectItem>
                 ))}
               </SelectContent>

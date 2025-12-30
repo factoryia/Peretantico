@@ -288,7 +288,7 @@ export const fetchCompleteRequests = async (
     };
 
     if (status && status !== "all")
-      params["filter[field_application_statuses.name]"] = status;
+      params["filter[field_application_statuses.id]"] = status;
     else params["filter[status]"] = "1";
 
     if (subservice && subservice !== "all")

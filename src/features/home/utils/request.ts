@@ -78,7 +78,7 @@ export const fetchRequests = async (
 
     // Aplicar filtros
     if (status && status !== "all") {
-      params["filter[field_application_statuses.name]"] = status;
+      params["filter[field_application_statuses.id]"] = status;
     }
 
     if (subservice && subservice !== "all") {
