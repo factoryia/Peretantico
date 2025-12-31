@@ -1,6 +1,6 @@
-import { Church, FilePlus, FileText, FileUser } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ServiceType } from "@/types/global";
+import { Church, Droplets, FilePlus, FileText, FileUser } from "lucide-react";
 
 interface RequestHeaderProps {
   requestId: string;
@@ -32,10 +32,10 @@ export function RequestHeader({
         return "Partida de Defunción";
       case "node--marriage_certificate_request":
         return "Solicitud Partida Matrimonio";
-      // case "node--civil_registry_request":
-      //   return "Solicitud Registro Civil";
       case "node--request_medication":
         return `Solicitud #${requestId}`;
+      case "node--water_sample_fridge":
+        return `Cert. Entrega Agua`;
       default:
         return "Solicitud";
     }
@@ -44,6 +44,8 @@ export function RequestHeader({
   const renderSubtitle = () => {
     if (type === "node--request_medication") {
       return `Creada el: ${createdDate}`;
+    } else if (type === "node--water_sample_fridge") {
+      return `Ticket: #${requestId}`;
     } else {
       return `ID Solicitud: #${requestId}`;
     }
@@ -59,6 +61,8 @@ export function RequestHeader({
         return <Church className="size-6" />;
       case "node--request_medication":
         return <FilePlus className="size-6" />;
+      case "node--water_sample_fridge":
+        return <Droplets className="size-6" />;
       default:
         return <FileText className="size-6" />;
     }
@@ -84,30 +88,8 @@ export function RequestHeader({
           statusStyles[statusVariant]
         )}
       >
-        Estado: {status}
+        {status}
       </span>
     </div>
-    // <div className="bg-white p-5 rounded-xl shadow-sm mb-6 flex flex-col items-center justify-center flex-wrap gap-3">
-    //   <div>
-    //     <h1 className="text-xl font-semibold text-blue-600 flex items-center gap-2 m-0">
-    //       {/* <FileText className="w-6 h-6" /> */}
-    //       {renderIcon()}
-    //       {/* Solicitud #{requestId} */}
-    //       {renderTitle()}
-    //     </h1>
-    //     <p className="text-[13.6px] text-gray-500 mb-0 ml-8 mt-1.5 text-center">
-    //       {/* Creada el: {createdDate} */}
-    //       {renderSubtitle()}
-    //     </p>
-    //   </div>
-    //   <span
-    //     className={cn(
-    //       "px-3 py-1.5 rounded-full text-xs font-medium",
-    //       statusStyles[statusVariant]
-    //     )}
-    //   >
-    //     Estado: {status}
-    //   </span>
-    // </div>
   );
 }

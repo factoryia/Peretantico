@@ -1,7 +1,10 @@
 import { ClipboardList, File, FileUser, Info } from "lucide-react";
 import { DataPoint } from "./data-point";
 import type { ServiceType } from "@/types/global";
-import type { CompleteRequest } from "../utils/complete-request";
+import type {
+  CompleteRequest,
+  WaterSampleFridgeInfoService,
+} from "../utils/complete-request";
 import { CivilRegistryInfo } from "./civil-registry-info";
 import { DeathCertificateInfo } from "./death-certificate-info";
 import { MarriageDepartureInfo } from "./marriage-departure-info";
@@ -33,6 +36,8 @@ export function RequestDetailCard({
         return "Detalle del Requerimiento";
       case "node--marriage_certificate_request":
         return "Información del Trámite";
+      case "node--water_sample_fridge":
+        return "Datos del Servicio";
       default:
         return "Detalle de la Solicitud";
     }
@@ -48,10 +53,16 @@ export function RequestDetailCard({
         return <Info className="w-5 h-5 text-blue-600" />;
       case "node--marriage_certificate_request":
         return <File className="w-5 h-5 text-blue-600" />;
+      case "node--water_sample_fridge":
+        return <ClipboardList className="w-5 h-5 text-blue-600" />;
       default:
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
     }
   };
+
+  const waterInfo = request?.infoService as
+    | WaterSampleFridgeInfoService
+    | undefined;
 
   return (
     <div className="bg-white overflow-hidden h-full px-6 py-7 border-b">
@@ -101,6 +112,32 @@ export function RequestDetailCard({
 
         {type === "node--marriage_certificate_request" && (
           <MarriageDepartureInfo request={request} />
+        )}
+
+        {type === "node--water_sample_fridge" && waterInfo && (
+          <>
+            <DataPoint
+              label="Modalidad de Entrega"
+              value={waterInfo.waterService || "Sin especificar"}
+              highlight
+              className="uppercase"
+            />
+            <DataPoint
+              label="¿Requiere Sello y Radicado?"
+              value={waterInfo.requiresRadicado ? "Sí" : "No"}
+            />
+            {observations && (
+              <div className="mt-3 bg-gray-50 p-2.5 rounded-lg">
+                <DataPoint
+                  label="Observaciones"
+                  value={
+                    <span className="text-sm italic">"{observations}"</span>
+                  }
+                  noBorder
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

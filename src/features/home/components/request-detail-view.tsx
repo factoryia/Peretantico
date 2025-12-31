@@ -13,7 +13,11 @@ import {
   RequestManagementCard,
   type Distributor,
 } from "./request-management-card";
-import type { CompleteRequest } from "../utils/complete-request";
+import { WaterSampleFridgeInfo } from "./water-sample-info";
+import type {
+  CompleteRequest,
+  WaterSampleFridgeInfoService,
+} from "../utils/complete-request";
 import { useEffect, useState } from "react";
 import api from "@/api";
 import { toast } from "sonner";
@@ -181,9 +185,47 @@ export function RequestDetailViewModal({
           alt: "Autorización",
         });
       }
+    } else if (info.type === "node--water_sample_fridge") {
+      info.files?.forEach((file: { uri: string; title: string }) => {
+        attachments.push({
+          url: file.uri,
+          label: file.title || "Documento",
+          alt: "Archivo adjunto",
+        });
+      });
     }
 
     return attachments;
+  };
+
+  const getFullName = () => {
+    if (request.infoService?.type === "node--water_sample_fridge") {
+      return (
+        (request.infoService as WaterSampleFridgeInfoService).senderFullName ||
+        "Sin nombre"
+      );
+    }
+    return request.applicant?.name || "Sin nombre";
+  };
+
+  const getPhoneNumber = () => {
+    if (request.infoService?.type === "node--water_sample_fridge") {
+      return (
+        (request.infoService as WaterSampleFridgeInfoService)
+          .senderContactPhone || "Sin teléfono"
+      );
+    }
+    return request.applicant?.phoneNumber || "Sin teléfono";
+  };
+
+  const getAddress = () => {
+    if (request.infoService?.type === "node--water_sample_fridge") {
+      return (
+        (request.infoService as WaterSampleFridgeInfoService).senderAddress ||
+        "Sin dirección"
+      );
+    }
+    return request.applicant?.address || "Sin dirección";
   };
 
   return (
@@ -208,15 +250,19 @@ export function RequestDetailViewModal({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))]">
             <PatientDataCard
               type={request.infoService?.type || "Sin tipo"}
-              fullName={request.applicant?.name || "Sin nombre"}
+              fullName={getFullName()}
               documentType={request.applicant?.documentType?.name || "Sin tipo"}
               documentNumber={
                 request.applicant?.documentNumber || "Sin documento"
               }
-              phone={request.applicant?.phoneNumber || "Sin teléfono"}
-              address={request.applicant?.address || "Sin dirección"}
+              phone={getPhoneNumber()}
+              address={getAddress()}
               municipality={"Sin municipio"} // CompleteRequest doesn't have municipality yet, keep placeholder or add if needed
             />
+
+            {request.infoService?.type === "node--water_sample_fridge" && (
+              <WaterSampleFridgeInfo request={request} />
+            )}
 
             <RequestDetailCard
               type={request.infoService?.type || "Sin tipo"}
@@ -228,6 +274,9 @@ export function RequestDetailViewModal({
                 request.field_observations ||
                 (request.infoService?.type === "node--request_medication"
                   ? request.infoService.observations
+                  : request.infoService?.type === "node--water_sample_fridge"
+                  ? (request.infoService as WaterSampleFridgeInfoService)
+                      .observations
                   : undefined) ||
                 "Sin observaciones"
               }

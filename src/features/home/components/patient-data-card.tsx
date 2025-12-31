@@ -19,7 +19,7 @@ export function PatientDataCard({
   documentNumber,
   phone,
   address,
-  municipality,
+  // municipality,
   type,
 }: PatientDataCardProps) {
   const renderTitle = () => {
@@ -97,7 +97,8 @@ export function PatientDataCard({
               ? "Dirección de Entrega"
               : "Dirección de Entrega y Municipio"
           }
-          value={`${address}, ${municipality}`}
+          value={`${address}`}
+          // value={`${address}, ${municipality}`}
           noBorder
         />
       </div>

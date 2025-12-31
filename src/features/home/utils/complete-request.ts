@@ -110,11 +110,36 @@ export interface MarriageCertificateInfoService extends BaseInfoService {
   marriageType?: string;
 }
 
+export interface WaterSampleFridgeInfoService extends BaseInfoService {
+  type: "node--water_sample_fridge";
+  birthDate?: string;
+  currentAvailability?: boolean;
+  deliveryAddress?: string;
+  documentNumber?: string;
+  hasOriginalDeathCertificate?: boolean;
+  labName?: string;
+  labRegistrationCode?: string;
+  observations?: string;
+  packageContentDescription?: string;
+  files?: Array<{ uri: string; title: string; options: any[] }>;
+  pickupAddress?: string;
+  recipientAddress?: string;
+  recipientContactPhone?: string;
+  recipientFullName?: string;
+  recipientIdNumber?: string;
+  requiresRadicado?: boolean;
+  senderAddress?: string;
+  senderContactPhone?: string;
+  senderFullName?: string;
+  waterService?: string;
+}
+
 export type InfoService =
   | MedicationInfoService
   | CivilRegistryInfoService
   | DeathCertificateInfoService
   | MarriageCertificateInfoService
+  | WaterSampleFridgeInfoService
   | (BaseInfoService & { type: string; [key: string]: any });
 
 export interface CompleteRequestFilters {
@@ -243,6 +268,10 @@ const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
     "node--death_certificate_request": {
       endpoint: "/api/node/death_certificate_request",
     },
+    "node--water_sample_fridge": {
+      endpoint: "/api/node/water_sample_fridge",
+      includes: "field_water_service",
+    },
   };
 
   const infoFetches = Object.entries(infoServicesByType).map(([type, ids]) => {
@@ -279,7 +308,7 @@ export const fetchCompleteRequests = async (
 
     const params: Record<string, string | number> = {
       include:
-        "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_payment_status,field_subservice",
+        "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_info_service.field_water_service,field_payment_status,field_subservice",
       sort: "created",
       "page[limit]": limit,
       "page[offset]": offset,
@@ -453,6 +482,36 @@ export const transformCompleteRequests = (
           marriageType: getAttr(
             infoRels?.field_marriage_type?.data?.id,
             "taxonomy_term--marriage_certificate_type",
+            "name"
+          ),
+        };
+      } else if (type === "node--water_sample_fridge") {
+        infoServiceData = {
+          ...baseInfo,
+          type,
+          birthDate: infoAttrs.field_birth_date,
+          currentAvailability: infoAttrs.field_current_availability,
+          deliveryAddress: infoAttrs.field_delivery_address,
+          documentNumber: infoAttrs.field_document_number,
+          hasOriginalDeathCertificate:
+            infoAttrs.field_has_original_death_certifi,
+          labName: infoAttrs.field_lab_name,
+          labRegistrationCode: infoAttrs.field_lab_registration_code,
+          observations: infoAttrs.field_observations,
+          packageContentDescription: infoAttrs.field_package_content_descriptio,
+          files: infoAttrs.field_path || [],
+          pickupAddress: infoAttrs.field_pickup_address,
+          recipientAddress: infoAttrs.field_recipient_address,
+          recipientContactPhone: infoAttrs.field_recipient_contact_phone,
+          recipientFullName: infoAttrs.field_recipient_full_name,
+          recipientIdNumber: infoAttrs.field_recipient_id_number,
+          requiresRadicado: infoAttrs.field_requires_radicado,
+          senderAddress: infoAttrs.field_sender_address,
+          senderContactPhone: infoAttrs.field_sender_contact_phone,
+          senderFullName: infoAttrs.field_sender_full_name,
+          waterService: getAttr(
+            infoRels?.field_water_service?.data?.id,
+            "taxonomy_term--water_service",
             "name"
           ),
         };

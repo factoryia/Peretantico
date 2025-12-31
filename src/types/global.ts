@@ -17,4 +17,5 @@ export type ServiceType =
   | "node--civil_registry_request"
   | "node--death_certificate_request"
   | "node--marriage_certificate_request"
-  | "node--request_medication";
+  | "node--request_medication"
+  | "node--water_sample_fridge";
