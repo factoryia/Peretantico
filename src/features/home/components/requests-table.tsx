@@ -277,7 +277,7 @@ export function RequestsTable({
                 Cliente
               </TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
-                Subservicio
+                Servicio
               </TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-wider text-muted-foreground py-4 px-6">
                 Repartidor
@@ -318,7 +318,29 @@ export function RequestsTable({
                 return "nuevo";
               };
 
+              const getServiceTitle = (type: string | undefined) => {
+                switch (type) {
+                  case "node--civil_registry_request":
+                    return "Solicitud Registro Civil";
+                  case "node--death_certificate_request":
+                    return "Partida de Defunción";
+                  case "node--marriage_certificate_request":
+                    return "Solicitud Partida Matrimonio";
+                  case "node--request_medication":
+                    return "Solicitud de Medicamentos";
+                  case "node--water_sample_fridge":
+                    return "Cert. Entrega Agua";
+                  case "node--property_certification":
+                    return "Cert. Propiedad";
+                  case "node--medical_bills":
+                    return "Solicitud Recibo Médico";
+                  default:
+                    return requestData.subservice?.name || "Solicitud";
+                }
+              };
+
               const variant = getStatusVariant(statusName);
+              const serviceType = requestData.infoService?.type;
 
               const statusStyles = {
                 nuevo:
@@ -348,9 +370,7 @@ export function RequestsTable({
                   </TableCell>
                   <TableCell className="py-4 px-6">
                     <span className="text-muted-foreground text-sm">
-                      {requestData.subservice
-                        ? requestData.subservice?.name
-                        : "Sin asignar"}
+                      {getServiceTitle(serviceType)}
                     </span>
                   </TableCell>
                   <TableCell className="py-4 px-6">

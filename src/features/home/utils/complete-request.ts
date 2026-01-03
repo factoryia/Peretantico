@@ -607,29 +607,51 @@ export const transformCompleteRequests = (
             id: rels.field_info_service.data.id,
           }
         : undefined,
-      applicant: applicant
-        ? {
-            id: applicant.id,
-            name: (applicant.attributes.field_full_name ||
-              applicant.attributes.title ||
-              "Unknown") as string,
-            documentNumber: applicant.attributes
-              .field_document_number as string,
-            phoneNumber: applicant.attributes.field_phone_number as string,
-            address: applicant.attributes.field_address as string,
-            documentType: docTypeId
-              ? {
-                  id: docTypeId,
-                  name:
-                    getAttr(
-                      docTypeId,
-                      "taxonomy_term--document_type",
-                      "name"
-                    ) || "Unknown",
-                }
-              : undefined,
-          }
-        : undefined,
+      applicant:
+        infoServiceData?.type === "node--water_sample_fridge"
+          ? {
+              id: infoServiceData.id,
+              name:
+                (infoServiceData as WaterSampleFridgeInfoService)
+                  .senderFullName || "Unknown",
+            }
+          : infoServiceData?.type === "node--medical_bills"
+          ? {
+              id: infoServiceData.id,
+              name:
+                (infoServiceData as MedicalBillsInfoService).senderFullName ||
+                "Unknown",
+            }
+          : infoServiceData?.type === "node--property_certification"
+          ? {
+              id: infoServiceData.id,
+              name:
+                (infoServiceData as PropertyCertificationInfoService)
+                  .ownerName || "Unknown",
+            }
+          : applicant
+          ? {
+              id: applicant.id,
+              name: (applicant.attributes.field_full_name ||
+                applicant.attributes.title ||
+                "Unknown") as string,
+              documentNumber: applicant.attributes
+                .field_document_number as string,
+              phoneNumber: applicant.attributes.field_phone_number as string,
+              address: applicant.attributes.field_address as string,
+              documentType: docTypeId
+                ? {
+                    id: docTypeId,
+                    name:
+                      getAttr(
+                        docTypeId,
+                        "taxonomy_term--document_type",
+                        "name"
+                      ) || "Unknown",
+                  }
+                : undefined,
+            }
+          : undefined,
       applicationStatus: rels.field_application_statuses?.data?.id
         ? {
             id: rels.field_application_statuses.data.id,

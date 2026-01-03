@@ -18,6 +18,7 @@ import type {
   CompleteRequest,
   MedicalBillsInfoService,
   WaterSampleFridgeInfoService,
+  PropertyCertificationInfoService,
 } from "../utils/complete-request";
 import { useEffect, useState } from "react";
 import api from "@/api";
@@ -240,6 +241,11 @@ export function RequestDetailViewModal({
     } else if (request.infoService?.type === "node--medical_bills") {
       return (
         (request.infoService as MedicalBillsInfoService).senderFullName ||
+        "Sin nombre"
+      );
+    } else if (request.infoService?.type === "node--property_certification") {
+      return (
+        (request.infoService as PropertyCertificationInfoService).ownerName ||
         "Sin nombre"
       );
     }
