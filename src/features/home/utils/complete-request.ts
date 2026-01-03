@@ -134,12 +134,27 @@ export interface WaterSampleFridgeInfoService extends BaseInfoService {
   waterService?: string;
 }
 
+export interface PropertyCertificationInfoService extends BaseInfoService {
+  type: "node--property_certification";
+  applicantIdCopy?: Array<{ uri: string; title: string; options: any[] }>;
+  cadastralRegistration?: string;
+  documentNumber?: string;
+  observations?: string;
+  ownerName?: string;
+  propertyDeedCopy?: { uri: string; title: string; options: any[] };
+  propertyNumber?: string;
+  propertyRegistered?: boolean;
+  registryNotaryNumber?: string;
+  files?: Array<{ uri: string; title: string; options: any[] }>;
+}
+
 export type InfoService =
   | MedicationInfoService
   | CivilRegistryInfoService
   | DeathCertificateInfoService
   | MarriageCertificateInfoService
   | WaterSampleFridgeInfoService
+  | PropertyCertificationInfoService
   | (BaseInfoService & { type: string; [key: string]: any });
 
 export interface CompleteRequestFilters {
@@ -271,6 +286,9 @@ const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
     "node--water_sample_fridge": {
       endpoint: "/api/node/water_sample_fridge",
       includes: "field_water_service",
+    },
+    "node--property_certification": {
+      endpoint: "/api/node/property_certification",
     },
   };
 
@@ -514,6 +532,21 @@ export const transformCompleteRequests = (
             "taxonomy_term--water_service",
             "name"
           ),
+        };
+      } else if (type === "node--property_certification") {
+        infoServiceData = {
+          ...baseInfo,
+          type: "node--property_certification",
+          applicantIdCopy: infoAttrs.field_applicant_id_copy || [],
+          cadastralRegistration: infoAttrs.field_cadastral_registration,
+          documentNumber: infoAttrs.field_document_number,
+          observations: infoAttrs.field_observations,
+          ownerName: infoAttrs.field_owner_name,
+          propertyDeedCopy: infoAttrs.field_property_deed_copy,
+          propertyNumber: infoAttrs.field_property_number,
+          propertyRegistered: infoAttrs.field_property_registered,
+          registryNotaryNumber: infoAttrs.field_registry_notary_number,
+          files: infoAttrs.field_path || [],
         };
       } else {
         infoServiceData = { ...baseInfo, type: type || "unknown" };

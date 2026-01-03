@@ -1,6 +1,13 @@
 import { cn } from "@/lib/utils";
 import type { ServiceType } from "@/types/global";
-import { Church, Droplets, FilePlus, FileText, FileUser } from "lucide-react";
+import {
+  Church,
+  Droplets,
+  FilePlus,
+  FileText,
+  FileUser,
+  Home,
+} from "lucide-react";
 
 interface RequestHeaderProps {
   requestId: string;
@@ -36,6 +43,8 @@ export function RequestHeader({
         return `Solicitud #${requestId}`;
       case "node--water_sample_fridge":
         return `Cert. Entrega Agua`;
+      case "node--property_certification":
+        return "Cert. Propiedad";
       default:
         return "Solicitud";
     }
@@ -44,7 +53,10 @@ export function RequestHeader({
   const renderSubtitle = () => {
     if (type === "node--request_medication") {
       return `Creada el: ${createdDate}`;
-    } else if (type === "node--water_sample_fridge") {
+    } else if (
+      type === "node--water_sample_fridge" ||
+      type === "node--property_certification"
+    ) {
       return `Ticket: #${requestId}`;
     } else {
       return `ID Solicitud: #${requestId}`;
@@ -63,6 +75,8 @@ export function RequestHeader({
         return <FilePlus className="size-6" />;
       case "node--water_sample_fridge":
         return <Droplets className="size-6" />;
+      case "node--property_certification":
+        return <Home className="size-6" />;
       default:
         return <FileText className="size-6" />;
     }

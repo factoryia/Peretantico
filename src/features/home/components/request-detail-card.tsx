@@ -38,6 +38,8 @@ export function RequestDetailCard({
         return "Información del Trámite";
       case "node--water_sample_fridge":
         return "Datos del Servicio";
+      case "node--property_certification":
+        return "Detalles de la Propiedad";
       default:
         return "Detalle de la Solicitud";
     }
@@ -55,6 +57,8 @@ export function RequestDetailCard({
         return <File className="w-5 h-5 text-blue-600" />;
       case "node--water_sample_fridge":
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
+      case "node--property_certification":
+        return <Info className="w-5 h-5 text-blue-600" />;
       default:
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
     }
@@ -125,6 +129,42 @@ export function RequestDetailCard({
             <DataPoint
               label="¿Requiere Sello y Radicado?"
               value={waterInfo.requiresRadicado ? "Sí" : "No"}
+            />
+            {observations && (
+              <div className="mt-3 bg-gray-50 p-2.5 rounded-lg">
+                <DataPoint
+                  label="Observaciones"
+                  value={
+                    <span className="text-sm italic">"{observations}"</span>
+                  }
+                  noBorder
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {type === "node--property_certification" && request?.infoService && (
+          <>
+            <DataPoint
+              label="¿Tiene Matrícula?"
+              value={
+                (request.infoService as any).propertyRegistered ? "Sí" : "No"
+              }
+              highlight
+            />
+            <DataPoint
+              label="Número Matrícula Inmobiliaria"
+              value={
+                (request.infoService as any).propertyNumber || "Sin número"
+              }
+            />
+            <DataPoint
+              label="Registro Catastral"
+              value={
+                (request.infoService as any).cadastralRegistration ||
+                "Sin registro"
+              }
             />
             {observations && (
               <div className="mt-3 bg-gray-50 p-2.5 rounded-lg">

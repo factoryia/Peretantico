@@ -193,6 +193,30 @@ export function RequestDetailViewModal({
           alt: "Archivo adjunto",
         });
       });
+    } else if (info.type === "node--property_certification") {
+      // field_path documents
+      info.files?.forEach((file: { uri: string; title: string }) => {
+        attachments.push({
+          url: file.uri,
+          label: file.title || "Certificación",
+          alt: "Certificación de propiedad",
+        });
+      });
+      // Additional docs if needed (applicantIdCopy, propertyDeedCopy)
+      info.applicantIdCopy?.forEach((file: { uri: string; title: string }) => {
+        attachments.push({
+          url: file.uri,
+          label: file.title || "Copia Cédula",
+          alt: "Copia Cédula",
+        });
+      });
+      if (info.propertyDeedCopy) {
+        attachments.push({
+          url: info.propertyDeedCopy.uri,
+          label: info.propertyDeedCopy.title || "Copia Escritura",
+          alt: "Copia Escritura",
+        });
+      }
     }
 
     return attachments;
@@ -248,17 +272,21 @@ export function RequestDetailViewModal({
 
           {/* Primera fila de tarjetas */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))]">
-            <PatientDataCard
-              type={request.infoService?.type || "Sin tipo"}
-              fullName={getFullName()}
-              documentType={request.applicant?.documentType?.name || "Sin tipo"}
-              documentNumber={
-                request.applicant?.documentNumber || "Sin documento"
-              }
-              phone={getPhoneNumber()}
-              address={getAddress()}
-              municipality={"Sin municipio"} // CompleteRequest doesn't have municipality yet, keep placeholder or add if needed
-            />
+            {request.infoService?.type !== "node--property_certification" && (
+              <PatientDataCard
+                type={request.infoService?.type || "Sin tipo"}
+                fullName={getFullName()}
+                documentType={
+                  request.applicant?.documentType?.name || "Sin tipo"
+                }
+                documentNumber={
+                  request.applicant?.documentNumber || "Sin documento"
+                }
+                phone={getPhoneNumber()}
+                address={getAddress()}
+                municipality={"Sin municipio"} // CompleteRequest doesn't have municipality yet, keep placeholder or add if needed
+              />
+            )}
 
             {request.infoService?.type === "node--water_sample_fridge" && (
               <WaterSampleFridgeInfo request={request} />
@@ -277,6 +305,8 @@ export function RequestDetailViewModal({
                   : request.infoService?.type === "node--water_sample_fridge"
                   ? (request.infoService as WaterSampleFridgeInfoService)
                       .observations
+                  : request.infoService?.type === "node--property_certification"
+                  ? (request.infoService as any).observations
                   : undefined) ||
                 "Sin observaciones"
               }

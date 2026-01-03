@@ -11,6 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarGroupLabel,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import { data } from "@/constants";
 import { Link, useLocation } from "react-router";
@@ -157,6 +158,7 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }
