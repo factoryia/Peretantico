@@ -27,6 +27,8 @@ export function PatientDataCard({
       return "Datos del Paciente";
     } else if (type === "node--medical_bills") {
       return "DATOS REMITENTE";
+    } else if (type === "node--property_unbundling_request") {
+      return "Datos del cliente";
     } else {
       return "Datos del Solicitante";
     }
@@ -58,8 +60,8 @@ export function PatientDataCard({
           label={
             type === "node--civil_registry_request"
               ? "Nombre del Contacto (WhatsApp)"
-              : type === "node--medical_bills"
-              ? "Nombre Completo"
+              : type === "node--property_unbundling_request"
+              ? "Razón Social / Nombre"
               : "Nombre Completo"
           }
           value={fullName}
@@ -81,6 +83,8 @@ export function PatientDataCard({
           label={
             type === "node--marriage_certificate_request"
               ? "Teléfono / WhatsApp"
+              : type === "node--property_unbundling_request"
+              ? "Contacto"
               : type === "node--medical_bills"
               ? "Teléfono"
               : "Teléfono de Contacto"
@@ -92,23 +96,25 @@ export function PatientDataCard({
           }
         />
 
-        <DataPoint
-          // label="Dirección de Entrega"
-          label={
-            type === "node--marriage_certificate_request"
-              ? "Dirección Indicada"
-              : type === "node--death_certificate_request"
-              ? "Dirección"
-              : type === "node--civil_registry_request"
-              ? "Dirección de Entrega"
-              : type === "node--medical_bills"
-              ? "Dirección Recolección"
-              : "Dirección de Entrega y Municipio"
-          }
-          value={`${address}`}
-          // value={`${address}, ${municipality}`}
-          noBorder
-        />
+        {type !== "node--property_unbundling_request" && (
+          <DataPoint
+            // label="Dirección de Entrega"
+            label={
+              type === "node--marriage_certificate_request"
+                ? "Dirección Indicada"
+                : type === "node--death_certificate_request"
+                ? "Dirección"
+                : type === "node--civil_registry_request"
+                ? "Dirección de Entrega"
+                : type === "node--medical_bills"
+                ? "Dirección Recolección"
+                : "Dirección de Entrega y Municipio"
+            }
+            value={`${address}`}
+            // value={`${address}, ${municipality}`}
+            noBorder
+          />
+        )}
       </div>
     </div>
     // <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-full">

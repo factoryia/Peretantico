@@ -19,6 +19,7 @@ import type {
   MedicalBillsInfoService,
   WaterSampleFridgeInfoService,
   PropertyCertificationInfoService,
+  PropertyUnbundlingInfoService,
 } from "../utils/complete-request";
 import { useEffect, useState } from "react";
 import api from "@/api";
@@ -227,6 +228,86 @@ export function RequestDetailViewModal({
           alt: "Archivo adjunto",
         });
       });
+    } else if (info.type === "node--property_unbundling_request") {
+      const pInfo = info as PropertyUnbundlingInfoService;
+      pInfo.applicantIdCopy?.forEach((file) => {
+        attachments.push({
+          url: file.uri,
+          label: file.title || "ID Propietario",
+          alt: "ID Propietario",
+        });
+      });
+      if (pInfo.cadastralResolution) {
+        attachments.push({
+          url: pInfo.cadastralResolution.uri,
+          label: pInfo.cadastralResolution.title || "Resolu. Catastro",
+          alt: "Resolu. Catastro",
+        });
+      }
+      if (pInfo.disengagementDeed) {
+        attachments.push({
+          url: pInfo.disengagementDeed.uri,
+          label: pInfo.disengagementDeed.title || "Escritura Desenglobe",
+          alt: "Escritura Desenglobe",
+        });
+      }
+      if (pInfo.legalRepresentationCerti) {
+        attachments.push({
+          url: pInfo.legalRepresentationCerti.uri,
+          label:
+            pInfo.legalRepresentationCerti.title || "Cert. Cámara Comercio",
+          alt: "Cert. Cámara Comercio",
+        });
+      }
+      if (pInfo.neighboringProperties) {
+        attachments.push({
+          url: pInfo.neighboringProperties.uri,
+          label: pInfo.neighboringProperties.title || "Predios Colindantes",
+          alt: "Predios Colindantes",
+        });
+      }
+      if (pInfo.notarialPower) {
+        attachments.push({
+          url: pInfo.notarialPower.uri,
+          label: pInfo.notarialPower.title || "Poder Notarial",
+          alt: "Poder Notarial",
+        });
+      }
+      if (pInfo.propertyDeedCopy) {
+        attachments.push({
+          url: pInfo.propertyDeedCopy.uri,
+          label: pInfo.propertyDeedCopy.title || "Copia Escritura",
+          alt: "Copia Escritura",
+        });
+      }
+      if (pInfo.propertyPlan) {
+        attachments.push({
+          url: pInfo.propertyPlan.uri,
+          label: pInfo.propertyPlan.title || "Plano Predio",
+          alt: "Plano Predio",
+        });
+      }
+      if (pInfo.propertyTax) {
+        attachments.push({
+          url: pInfo.propertyTax.uri,
+          label: pInfo.propertyTax.title || "Impuesto Predial",
+          alt: "Impuesto Predial",
+        });
+      }
+      if (pInfo.traditionCertificate) {
+        attachments.push({
+          url: pInfo.traditionCertificate.uri,
+          label: pInfo.traditionCertificate.title || "Cert. Tradición",
+          alt: "Cert. Tradición",
+        });
+      }
+      pInfo.files?.forEach((file) => {
+        attachments.push({
+          url: file.uri,
+          label: file.title || "Adjunto",
+          alt: "Adjunto",
+        });
+      });
     }
 
     return attachments;
@@ -248,6 +329,13 @@ export function RequestDetailViewModal({
         (request.infoService as PropertyCertificationInfoService).ownerName ||
         "Sin nombre"
       );
+    } else if (
+      request.infoService?.type === "node--property_unbundling_request"
+    ) {
+      return (
+        (request.infoService as PropertyUnbundlingInfoService).fullName ||
+        "Sin nombre"
+      );
     }
     return request.applicant?.name || "Sin nombre";
   };
@@ -261,6 +349,13 @@ export function RequestDetailViewModal({
     } else if (request.infoService?.type === "node--medical_bills") {
       return (
         (request.infoService as MedicalBillsInfoService).senderContactPhone ||
+        "Sin teléfono"
+      );
+    } else if (
+      request.infoService?.type === "node--property_unbundling_request"
+    ) {
+      return (
+        (request.infoService as PropertyUnbundlingInfoService).phoneNumber ||
         "Sin teléfono"
       );
     }

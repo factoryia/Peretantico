@@ -334,6 +334,8 @@ export function RequestsTable({
                     return "Cert. Propiedad";
                   case "node--medical_bills":
                     return "Solicitud Recibo Médico";
+                  case "node--property_unbundling_request":
+                    return "Desenglobe de predio";
                   default:
                     return requestData.subservice?.name || "Solicitud";
                 }
@@ -363,9 +365,16 @@ export function RequestsTable({
                   </TableCell>
                   <TableCell className="py-4 px-6">
                     <div className="flex flex-col">
-                      <span className="font-bold text-gray-900">
-                        {requestData.applicant?.name}
-                      </span>
+                      {requestData.applicant?.name &&
+                      requestData.applicant.name !== "Unknown" ? (
+                        <span className="font-bold text-gray-900">
+                          {requestData.applicant.name}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/60 italic text-sm">
+                          Sin nombre
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="py-4 px-6">

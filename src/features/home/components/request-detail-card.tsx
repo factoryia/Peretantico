@@ -1,9 +1,11 @@
-import { ClipboardList, File, FileUser, Info } from "lucide-react";
+import { Check, X, ClipboardList, File, FileUser, Info } from "lucide-react";
 import { DataPoint } from "./data-point";
 import type { ServiceType } from "@/types/global";
+import { Badge } from "@/components/ui/badge";
 import type {
   CompleteRequest,
   MedicalBillsInfoService,
+  PropertyUnbundlingInfoService,
   WaterSampleFridgeInfoService,
 } from "../utils/complete-request";
 import { CivilRegistryInfo } from "./civil-registry-info";
@@ -43,6 +45,8 @@ export function RequestDetailCard({
         return "Detalles de la Propiedad";
       case "node--medical_bills":
         return "DATOS DESTINATARIO";
+      case "node--property_unbundling_request":
+        return "Detalles del Predio";
       default:
         return "Detalle de la Solicitud";
     }
@@ -64,6 +68,8 @@ export function RequestDetailCard({
         return <Info className="w-5 h-5 text-blue-600" />;
       case "node--medical_bills":
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
+      case "node--property_unbundling_request":
+        return <Info className="w-5 h-5 text-blue-600" />;
       default:
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
     }
@@ -221,6 +227,63 @@ export function RequestDetailCard({
             />
           </>
         )}
+        {type === "node--property_unbundling_request" &&
+          request?.infoService && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="bg-[#F0F9FF] border border-[#bae6fd] text-[#0C4A6E] px-4 py-3 rounded-lg font-semibold text-lg">
+                    <p className="text-[12.8px] text-[#0369A1] font-medium mb-1.5 uppercase">
+                      Folio de Matrícula Inmobiliaria
+                    </p>
+                    {(request.infoService as PropertyUnbundlingInfoService)
+                      .registrySerialNumber || "Sin folio"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-start gap-10">
+                <DataPoint
+                  label="Ciudad"
+                  value="Sin datos (Pendiente)"
+                  noBorder
+                />
+
+                <div className="flex flex-col items-end">
+                  <p className="text-[12.8px] text-[#6B7280] font-medium mb-2 uppercase">
+                    Aporta planos
+                  </p>
+                  <div className="flex items-center">
+                    {(request.infoService as PropertyUnbundlingInfoService)
+                      .hasPropertyPlan ? (
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none flex items-center gap-1 font-bold text-xs px-3 py-1 uppercase h-auto">
+                        <Check className="size-3.5" /> Aporta planos
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="bg-red-50 text-red-600 border-red-100 flex items-center gap-1 font-bold text-xs px-3 py-1 uppercase h-auto"
+                      >
+                        <X className="size-3.5" /> No aporta planos
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {observations && (
+                <div className="mt-3 bg-gray-50 p-2.5 rounded-lg">
+                  <DataPoint
+                    label="Observaciones"
+                    value={
+                      <span className="text-sm italic">"{observations}"</span>
+                    }
+                    noBorder
+                  />
+                </div>
+              )}
+            </div>
+          )}
       </div>
     </div>
   );

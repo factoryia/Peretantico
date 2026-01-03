@@ -161,6 +161,27 @@ export interface MedicalBillsInfoService extends BaseInfoService {
   files?: Array<{ uri: string; title: string; options: any[] }>;
 }
 
+export interface PropertyUnbundlingInfoService extends BaseInfoService {
+  type: "node--property_unbundling_request";
+  fullName?: string;
+  phoneNumber?: string;
+  documentNumber?: string;
+  registrySerialNumber?: string;
+  hasPropertyPlan?: boolean;
+  isLegalEntity?: boolean;
+  applicantIdCopy?: Array<{ uri: string; title: string; options: any[] }>;
+  cadastralResolution?: { uri: string; title: string; options: any[] };
+  disengagementDeed?: { uri: string; title: string; options: any[] };
+  legalRepresentationCerti?: { uri: string; title: string; options: any[] };
+  neighboringProperties?: { uri: string; title: string; options: any[] };
+  notarialPower?: { uri: string; title: string; options: any[] };
+  propertyDeedCopy?: { uri: string; title: string; options: any[] };
+  propertyPlan?: { uri: string; title: string; options: any[] };
+  propertyTax?: { uri: string; title: string; options: any[] };
+  traditionCertificate?: { uri: string; title: string; options: any[] };
+  files?: Array<{ uri: string; title: string; options: any[] }>;
+}
+
 export type InfoService =
   | MedicationInfoService
   | CivilRegistryInfoService
@@ -169,6 +190,7 @@ export type InfoService =
   | WaterSampleFridgeInfoService
   | PropertyCertificationInfoService
   | MedicalBillsInfoService
+  | PropertyUnbundlingInfoService
   | (BaseInfoService & { type: string; [key: string]: any });
 
 export interface CompleteRequestFilters {
@@ -296,6 +318,9 @@ const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
     },
     "node--death_certificate_request": {
       endpoint: "/api/node/death_certificate_request",
+    },
+    "node--property_unbundling_request": {
+      endpoint: "/api/node/property_unbundling_request",
     },
     "node--water_sample_fridge": {
       endpoint: "/api/node/water_sample_fridge",
@@ -579,6 +604,30 @@ export const transformCompleteRequests = (
           packageContentDescription: infoAttrs.field_package_content_descriptio,
           files: infoAttrs.field_path || [],
         };
+      } else if (type === "node--property_unbundling_request") {
+        infoServiceData = {
+          ...baseInfo,
+          type: "node--property_unbundling_request",
+          fullName: infoAttrs.field_full_name as string,
+          phoneNumber: infoAttrs.field_phone_number as string,
+          documentNumber: infoAttrs.field_document_number as string,
+          registrySerialNumber:
+            infoAttrs.field_registry_serial_number as string,
+          hasPropertyPlan: infoAttrs.field_has_property_plan as boolean,
+          isLegalEntity: infoAttrs.field_is_legal_entity as boolean,
+          applicantIdCopy: infoAttrs.field_applicant_id_copy as any[],
+          cadastralResolution: infoAttrs.field_cadastral_resolution as any,
+          disengagementDeed: infoAttrs.field_disengagement_deed as any,
+          legalRepresentationCerti:
+            infoAttrs.field_legal_representation_certi as any,
+          neighboringProperties: infoAttrs.field_neighboring_properties as any,
+          notarialPower: infoAttrs.field_notarial_power as any,
+          propertyDeedCopy: infoAttrs.field_property_deed_copy as any,
+          propertyPlan: infoAttrs.field_property_plan as any,
+          propertyTax: infoAttrs.field_property_tax as any,
+          traditionCertificate: infoAttrs.field_tradition_certificate as any,
+          files: infoAttrs.field_path as any[],
+        } as PropertyUnbundlingInfoService;
       } else {
         infoServiceData = { ...baseInfo, type: type || "unknown" };
       }
@@ -628,6 +677,13 @@ export const transformCompleteRequests = (
               name:
                 (infoServiceData as PropertyCertificationInfoService)
                   .ownerName || "Unknown",
+            }
+          : infoServiceData?.type === "node--property_unbundling_request"
+          ? {
+              id: infoServiceData.id,
+              name:
+                (infoServiceData as PropertyUnbundlingInfoService).fullName ||
+                "Unknown",
             }
           : applicant
           ? {

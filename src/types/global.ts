@@ -20,4 +20,5 @@ export type ServiceType =
   | "node--request_medication"
   | "node--water_sample_fridge"
   | "node--property_certification"
-  | "node--medical_bills";
+  | "node--medical_bills"
+  | "node--property_unbundling_request";

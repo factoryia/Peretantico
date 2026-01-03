@@ -47,6 +47,8 @@ export function RequestHeader({
         return "Cert. Propiedad";
       case "node--medical_bills":
         return "Solicitud Recibo Médico";
+      case "node--property_unbundling_request":
+        return "Solicitud Desenglobe";
       default:
         return "Solicitud";
     }
@@ -58,7 +60,8 @@ export function RequestHeader({
     } else if (
       type === "node--water_sample_fridge" ||
       type === "node--property_certification" ||
-      type === "node--medical_bills"
+      type === "node--medical_bills" ||
+      type === "node--property_unbundling_request"
     ) {
       return `Ticket: #${requestId}`;
     } else {
@@ -79,6 +82,7 @@ export function RequestHeader({
       case "node--water_sample_fridge":
         return <Droplets className="size-6" />;
       case "node--property_certification":
+      case "node--property_unbundling_request":
         return <Home className="size-6" />;
       default:
         return <FileText className="size-6" />;
