@@ -25,6 +25,8 @@ export function PatientDataCard({
   const renderTitle = () => {
     if (type === "node--request_medication") {
       return "Datos del Paciente";
+    } else if (type === "node--medical_bills") {
+      return "DATOS REMITENTE";
     } else {
       return "Datos del Solicitante";
     }
@@ -56,6 +58,8 @@ export function PatientDataCard({
           label={
             type === "node--civil_registry_request"
               ? "Nombre del Contacto (WhatsApp)"
+              : type === "node--medical_bills"
+              ? "Nombre Completo"
               : "Nombre Completo"
           }
           value={fullName}
@@ -77,6 +81,8 @@ export function PatientDataCard({
           label={
             type === "node--marriage_certificate_request"
               ? "Teléfono / WhatsApp"
+              : type === "node--medical_bills"
+              ? "Teléfono"
               : "Teléfono de Contacto"
           }
           value={
@@ -95,6 +101,8 @@ export function PatientDataCard({
               ? "Dirección"
               : type === "node--civil_registry_request"
               ? "Dirección de Entrega"
+              : type === "node--medical_bills"
+              ? "Dirección Recolección"
               : "Dirección de Entrega y Municipio"
           }
           value={`${address}`}

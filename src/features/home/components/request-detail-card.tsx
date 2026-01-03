@@ -3,6 +3,7 @@ import { DataPoint } from "./data-point";
 import type { ServiceType } from "@/types/global";
 import type {
   CompleteRequest,
+  MedicalBillsInfoService,
   WaterSampleFridgeInfoService,
 } from "../utils/complete-request";
 import { CivilRegistryInfo } from "./civil-registry-info";
@@ -40,6 +41,8 @@ export function RequestDetailCard({
         return "Datos del Servicio";
       case "node--property_certification":
         return "Detalles de la Propiedad";
+      case "node--medical_bills":
+        return "DATOS DESTINATARIO";
       default:
         return "Detalle de la Solicitud";
     }
@@ -59,6 +62,8 @@ export function RequestDetailCard({
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
       case "node--property_certification":
         return <Info className="w-5 h-5 text-blue-600" />;
+      case "node--medical_bills":
+        return <ClipboardList className="w-5 h-5 text-blue-600" />;
       default:
         return <ClipboardList className="w-5 h-5 text-blue-600" />;
     }
@@ -177,6 +182,43 @@ export function RequestDetailCard({
                 />
               </div>
             )}
+          </>
+        )}
+        {type === "node--medical_bills" && request?.infoService && (
+          <>
+            <DataPoint
+              label="Entidad"
+              value={
+                (request.infoService as MedicalBillsInfoService)
+                  .recipientFullName || "Sin especificar"
+              }
+              highlight
+            />
+            <DataPoint
+              label="Dirección Entrega"
+              value={
+                (request.infoService as MedicalBillsInfoService)
+                  .recipientAddress || "Sin dirección"
+              }
+            />
+            <DataPoint
+              label="Contacto / Fecha Nac."
+              value={`${
+                (request.infoService as MedicalBillsInfoService)
+                  .recipientContactPhone || "Sin contacto"
+              } / ${
+                (request.infoService as MedicalBillsInfoService).birthDate ||
+                "Sin fecha"
+              }`}
+            />
+            <DataPoint
+              label="Contenido Paquete"
+              value={
+                (request.infoService as MedicalBillsInfoService)
+                  .packageContentDescription || "Sin descripción"
+              }
+              noBorder
+            />
           </>
         )}
       </div>

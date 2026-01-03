@@ -45,6 +45,8 @@ export function RequestHeader({
         return `Cert. Entrega Agua`;
       case "node--property_certification":
         return "Cert. Propiedad";
+      case "node--medical_bills":
+        return "Solicitud Recibo Médico";
       default:
         return "Solicitud";
     }
@@ -55,7 +57,8 @@ export function RequestHeader({
       return `Creada el: ${createdDate}`;
     } else if (
       type === "node--water_sample_fridge" ||
-      type === "node--property_certification"
+      type === "node--property_certification" ||
+      type === "node--medical_bills"
     ) {
       return `Ticket: #${requestId}`;
     } else {

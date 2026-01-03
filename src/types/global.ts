@@ -19,4 +19,5 @@ export type ServiceType =
   | "node--marriage_certificate_request"
   | "node--request_medication"
   | "node--water_sample_fridge"
-  | "node--property_certification";
+  | "node--property_certification"
+  | "node--medical_bills";

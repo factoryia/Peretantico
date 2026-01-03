@@ -16,6 +16,7 @@ import {
 import { WaterSampleFridgeInfo } from "./water-sample-info";
 import type {
   CompleteRequest,
+  MedicalBillsInfoService,
   WaterSampleFridgeInfoService,
 } from "../utils/complete-request";
 import { useEffect, useState } from "react";
@@ -217,6 +218,14 @@ export function RequestDetailViewModal({
           alt: "Copia Escritura",
         });
       }
+    } else if (info.type === "node--medical_bills") {
+      info.files?.forEach((file: { uri: string; title: string }) => {
+        attachments.push({
+          url: file.uri,
+          label: file.title || "Documento",
+          alt: "Archivo adjunto",
+        });
+      });
     }
 
     return attachments;
@@ -226,6 +235,11 @@ export function RequestDetailViewModal({
     if (request.infoService?.type === "node--water_sample_fridge") {
       return (
         (request.infoService as WaterSampleFridgeInfoService).senderFullName ||
+        "Sin nombre"
+      );
+    } else if (request.infoService?.type === "node--medical_bills") {
+      return (
+        (request.infoService as MedicalBillsInfoService).senderFullName ||
         "Sin nombre"
       );
     }
@@ -238,6 +252,11 @@ export function RequestDetailViewModal({
         (request.infoService as WaterSampleFridgeInfoService)
           .senderContactPhone || "Sin teléfono"
       );
+    } else if (request.infoService?.type === "node--medical_bills") {
+      return (
+        (request.infoService as MedicalBillsInfoService).senderContactPhone ||
+        "Sin teléfono"
+      );
     }
     return request.applicant?.phoneNumber || "Sin teléfono";
   };
@@ -246,6 +265,11 @@ export function RequestDetailViewModal({
     if (request.infoService?.type === "node--water_sample_fridge") {
       return (
         (request.infoService as WaterSampleFridgeInfoService).senderAddress ||
+        "Sin dirección"
+      );
+    } else if (request.infoService?.type === "node--medical_bills") {
+      return (
+        (request.infoService as MedicalBillsInfoService).senderAddress ||
         "Sin dirección"
       );
     }

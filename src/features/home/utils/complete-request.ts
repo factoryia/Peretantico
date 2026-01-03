@@ -148,6 +148,19 @@ export interface PropertyCertificationInfoService extends BaseInfoService {
   files?: Array<{ uri: string; title: string; options: any[] }>;
 }
 
+export interface MedicalBillsInfoService extends BaseInfoService {
+  type: "node--medical_bills";
+  senderFullName?: string;
+  senderContactPhone?: string;
+  senderAddress?: string;
+  recipientFullName?: string;
+  recipientAddress?: string;
+  recipientContactPhone?: string;
+  birthDate?: string;
+  packageContentDescription?: string;
+  files?: Array<{ uri: string; title: string; options: any[] }>;
+}
+
 export type InfoService =
   | MedicationInfoService
   | CivilRegistryInfoService
@@ -155,6 +168,7 @@ export type InfoService =
   | MarriageCertificateInfoService
   | WaterSampleFridgeInfoService
   | PropertyCertificationInfoService
+  | MedicalBillsInfoService
   | (BaseInfoService & { type: string; [key: string]: any });
 
 export interface CompleteRequestFilters {
@@ -289,6 +303,9 @@ const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
     },
     "node--property_certification": {
       endpoint: "/api/node/property_certification",
+    },
+    "node--medical_bills": {
+      endpoint: "/api/node/medical_bills",
     },
   };
 
@@ -546,6 +563,20 @@ export const transformCompleteRequests = (
           propertyNumber: infoAttrs.field_property_number,
           propertyRegistered: infoAttrs.field_property_registered,
           registryNotaryNumber: infoAttrs.field_registry_notary_number,
+          files: infoAttrs.field_path || [],
+        };
+      } else if (type === "node--medical_bills") {
+        infoServiceData = {
+          ...baseInfo,
+          type: "node--medical_bills",
+          senderFullName: infoAttrs.field_sender_full_name,
+          senderContactPhone: infoAttrs.field_sender_contact_phone,
+          senderAddress: infoAttrs.field_sender_address,
+          recipientFullName: infoAttrs.field_recipient_full_name,
+          recipientAddress: infoAttrs.field_recipient_address,
+          recipientContactPhone: infoAttrs.field_recipient_contact_phone,
+          birthDate: infoAttrs.field_birth_date,
+          packageContentDescription: infoAttrs.field_package_content_descriptio,
           files: infoAttrs.field_path || [],
         };
       } else {
