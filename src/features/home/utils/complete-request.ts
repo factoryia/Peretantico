@@ -167,6 +167,7 @@ export interface PropertyUnbundlingInfoService extends BaseInfoService {
   phoneNumber?: string;
   documentNumber?: string;
   registrySerialNumber?: string;
+  deedCity?: string;
   hasPropertyPlan?: boolean;
   isLegalEntity?: boolean;
   applicantIdCopy?: Array<{ uri: string; title: string; options: any[] }>;
@@ -613,6 +614,7 @@ export const transformCompleteRequests = (
           documentNumber: infoAttrs.field_document_number as string,
           registrySerialNumber:
             infoAttrs.field_registry_serial_number as string,
+          deedCity: infoAttrs.field_deed_city as string,
           hasPropertyPlan: infoAttrs.field_has_property_plan as boolean,
           isLegalEntity: infoAttrs.field_is_legal_entity as boolean,
           applicantIdCopy: infoAttrs.field_applicant_id_copy as any[],

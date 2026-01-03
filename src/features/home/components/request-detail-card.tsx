@@ -245,7 +245,10 @@ export function RequestDetailCard({
               <div className="flex justify-between items-start gap-10">
                 <DataPoint
                   label="Ciudad"
-                  value="Sin datos (Pendiente)"
+                  value={
+                    (request.infoService as PropertyUnbundlingInfoService)
+                      .deedCity || "Sin datos (Pendiente)"
+                  }
                   noBorder
                 />
 
