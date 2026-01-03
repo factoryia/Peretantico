@@ -1,4 +1,3 @@
-import React from "react";
 import type { CompleteRequest } from "../utils/complete-request";
 
 interface CivilRegistryInfoProps {
