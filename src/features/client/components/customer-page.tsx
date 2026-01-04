@@ -63,7 +63,7 @@ export default function CustomerManagementPage() {
       <div className="space-y-4 font-['Poppins',sans-serif]">
         {/* --- Filtros --- */}
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-lg border shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-blue-50 rounded-md">
                 <Filter className="h-5 w-5 text-blue-600" />
@@ -101,7 +101,7 @@ export default function CustomerManagementPage() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg border shadow-sm">
+          <div className="bg-white p-8 rounded-3xl border">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label
@@ -126,8 +126,8 @@ export default function CustomerManagementPage() {
         </div>
 
         {/* --- Listado --- */}
-        <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-          <div className="p-6 border-b bg-white">
+        <div className="rounded-3xl border bg-white overflow-hidden">
+          <div className="p-8 border-b bg-white">
             <h3 className="text-lg font-semibold leading-none tracking-tight">
               Listado de Clientes
             </h3>

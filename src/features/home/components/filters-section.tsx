@@ -58,7 +58,7 @@ export function FiltersSection({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-lg border shadow-sm">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 border rounded-3xl">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-blue-50 rounded-md">
             <Filter className="h-5 w-5 text-blue-600" />
@@ -96,7 +96,7 @@ export function FiltersSection({
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg border shadow-sm">
+      <div className="bg-white p-8 border rounded-3xl">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
           {/* Estado de la solicitud */}
           <div className="space-y-1.5">

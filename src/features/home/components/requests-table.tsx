@@ -257,8 +257,8 @@ export function RequestsTable({
   }
 
   return (
-    <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-      <div className="p-6 border-b bg-white">
+    <div className="rounded-3xl border bg-white overflow-hidden">
+      <div className="p-8 border-b bg-white">
         <h3 className="text-lg font-semibold leading-none tracking-tight">
           Solicitudes
         </h3>
