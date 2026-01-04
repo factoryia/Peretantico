@@ -274,7 +274,10 @@ export const fetchFinishedRequestsByDistributor = async (
       };
     });
 
-    return requests;
+    // Filtrar solicitudes que ya han sido pagadas (tienen estado de pago "Recibido")
+    return requests.filter(
+      (r) => r.paymentStatus?.name?.toLowerCase() !== "recibido"
+    );
   } catch (error) {
     console.error("Error fetching finished requests:", error);
     throw error;

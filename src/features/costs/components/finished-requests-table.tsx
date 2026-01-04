@@ -80,6 +80,7 @@ export function FinishedRequestsTable({
                     checked={isAllSelected}
                     onCheckedChange={toggleAll}
                     aria-label="Select all"
+                    className="cursor-pointer"
                   />
                 </div>
               </TableHead>
@@ -135,6 +136,7 @@ export function FinishedRequestsTable({
                           checked={isSelected}
                           onCheckedChange={() => toggleOne(request.id)}
                           aria-label={`Select ${request.applicationNumber}`}
+                          className="cursor-pointer"
                         />
                       </div>
                     </TableCell>
