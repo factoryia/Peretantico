@@ -27,18 +27,24 @@ export interface Distributor {
 export interface Request {
   id: string;
   title: string;
+  created: string;
   applicationNumber: string;
   status: string;
   entryDate: string;
-  estimatedApplicationHour: number;
+  estimatedApplicationHour?: string | null;
+  estimatedPrioritizedHour?: string | null;
+  isRecurring?: boolean;
   logisticsCosts: number;
   serviceValue: number;
+  prioritizedValue?: number;
+  applicationScore?: number;
   applicant: {
     id: string;
     fullName: string;
-    documentNumber: string;
-    phoneNumber: string;
-    email: string;
+    documentNumber?: string;
+    phoneNumber?: string;
+    email?: string;
+    address?: string;
   };
   category: {
     id: string;
@@ -56,7 +62,16 @@ export interface Request {
     id: string;
     title: string;
   };
+  infoServiceType?: string;
+  applicationStatus?: {
+    id: string;
+    name: string;
+  };
   paymentStatus?: {
+    id: string;
+    name: string;
+  };
+  serviceStatus?: {
     id: string;
     name: string;
   };
@@ -81,6 +96,16 @@ export interface CostRecord {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PaymentData {
+  title: string;
+  observations?: string;
+  additionalAmount?: number;
+  discountAmount?: number;
+  distributorId: string;
+  requestIds: string[];
+  paymentStatusId: string;
 }
 
 export interface DistributorWithRequests extends Distributor {

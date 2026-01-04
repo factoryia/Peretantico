@@ -1,205 +1,246 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Paginator } from "@/components/common/paginator";
-import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
-import { DistributorsTable } from "./distributors-table";
-import { RequestsModal } from "./requests-modal";
-import { PaymentCalculationModal } from "./payment-calculation-modal";
-import { fetchDistributors } from "../utils/costs";
-import type { Distributor } from "../types";
-import { useCoverageAreasQuery } from "../../distributors/hooks/taxonomies";
+import { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { FilterSelect } from "@/components/common/filter-select";
+import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
+import { FinishedRequestsTable } from "./finished-requests-table";
+import { PaymentSummaryModal } from "./payment-summary-modal";
+import {
+  fetchDistributors,
+  fetchFinishedRequestsByDistributor,
+} from "../utils/costs";
+import type { Request } from "../types";
+import {
+  Calculator,
+  Loader2,
+  Wallet,
+  Filter,
+  CheckCircle2,
+} from "lucide-react";
 
 /**
- * Página principal para la gestión de costos.
- * Permite:
- * - Listar distribuidores con paginación
- * - Filtrar distribuidores por nombre y cobertura
- * - Ver solicitudes asignadas a cada distribuidor
- * - Calcular pagos para solicitudes específicas
+ * Página principal para la gestión de pagos a repartidores.
+ * Permite filtrar solicitudes finalizadas por repartidor y calcular el total a pagar.
  */
 export default function CostManagementPage() {
-  // --- Interfaces ---
-  interface DistributorFilters {
-    coverageAreaId: string;
-    status: string;
-  }
-
   // --- Estados locales ---
-  const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [selectedDistributorId, setSelectedDistributorId] =
+    useState<string>("");
+  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedDistributor, setSelectedDistributor] =
-    useState<Distributor | null>(null);
-  const [filterName, setFilterName] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const [filters, setFilters] = useState<DistributorFilters>({
-    coverageAreaId: "all",
-    status: "all",
-  });
-
-  const updateFilters = (newFilters: Partial<DistributorFilters>) => {
-    setFilters((prev) => ({
-      ...prev,
-      ...newFilters,
-    }));
-  };
 
   // --- Query de distribuidores ---
-  const { data: distributors, isLoading: isLoadingDistributors } = useQuery({
-    queryKey: ["distributors", filterName, currentPage, pageSize],
-    queryFn: fetchDistributors,
-    staleTime: 5 * 60 * 1000, // cache por 5 minutos
+  const { data: distributors = [], isLoading: isLoadingDistributors } =
+    useQuery({
+      queryKey: ["distributors-list"],
+      queryFn: fetchDistributors,
+      staleTime: 5 * 60 * 1000,
+    });
+
+  // --- Query de solicitudes finalizadas ---
+  const {
+    data: finishedRequests = [] as Request[],
+    isLoading: isLoadingRequests,
+    isFetching: isFetchingRequests,
+  } = useQuery({
+    queryKey: ["finished-requests", selectedDistributorId],
+    queryFn: () =>
+      fetchFinishedRequestsByDistributor(selectedDistributorId) as Promise<
+        Request[]
+      >,
+    enabled: !!selectedDistributorId,
+    staleTime: 0,
   });
 
-  // --- Query de zonas ---
-  const {
-    data: coverageAreaOptions = [{ id: "all", name: "Todos" }],
-    isLoading: isLoadingCoverageAreas,
-  } = useCoverageAreasQuery();
+  // --- Opciones para el select de repartidores ---
+  const distributorOptions = useMemo(() => {
+    return distributors.map((d) => ({
+      id: d.id,
+      name: d.title,
+    }));
+  }, [distributors]);
 
-  // --- Filtros aplicados ---
-  const filteredDistributors =
-    distributors?.filter((distributor) => {
-      const matchesName = distributor.title
-        .toLowerCase()
-        .includes(filterName.toLowerCase());
-
-      const matchesCoverage =
-        filters.coverageAreaId === "all" ||
-        distributor.coverageArea?.id === filters.coverageAreaId;
-
-        const matchesStatus =
-        filters.status === "all" ||
-        distributor.status === (filters.status === "true");
-
-      return matchesName && matchesCoverage && matchesStatus;
-    }) ?? [];
-
-  // --- Paginación ---
-  const totalPages = Math.ceil(filteredDistributors.length / pageSize);
-  const paginatedDistributors = filteredDistributors.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  // --- Acciones ---
-  const handleViewRequests = (distributor: Distributor) => {
-    setSelectedDistributor(distributor);
-    setIsRequestsModalOpen(true);
+  const handleDistributorChange = (id: string) => {
+    setSelectedDistributorId(id);
+    setSelectedRequestIds([]);
   };
 
-  const handleCalculatePayment = (distributor: Distributor) => {
-    setSelectedDistributor(distributor);
+  const selectedDistributorName = useMemo(() => {
+    return (
+      distributors.find((d) => d.id === selectedDistributorId)?.title || ""
+    );
+  }, [distributors, selectedDistributorId]);
+
+  const selectedRequestsData = useMemo(() => {
+    return finishedRequests.filter((r) => selectedRequestIds.includes(r.id));
+  }, [finishedRequests, selectedRequestIds]);
+
+  const handleCalculatePayment = () => {
     setIsPaymentModalOpen(true);
   };
 
-  return (
-    <>
-      <div className="space-y-4">
-        {/* --- Filtros --- */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-2xl font-bold tracking-tight">
-                Gestión de Costos
-              </CardTitle>
-            </div>
-            <CardDescription className="text-base">
-              Administre los costos y pagos de los distribuidores
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="filterName">Filtrar por nombre</Label>
-                <Input
-                  id="filterName"
-                  placeholder="Buscar distribuidor..."
-                  value={filterName}
-                  onChange={(e) => setFilterName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="coverageArea">Zona de cobertura</Label>
-                <FilterSelect
-                  placeholder="Zona de cobertura"
-                  options={[
-                    { id: "all", name: "Todas las zonas" },
-                    ...coverageAreaOptions,
-                  ]}
-                  value={filters.coverageAreaId}
-                  onValueChange={(value) =>
-                    updateFilters({ coverageAreaId: value })
-                  }
-                  className={isLoadingCoverageAreas ? "opacity-50" : ""}
-                  disabled={isLoadingCoverageAreas}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+  const handlePaymentSuccess = () => {
+    setSelectedRequestIds([]);
+    queryClient.invalidateQueries({
+      queryKey: ["finished-requests", selectedDistributorId],
+    });
+  };
 
-        {/* --- Listado con tabla y paginación --- */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Listado de Distribuidores</CardTitle>
-            <CardDescription>
-              {isLoadingDistributors
-                ? "Cargando distribuidores..."
-                : `${filteredDistributors.length} distribuidor(es) encontrado(s)`}
-            </CardDescription>
+  return (
+    <div className="space-y-6 max-w-[1200px] mx-auto pb-20 px-4 sm:px-6">
+      {/* --- Filtros (Compacto) --- */}
+      <Card className="shadow-none shadow-slate-100 border bg-white rounded-3xl overflow-hidden transition-all hover:shadow-blue-950/30">
+        {/* <CardHeader className="border-b border-gray-50 bg-slate-50/30 pt-6">
+          <div className="flex items-center gap-3">
+            <div className="p-1.5 bg-blue-100 rounded-lg text-blue-600">
+              <Filter className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Filtrar Solicitudes Completadas
+              </h3>
+              <p className="text-sm font-medium text-slate-500">
+                Seleccione un repartidor para ver sus servicios finalizados
+              </p>
+            </div>
+          </div>
+        </CardHeader> */}
+        <CardContent className="flex justify-between items-center p-4 sm:p-5 pt-0">
+          <div className="flex items-center gap-3">
+            <div className="p-1.5 bg-blue-100 rounded-lg text-blue-600">
+              <Filter className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Filtrar Solicitudes Completadas
+              </h3>
+              <p className="text-sm font-medium text-slate-500">
+                Seleccione un repartidor para ver sus servicios finalizados
+              </p>
+            </div>
+          </div>
+          <div className="max-w-md">
+            <FilterSelect
+              placeholder={
+                isLoadingDistributors
+                  ? "Cargando repartidores..."
+                  : "Seleccione un repartidor para liquidar..."
+              }
+              options={distributorOptions}
+              value={selectedDistributorId}
+              onValueChange={handleDistributorChange}
+              disabled={isLoadingDistributors}
+              className="w-full h-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* --- Contenido Principal --- */}
+      {!selectedDistributorId ? (
+        <div className="flex flex-col items-center justify-center py-20 px-4 animate-in fade-in zoom-in-95 duration-500">
+          <div className="p-5 bg-slate-50 rounded-full mb-6 border border-slate-100 shadow-inner">
+            <Wallet className="h-12 w-12 text-slate-300" />
+          </div>
+          <h2 className="text-xl font-black text-slate-800 text-center">
+            Gestión de Pagos
+          </h2>
+          <p className="text-slate-500 text-center mt-2 max-w-sm font-medium text-sm">
+            Seleccione un repartidor en el filtro superior para ver las
+            solicitudes finalizadas y proceder con la liquidación de servicios.
+          </p>
+        </div>
+      ) : (
+        <Card className="shadow-2xl shadow-slate-100 border bg-white rounded-3xl overflow-hidden transition-all hover:shadow-blue-950/30 animate-in fade-in slide-in-from-bottom-4 duration-500 pt-0">
+          <CardHeader className="border-b border-gray-50 bg-slate-50/30 p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-200">
+                  <Wallet className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-black tracking-tight text-gray-900 sm:text-2xl">
+                    Gestión de Pagos
+                  </h1>
+                  <p className="text-[11px] font-bold text-gray-500 mt-0.5 uppercase tracking-widest leading-none">
+                    Liquidación de servicios: {selectedDistributorName}
+                  </p>
+                </div>
+              </div>
+              <Badge
+                variant="outline"
+                className="w-fit h-6 px-3 bg-blue-50 text-blue-700 border-blue-100 font-bold uppercase text-[9px] tracking-widest rounded-full"
+              >
+                {finishedRequests.length} Solicitudes Finalizadas
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent>
-            {isLoadingDistributors ? (
-              <TableSkeleton />
+          <CardContent className="p-0">
+            {isLoadingRequests ? (
+              <div className="p-10">
+                <TableSkeleton />
+              </div>
             ) : (
-              <>
-                <DistributorsTable
-                  distributors={paginatedDistributors}
-                  onViewRequests={handleViewRequests}
-                  onCalculatePayment={handleCalculatePayment}
+              <div className="p-6 space-y-6">
+                <FinishedRequestsTable
+                  requests={finishedRequests}
+                  selectedIds={selectedRequestIds}
+                  onSelectionChange={setSelectedRequestIds}
                 />
-                <Paginator
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                  pageSize={pageSize}
-                  onPageSizeChange={(size) => {
-                    setPageSize(size);
-                    setCurrentPage(1);
-                  }}
-                />
-              </>
+
+                {/* --- Acciones de Pago --- */}
+                {selectedRequestIds.length > 0 && (
+                  <div className="flex items-center justify-between p-5 bg-blue-600 rounded-2xl shadow-xl shadow-blue-200 animate-in zoom-in-95 duration-300">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/20 rounded-lg text-white">
+                        <Calculator className="h-5 w-5" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-white font-black uppercase text-xs tracking-widest">
+                          Resumen de Selección
+                        </span>
+                        <span className="text-white/90 text-[13px] font-bold">
+                          {selectedRequestIds.length}{" "}
+                          {selectedRequestIds.length === 1
+                            ? "solicitud seleccionada"
+                            : "solicitudes seleccionadas"}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleCalculatePayment}
+                      className="bg-white hover:bg-slate-50 text-blue-700 font-black flex items-center gap-2 shadow-lg px-8 py-6 h-auto transition-all hover:scale-[1.05] rounded-xl uppercase text-xs tracking-wider active:scale-95"
+                      disabled={isFetchingRequests}
+                    >
+                      {isFetchingRequests ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      Liquidar Servicios
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
-      </div>
+      )}
 
-      {/* --- Modales --- */}
-      <RequestsModal
-        open={isRequestsModalOpen}
-        onOpenChange={setIsRequestsModalOpen}
-        distributor={selectedDistributor}
-      />
-
-      <PaymentCalculationModal
-        open={isPaymentModalOpen}
+      {/* --- Modal de Resumen de Pago --- */}
+      <PaymentSummaryModal
+        isOpen={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        distributor={selectedDistributor}
+        selectedRequests={selectedRequestsData}
+        distributorId={selectedDistributorId}
+        distributorName={selectedDistributorName}
+        onSuccess={handlePaymentSuccess}
       />
-    </>
+    </div>
   );
 }
