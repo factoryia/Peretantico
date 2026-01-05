@@ -146,8 +146,7 @@ export function Distributors() {
         <div className="h-full overflow-y-auto pb-20">
           <div className="space-y-6 font-['Poppins',sans-serif] p-4 md:p-6">
             {/* Header Section */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-blue-600" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border relative overflow-hidden border-l-4 border-l-blue-600">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-blue-50 rounded-lg">
                   <Users className="h-6 w-6 text-blue-600" />
@@ -190,7 +189,7 @@ export function Distributors() {
             </div>
 
             {/* Filters Section */}
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+            <div className="bg-white p-6 rounded-3xl border space-y-4">
               <div className="flex items-center gap-2 mb-2">
                 <Filter className="h-4 w-4 text-blue-500" />
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">

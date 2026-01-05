@@ -30,7 +30,11 @@ export const fetchProfiles = async (
   municipality: string = "",
   page: number = 1,
   limit: number = 10
-): Promise<{ customers: Customer[]; totalPages: number }> => {
+): Promise<{
+  customers: Customer[];
+  totalPages: number;
+  totalCount: number;
+}> => {
   try {
     const offset = (page - 1) * limit;
     const params: Record<string, string | number> = {
@@ -79,13 +83,13 @@ export const fetchProfiles = async (
       })
     );
 
-    const totalItems = response.data.meta?.count ?? customers.length;
-    const totalPages = Math.ceil(totalItems / limit);
+    const totalCount = response.data.meta?.count ?? customers.length;
+    const totalPages = Math.ceil(totalCount / limit);
 
-    return { customers, totalPages };
+    return { customers, totalPages, totalCount };
   } catch (error) {
     console.error("Error fetching profiles:", error);
-    return { customers: [], totalPages: 1 };
+    return { customers: [], totalPages: 1, totalCount: 0 };
   }
 };
 

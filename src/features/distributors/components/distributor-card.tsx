@@ -61,17 +61,16 @@ export function DistributorCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{
-        duration: 0.5,
-        delay: index * 0.1,
+        duration: 0.3,
+        delay: Math.min(index * 0.05, 0.5),
         ease: "easeOut",
       }}
       className="h-full"
     >
-      <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-gray-100 bg-white h-full flex flex-col">
+      <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white h-full flex flex-col">
         {/* Decorative background element */}
         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-32 h-32 bg-blue-50/50 rounded-full blur-3xl group-hover:bg-blue-100/50 transition-colors" />
 
