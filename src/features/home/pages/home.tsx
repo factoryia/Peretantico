@@ -6,8 +6,13 @@ import { FiltersSection } from "../components/filters-section";
 import { RequestsTable } from "../components/requests-table";
 import { NewRequestModal } from "../components/new-request-modal";
 import type { RequestFilters } from "../types/request";
+import { useAuthStore } from "@/features/auth/stores/use-auth-store";
+import { DistributorDashboard } from "../components/distributor-dashboard";
 
 export function Home() {
+  const { authUser } = useAuthStore();
+  const isDistributor = authUser?.roles?.includes("distributor");
+
   const [filters, setFilters] = useState<RequestFilters>({});
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -31,6 +36,10 @@ export function Home() {
   const handleRefresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
   }, []);
+
+  if (isDistributor) {
+    return <DistributorDashboard />;
+  }
 
   return (
     <div className="h-full flex flex-col">

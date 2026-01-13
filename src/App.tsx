@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Distributors } from "@/features/distributors/pages/distributors";
 import { AuthRoutes } from "@/features/auth/routes/auth-routes";
 import { PrivateRoutes } from "@/features/auth/components/private-routes";
+import { RoleGuard } from "@/features/auth/components/role-guard";
 import { Configuration } from "./features/config/pages/configuration";
 import CostPage from "@/features/costs/pages/page";
 import Client from "./features/client/pages/client";
@@ -33,11 +34,15 @@ export default function App() {
           <Route element={<PrivateRoutes />}>
             <Route element={<DashboardLayout />}>
               <Route path="/" element={<Home />} />
-              <Route path="/repartidores" element={<Distributors />} />
-              <Route path="/reportes" element={<Reports />} />
-              <Route path="/configuraciones" element={<Configuration />} />
-              <Route path="/clientes" element={<Client />} />
-              <Route path="/costos" element={<CostPage/>} />
+
+              {/* Rutas exclusivas para admin (excluidas para distribuidores) */}
+              <Route element={<RoleGuard excludedRoles={["distributor"]} />}>
+                <Route path="/repartidores" element={<Distributors />} />
+                <Route path="/reportes" element={<Reports />} />
+                <Route path="/configuraciones" element={<Configuration />} />
+                <Route path="/clientes" element={<Client />} />
+                <Route path="/costos" element={<CostPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

@@ -90,6 +90,12 @@ export interface Request {
         };
       };
     };
+    field_image?: {
+      data?: {
+        id: string;
+        type: string;
+      };
+    };
   };
 }
 

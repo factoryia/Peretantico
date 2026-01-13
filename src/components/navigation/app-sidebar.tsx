@@ -53,35 +53,45 @@ export function AppSidebar() {
 
       <SidebarContent className="bg-white p-4">
         <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="uppercase text-muted-foreground font-semibold group-data-[collapsible=icon]:hidden">
+            Plataforma
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-2">
-              <SidebarGroupLabel className="uppercase text-muted-foreground font-semibold px-4 group-data-[collapsible=icon]:hidden">
-                Plataforma
-              </SidebarGroupLabel>
-              {data.navMain.map((item) => {
-                const isActive = pathname === item.url;
+              {data.navMain
+                .filter((item) => {
+                  const isDistributor =
+                    authUser?.roles?.includes("distributor");
+                  if (isDistributor) {
+                    // Solo mostrar "Solicitudes" para distribuidores
+                    return item.url === "/";
+                  }
+                  return true;
+                })
+                .map((item) => {
+                  const isActive = pathname === item.url;
 
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.title}
-                      className={cn(
-                        "py-2 px-3 h-auto hover:bg-[#EFF6FF] hover:text-blue-600 ml-2 border-l-2 border-transparent transition-all group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:mx-auto",
-                        isActive &&
-                          "bg-[#EFF6FF] border-blue-600 text-blue-600 hover:text-blue-600 shadow-sm"
-                      )}
-                    >
-                      <Link to={item.url} className="">
-                        <item.icon className="min-w-5 min-h-5" />
-                        <span className="ml-1 text-[15px] group-data-[collapsible=icon]:hidden">
-                          {item.title}
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip={item.title}
+                        className={cn(
+                          "py-2 px-3 h-auto hover:bg-[#EFF6FF] hover:text-blue-600 ml-2 border-l-2 border-transparent transition-all group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:mx-auto",
+                          isActive &&
+                            "bg-[#EFF6FF] border-blue-600 text-blue-600 hover:text-blue-600 shadow-sm"
+                        )}
+                      >
+                        <Link to={item.url} className="">
+                          <item.icon className="min-w-5 min-h-5" />
+                          <span className="ml-1 text-[15px] group-data-[collapsible=icon]:hidden">
+                            {item.title}
+                          </span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -110,7 +120,11 @@ export function AppSidebar() {
                       {authUser?.name || "Usuario"}
                     </span>
                     <span className="truncate text-xs">
-                      {authUser?.roles?.[0] || "Rol"}
+                      {authUser?.roles?.filter(
+                        (r) => r !== "authenticated"
+                      )[0] ||
+                        authUser?.roles?.[0] ||
+                        "Rol"}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
@@ -140,7 +154,11 @@ export function AppSidebar() {
                         {authUser?.name || "Usuario"}
                       </span>
                       <span className="truncate text-xs">
-                        {authUser?.roles?.[0] || "Rol"}
+                        {authUser?.roles?.filter(
+                          (r) => r !== "authenticated"
+                        )[0] ||
+                          authUser?.roles?.[0] ||
+                          "Rol"}
                       </span>
                     </div>
                   </div>

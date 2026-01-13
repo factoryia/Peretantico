@@ -31,6 +31,7 @@ interface RequestDetailViewModalProps {
   onOpenChange: (open: boolean) => void;
   onAssignDistributor: (distributorId: string) => Promise<void>;
   onUpdateRequest?: (requestId: string, data: any) => Promise<void>;
+  isDistributor?: boolean;
 }
 
 export function RequestDetailViewModal({
@@ -39,6 +40,7 @@ export function RequestDetailViewModal({
   request,
   onAssignDistributor,
   onUpdateRequest,
+  isDistributor = false,
 }: RequestDetailViewModalProps) {
   const [distributorsList, setDistributorsList] = useState<Distributor[]>([]);
 
@@ -456,13 +458,15 @@ export function RequestDetailViewModal({
               }
             />
 
-            <RequestManagementCard
-              serviceValue={request.field_service_value || 0}
-              logisticsCost={request.field_logistics_costs || 0}
-              assignedDistributor={request.distributor?.id || ""}
-              distributors={distributorsList}
-              onSave={handleSave}
-            />
+            {!isDistributor && (
+              <RequestManagementCard
+                serviceValue={request.field_service_value || 0}
+                logisticsCost={request.field_logistics_costs || 0}
+                assignedDistributor={request.distributor?.id || ""}
+                distributors={distributorsList}
+                onSave={handleSave}
+              />
+            )}
           </div>
         </div>
       </DialogContent>

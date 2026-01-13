@@ -59,6 +59,11 @@ export interface CompleteRequest {
   subservice?: { id: string; name: string };
   infoService?: InfoService;
   paymentInfo?: PaymentDTO | null;
+  evidenceImage?: {
+    id: string;
+    uri: string;
+    alt?: string;
+  };
 }
 
 export interface BaseInfoService {
@@ -369,7 +374,7 @@ export const fetchCompleteRequests = async (
 
     const params: Record<string, string | number> = {
       include:
-        "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_info_service.field_water_service,field_payment_status,field_subservice",
+        "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_info_service.field_water_service,field_payment_status,field_subservice,field_image",
       sort: "created",
       "page[limit]": limit,
       "page[offset]": offset,
@@ -762,6 +767,22 @@ export const transformCompleteRequests = (
         : undefined,
       infoService: infoServiceData,
       paymentInfo: payments[request.id] || null,
+      evidenceImage: (rels as any).field_image?.data?.id
+        ? (() => {
+            const img = getEntity(
+              (rels as any).field_image.data.id,
+              "file--file"
+            );
+            return img
+              ? {
+                  id: img.id,
+                  uri:
+                    (img.attributes.uri as any)?.url ||
+                    (img.attributes.uri as any),
+                }
+              : undefined;
+          })()
+        : undefined,
     };
   });
 
