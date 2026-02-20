@@ -147,7 +147,7 @@ export const fetchFinishedRequestsByDistributor = async (
         params: {
           "page[limit]": 100,
           include:
-            "field_applicant,field_application_statuses,field_distributor_data,field_info_service,field_payment_status,field_service_status,field_subservice",
+            "field_applicant,field_application_statuses,field_distributor_data,field_info_service,field_payment_status,field_service_status",
           "filter[field_distributor_data.id]": distributorId,
           sort: "-created",
         },

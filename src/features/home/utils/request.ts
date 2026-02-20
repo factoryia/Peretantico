@@ -59,7 +59,6 @@ export const fetchRequests = async (
   try {
     const {
       status,
-      subservice,
       assignedDistributor,
       requestNumber,
       applicantName,
@@ -72,17 +71,13 @@ export const fetchRequests = async (
       "page[limit]": limit,
       "page[offset]": offset,
       include:
-        "field_applicant,field_distributor_data,field_subservice,field_application_statuses,field_service_status,field_payment_status,field_used_channel",
+        "field_applicant,field_distributor_data,field_application_statuses,field_service_status,field_payment_status,field_used_channel",
       sort: "-created",
     };
 
     // Aplicar filtros
     if (status && status !== "all") {
       params["filter[field_application_statuses.id]"] = status;
-    }
-
-    if (subservice && subservice !== "all") {
-      params["filter[field_subservice.id]"] = subservice;
     }
 
     if (assignedDistributor && assignedDistributor !== "all") {

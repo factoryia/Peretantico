@@ -226,7 +226,7 @@ const fetchRelatedEntities = async (
   _type: string,
   ids: Set<string>,
   endpoint: string,
-  includes?: string
+  includes?: string,
 ) => {
   if (ids.size === 0) return { data: [], included: [] };
   const res = await api.get(endpoint, {
@@ -284,27 +284,27 @@ const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
       "node--profile",
       idsMap.applicant,
       "/api/node/profile",
-      "field_type_document"
+      "field_type_document",
     ),
     fetchRelatedEntities(
       "node--distributor",
       idsMap.distributor,
-      "/api/node/distributor"
+      "/api/node/distributor",
     ),
     fetchRelatedEntities(
       "taxonomy_term--category",
       idsMap.subservice,
-      "/api/taxonomy_term/category"
+      "/api/taxonomy_term/category",
     ),
     fetchRelatedEntities(
       "taxonomy_term--application_statuses",
       idsMap.status,
-      "/api/taxonomy_term/application_statuses"
+      "/api/taxonomy_term/application_statuses",
     ),
     fetchRelatedEntities(
       "taxonomy_term--payment_status",
       idsMap.paymentStatus,
-      "/api/taxonomy_term/payment_status"
+      "/api/taxonomy_term/payment_status",
     ),
   ];
 
@@ -358,14 +358,13 @@ const fetchMissingInclusions = async (requests: any[]): Promise<any[]> => {
 // --- Main Service Logic ---
 
 export const fetchCompleteRequests = async (
-  filters: CompleteRequestFilters = {}
+  filters: CompleteRequestFilters = {},
 ): Promise<CompleteRequestsApiResponse> => {
   try {
     const {
       page = 1,
       limit = 50,
       status,
-      subservice,
       assignedDistributor,
       requestNumber,
       applicantName,
@@ -374,7 +373,7 @@ export const fetchCompleteRequests = async (
 
     const params: Record<string, string | number> = {
       include:
-        "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_info_service.field_water_service,field_payment_status,field_subservice,field_image",
+        "field_applicant,field_applicant.field_type_document,field_application_statuses,field_distributor_data,field_info_service,field_info_service.field_marriage_case,field_info_service.field_marriage_registry,field_info_service.field_marriage_type,field_info_service.field_water_service,field_payment_status,field_image",
       sort: "created",
       "page[limit]": limit,
       "page[offset]": offset,
@@ -386,8 +385,6 @@ export const fetchCompleteRequests = async (
       params["filter[field_application_statuses.id]"] = status;
     else params["filter[status]"] = "1";
 
-    if (subservice && subservice !== "all")
-      params["filter[field_subservice.id]"] = subservice;
     if (assignedDistributor && assignedDistributor !== "all")
       params["filter[field_distributor_data.id]"] = assignedDistributor;
 
@@ -426,7 +423,7 @@ export const fetchCompleteRequests = async (
         response.data.data.map(async (req) => ({
           id: req.id,
           payment: await fetchPaymentByRequest(req.id).catch(() => null),
-        }))
+        })),
       );
       results.forEach((res) => (payments[res.id] = res.payment));
     }
@@ -449,7 +446,7 @@ export const fetchCompleteRequests = async (
 };
 
 export const transformCompleteRequests = (
-  response: RequestsApiResponse
+  response: RequestsApiResponse,
 ): { data: CompleteRequest[]; meta: any } => {
   if (!response?.data) return { data: [], meta: {} };
 
@@ -471,13 +468,13 @@ export const transformCompleteRequests = (
     // Resolve Relationships
     const applicant = getEntity(
       rels.field_applicant?.data?.id,
-      "node--profile"
+      "node--profile",
     );
     const docTypeId = applicant?.relationships?.field_type_document?.data?.id;
 
     const infoServiceEntity = getEntity(
       rels.field_info_service?.data?.id,
-      rels.field_info_service?.data?.type || ""
+      rels.field_info_service?.data?.type || "",
     );
     const infoAttrs = infoServiceEntity?.attributes as any;
     const infoRels = infoServiceEntity?.relationships as any;
@@ -538,17 +535,17 @@ export const transformCompleteRequests = (
           marriageCase: getAttr(
             infoRels?.field_marriage_case?.data?.id,
             "taxonomy_term--marriage_case",
-            "name"
+            "name",
           ),
           marriageRegistry: getAttr(
             infoRels?.field_marriage_registry?.data?.id,
             "taxonomy_term--marriage_registration_status",
-            "name"
+            "name",
           ),
           marriageType: getAttr(
             infoRels?.field_marriage_type?.data?.id,
             "taxonomy_term--marriage_certificate_type",
-            "name"
+            "name",
           ),
         };
       } else if (type === "node--water_sample_fridge") {
@@ -578,7 +575,7 @@ export const transformCompleteRequests = (
           waterService: getAttr(
             infoRels?.field_water_service?.data?.id,
             "taxonomy_term--water_service",
-            "name"
+            "name",
           ),
         };
       } else if (type === "node--property_certification") {
@@ -672,49 +669,50 @@ export const transformCompleteRequests = (
                   .senderFullName || "Unknown",
             }
           : infoServiceData?.type === "node--medical_bills"
-          ? {
-              id: infoServiceData.id,
-              name:
-                (infoServiceData as MedicalBillsInfoService).senderFullName ||
-                "Unknown",
-            }
-          : infoServiceData?.type === "node--property_certification"
-          ? {
-              id: infoServiceData.id,
-              name:
-                (infoServiceData as PropertyCertificationInfoService)
-                  .ownerName || "Unknown",
-            }
-          : infoServiceData?.type === "node--property_unbundling_request"
-          ? {
-              id: infoServiceData.id,
-              name:
-                (infoServiceData as PropertyUnbundlingInfoService).fullName ||
-                "Unknown",
-            }
-          : applicant
-          ? {
-              id: applicant.id,
-              name: (applicant.attributes.field_full_name ||
-                applicant.attributes.title ||
-                "Unknown") as string,
-              documentNumber: applicant.attributes
-                .field_document_number as string,
-              phoneNumber: applicant.attributes.field_phone_number as string,
-              address: applicant.attributes.field_address as string,
-              documentType: docTypeId
+            ? {
+                id: infoServiceData.id,
+                name:
+                  (infoServiceData as MedicalBillsInfoService).senderFullName ||
+                  "Unknown",
+              }
+            : infoServiceData?.type === "node--property_certification"
+              ? {
+                  id: infoServiceData.id,
+                  name:
+                    (infoServiceData as PropertyCertificationInfoService)
+                      .ownerName || "Unknown",
+                }
+              : infoServiceData?.type === "node--property_unbundling_request"
                 ? {
-                    id: docTypeId,
+                    id: infoServiceData.id,
                     name:
-                      getAttr(
-                        docTypeId,
-                        "taxonomy_term--document_type",
-                        "name"
-                      ) || "Unknown",
+                      (infoServiceData as PropertyUnbundlingInfoService)
+                        .fullName || "Unknown",
                   }
-                : undefined,
-            }
-          : undefined,
+                : applicant
+                  ? {
+                      id: applicant.id,
+                      name: (applicant.attributes.field_full_name ||
+                        applicant.attributes.title ||
+                        "Unknown") as string,
+                      documentNumber: applicant.attributes
+                        .field_document_number as string,
+                      phoneNumber: applicant.attributes
+                        .field_phone_number as string,
+                      address: applicant.attributes.field_address as string,
+                      documentType: docTypeId
+                        ? {
+                            id: docTypeId,
+                            name:
+                              getAttr(
+                                docTypeId,
+                                "taxonomy_term--document_type",
+                                "name",
+                              ) || "Unknown",
+                          }
+                        : undefined,
+                    }
+                  : undefined,
       applicationStatus: rels.field_application_statuses?.data?.id
         ? {
             id: rels.field_application_statuses.data.id,
@@ -722,8 +720,8 @@ export const transformCompleteRequests = (
               getAttr(
                 rels.field_application_statuses.data.id,
                 "taxonomy_term--application_statuses",
-                "name"
-              ) || "Unknown",
+                "name",
+              ) || "Sin estado",
           }
         : undefined,
       distributor: rels.field_distributor_data?.data?.id
@@ -733,12 +731,12 @@ export const transformCompleteRequests = (
               getAttr(
                 rels.field_distributor_data.data.id,
                 "node--distributor",
-                "title"
+                "title",
               ) ||
               getAttr(
                 rels.field_distributor_data.data.id,
                 "node--distributor",
-                "name"
+                "name",
               ) ||
               "Unknown",
           }
@@ -750,7 +748,7 @@ export const transformCompleteRequests = (
               getAttr(
                 rels.field_payment_status.data.id,
                 "taxonomy_term--payment_status",
-                "name"
+                "name",
               ) || "Unknown",
           }
         : undefined,
@@ -761,7 +759,7 @@ export const transformCompleteRequests = (
               getAttr(
                 rels.field_subservice.data.id,
                 "taxonomy_term--category",
-                "name"
+                "name",
               ) || "Unknown",
           }
         : undefined,
@@ -771,7 +769,7 @@ export const transformCompleteRequests = (
         ? (() => {
             const img = getEntity(
               (rels as any).field_image.data.id,
-              "file--file"
+              "file--file",
             );
             return img
               ? {
