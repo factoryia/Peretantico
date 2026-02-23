@@ -1,57 +1,19 @@
 import api from "@/api";
+import { fetchProfiles } from "@/features/client/utils/customer";
+import { fetchCompleteRequests } from "./complete-request";
 import type {
   RequestsApiResponse,
   RequestFilters,
   CreateRequestPayload,
   UpdateRequestPayload,
   Request,
-  AssignDistributorPayload,
-  AssignApplicantPayload,
+  CreateRequestDto,
+  UpdateRequestMetaDto,
+  AssignDistributorDto,
+  UpdateStatusDto,
+  BackendRequest,
+  RequestsListResponse,
 } from "../types/request";
-
-// Interfaces para tipos específicos
-interface ApiEntity {
-  id: string;
-  type: string;
-  attributes: {
-    [key: string]: unknown;
-  };
-}
-
-interface ProfileEntity extends ApiEntity {
-  type: "node--profile";
-  attributes: {
-    field_full_name?: string;
-    title?: string;
-  };
-}
-
-interface DistributorEntity extends ApiEntity {
-  type: "node--distributor";
-  attributes: {
-    title?: string;
-    name?: string;
-  };
-}
-
-interface TaxonomyEntity extends ApiEntity {
-  attributes: {
-    name?: string;
-    title?: string;
-  };
-}
-
-interface ApiError {
-  message: string;
-  response?: {
-    status: number;
-    data?: {
-      errors?: Array<{ detail?: string; title?: string }>;
-      message?: string;
-      error?: string;
-    };
-  };
-}
 
 export const fetchRequests = async (
   filters: RequestFilters = {}
@@ -59,6 +21,7 @@ export const fetchRequests = async (
   try {
     const {
       status,
+      subservice,
       assignedDistributor,
       requestNumber,
       applicantName,
@@ -66,188 +29,93 @@ export const fetchRequests = async (
       limit = 10,
     } = filters;
 
-    const offset = (page - 1) * limit;
-    const params: Record<string, string | number> = {
-      "page[limit]": limit,
-      "page[offset]": offset,
-      include:
-        "field_applicant,field_distributor_data,field_application_statuses,field_service_status,field_payment_status,field_used_channel",
-      sort: "-created",
-    };
-
-    // Aplicar filtros
-    if (status && status !== "all") {
-      params["filter[field_application_statuses.id]"] = status;
-    }
-
-    if (assignedDistributor && assignedDistributor !== "all") {
-      params["filter[field_distributor_data.id]"] = assignedDistributor;
-    }
-
-    if (requestNumber) {
-      params["filter[field_application_number][condition][path]"] =
-        "field_application_number";
-      params["filter[field_application_number][condition][operator]"] =
-        "CONTAINS";
-      params["filter[field_application_number][condition][value]"] =
-        requestNumber;
-    }
-
-    if (applicantName) {
-      params["filter[field_applicant.field_full_name][condition][path]"] =
-        "field_applicant.field_full_name";
-      params["filter[field_applicant.field_full_name][condition][operator]"] =
-        "CONTAINS";
-      params["filter[field_applicant.field_full_name][condition][value]"] =
-        applicantName;
-    }
-
-    const response = await api.get<RequestsApiResponse>("/api/node/request", {
-      params,
+    const backendResponse = await fetchCompleteRequests({
+      status,
+      subservice,
+      assignedDistributor,
+      requestNumber,
+      applicantName,
+      page,
+      limit,
     });
 
-    // Obtener entidades relacionadas si no están incluidas
-    if (
-      response.data.data &&
-      (!response.data.included || response.data.included.length === 0)
-    ) {
-      const requests = response.data.data;
-      const allIncluded: ApiEntity[] = [];
-
-      const applicantIds = new Set<string>();
-      const distributorIds = new Set<string>();
-      const subserviceIds = new Set<string>();
-      const statusIds = new Set<string>();
-
-      requests.forEach((request) => {
-        if (request.relationships.field_applicant?.data?.id) {
-          applicantIds.add(request.relationships.field_applicant.data.id);
-        }
-        if (request.relationships.field_distributor_data?.data?.id) {
-          distributorIds.add(
-            request.relationships.field_distributor_data.data.id
-          );
-        }
-        if (request.relationships.field_subservice?.data?.id) {
-          subserviceIds.add(request.relationships.field_subservice.data.id);
-        }
-        if (request.relationships.field_application_statuses?.data?.id) {
-          statusIds.add(
-            request.relationships.field_application_statuses.data.id
-          );
-        }
-        if (request.relationships.field_service_status?.data?.id) {
-          statusIds.add(request.relationships.field_service_status.data.id);
-        }
-      });
-
-      try {
-        // Obtener clientes
-        if (applicantIds.size > 0) {
-          const applicantsResponse = await api.get("/api/node/profile", {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]":
-                Array.from(applicantIds).join(","),
-              "page[limit]": 100,
-            },
-          });
-
-          if (applicantsResponse.data?.data) {
-            applicantsResponse.data.data.forEach((item: ProfileEntity) => {
-              allIncluded.push({
-                id: item.id,
-                type: "node--profile",
-                attributes: { name: item.attributes.field_full_name },
-              });
-            });
-          }
-        }
-
-        // Obtener repartidores
-        if (distributorIds.size > 0) {
-          const distributorsResponse = await api.get("/api/node/distributor", {
-            params: {
-              "filter[id][condition][path]": "id",
-              "filter[id][condition][operator]": "IN",
-              "filter[id][condition][value]":
-                Array.from(distributorIds).join(","),
-              "page[limit]": 100,
-            },
-          });
-
-          if (distributorsResponse.data?.data) {
-            distributorsResponse.data.data.forEach(
-              (item: DistributorEntity) => {
-                allIncluded.push({
-                  id: item.id,
-                  type: "node--distributor",
-                  attributes: { name: item.attributes.title },
-                });
-              }
-            );
-          }
-        }
-
-        // Obtener subservicios
-        if (subserviceIds.size > 0) {
-          const subservicesResponse = await api.get(
-            "/api/taxonomy_term/category",
-            {
-              params: {
-                "filter[id][condition][path]": "id",
-                "filter[id][condition][operator]": "IN",
-                "filter[id][condition][value]":
-                  Array.from(subserviceIds).join(","),
-                "page[limit]": 100,
-              },
-            }
-          );
-
-          if (subservicesResponse.data?.data) {
-            subservicesResponse.data.data.forEach((item: TaxonomyEntity) => {
-              allIncluded.push({
-                id: item.id,
+    const data: Request[] = backendResponse.data.map((req: any) => ({
+      id: req.id,
+      type: "node--request",
+      attributes: {
+        drupal_internal__nid: req.drupal_internal__nid ?? 0,
+        title: req.title ?? "",
+        field_application_number: req.field_application_number ?? "",
+        field_application_score: req.field_application_score,
+        field_entry_date: req.field_entry_date,
+        field_estimated_application_hour: req.field_estimated_application_hour,
+        field_estimated_prioritized_hour:
+          req.field_estimated_prioritized_hour ?? undefined,
+        field_priority_estimated_hours:
+          req.field_priority_estimated_hours ?? undefined,
+        field_logistics_costs: req.field_logistics_costs,
+        field_service_value: req.field_service_value,
+        field_prioritized_value: req.field_prioritized_value,
+        field_priority_value: req.field_priority_value,
+        field_is_recurring: req.field_is_recurring,
+        field_service_status: req.field_service_status,
+        field_request_status: req.field_request_status,
+        field_observations: req.field_observations,
+        field_payment_status: undefined,
+        field_used_channel: req.field_used_channel,
+        status: req.status ?? true,
+        promote: req.promote,
+        sticky: req.sticky ?? false,
+        created: req.created,
+        changed: req.created,
+      },
+      relationships: {
+        field_applicant: req.applicant
+          ? { data: { id: req.applicant.id, type: "node--profile" } }
+          : undefined,
+        field_distributor_data: req.distributor
+          ? { data: { id: req.distributor.id, type: "node--distributor" } }
+          : undefined,
+        field_subservice: req.subservice
+          ? {
+              data: {
+                id: req.subservice.id,
                 type: "taxonomy_term--category",
-                attributes: { name: item.attributes.name },
-              });
-            });
-          }
-        }
-
-        // Obtener estados
-        if (statusIds.size > 0) {
-          const statusResponse = await api.get(
-            "/api/taxonomy_term/application_statuses",
-            {
-              params: {
-                "filter[id][condition][path]": "id",
-                "filter[id][condition][operator]": "IN",
-                "filter[id][condition][value]": Array.from(statusIds).join(","),
-                "page[limit]": 100,
               },
             }
-          );
-
-          if (statusResponse.data?.data) {
-            statusResponse.data.data.forEach((item: TaxonomyEntity) => {
-              allIncluded.push({
-                id: item.id,
+          : undefined,
+        field_category: undefined,
+        field_service: undefined,
+        field_application_statuses: req.applicationStatus
+          ? {
+              data: {
+                id: req.applicationStatus.id,
                 type: "taxonomy_term--application_statuses",
-                attributes: { name: item.attributes.name },
-              });
-            });
-          }
-        }
+              },
+            }
+          : undefined,
+        field_service_status: undefined,
+        field_payment_status: undefined,
+        field_used_channel: undefined,
+        field_info_service: req.infoService
+          ? {
+              data: {
+                id: req.infoService.id,
+                type: req.infoService.type,
+              },
+            }
+          : undefined,
+        field_image: undefined,
+      },
+    }));
 
-        response.data.included = allIncluded;
-      } catch (error) {
-        console.warn("Error obteniendo entidades relacionadas:", error);
-      }
-    }
-
-    return response.data;
+    return {
+      data,
+      included: [],
+      meta: {
+        count: backendResponse.meta?.count ?? data.length,
+      },
+    };
   } catch (error) {
     console.error("Error fetching requests:", error);
     throw error;
@@ -258,317 +126,55 @@ export const updateRequest = async (
   requestId: string,
   data: UpdateRequestPayload
 ) => {
-  try {
-    console.log(requestId);
-    return api.patch(`/api/node/request/${requestId}`, data, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-      },
-    });
-  } catch (error) {
-    console.warn("API no disponible para actualización:", error);
-    return Promise.resolve({ data: { success: true } });
-  }
+  const attributes =
+    (data?.data?.attributes as UpdateRequestPayload["data"]["attributes"]) ??
+    {};
+  const relationships = data?.data?.relationships;
+  const serviceData =
+    (data?.serviceData as { fieldId: string; value: unknown }[]) ?? [];
+
+  const dto: UpdateRequestMetaDto = {
+    title: attributes.title ?? null,
+    observations: attributes.field_observations ?? null,
+    status: attributes.status,
+    promote: attributes.promote,
+    sticky: attributes.sticky,
+    isRecurring: attributes.field_is_recurring,
+    entryDate: attributes.field_entry_date,
+    estimatedApplicationHour: attributes.field_estimated_application_hour,
+    logisticsCosts: attributes.field_logistics_costs,
+    serviceValue: attributes.field_service_value,
+    applicantId: relationships?.field_applicant?.data.id,
+    distributorId: relationships?.field_distributor_data?.data.id,
+    serviceId: attributes.serviceId ?? relationships?.field_subservice?.data.id,
+    data: Array.isArray(serviceData)
+      ? serviceData.map((d) => ({
+          fieldId: d.fieldId,
+          value: d.value,
+        }))
+      : undefined,
+    paymentMethod: data.paymentMethod ?? null,
+    isPrioritized: data.isPrioritized ?? false,
+    requestStatus: data.requestStatus ?? "EnProceso",
+  };
+
+  const response = await api.put(`/requests/${requestId}`, dto);
+  return response;
 };
 
 export const createRequest = async (payload: CreateRequestPayload) => {
-  try {
-    console.log(
-      "Creating request with payload:",
-      JSON.stringify(payload, null, 2)
-    );
-
-    let response;
-
-    // Try JSON:API first
-    try {
-      console.log("Trying JSON:API endpoint: /api/node/request");
-      response = await api.post("/api/node/request", payload, {
-        headers: {
-          "Content-Type": "application/vnd.api+json",
-        },
-      });
-      console.log("Request created successfully via JSON:API:", response.data);
-      return response;
-    } catch (jsonApiError: unknown) {
-      const error = jsonApiError as ApiError;
-      console.log("JSON:API failed:", error.message);
-
-      if (error.response?.status === 404) {
-        console.log(
-          "JSON:API endpoint not found, trying alternative endpoints..."
-        );
-
-        // Try alternative JSON:API endpoints
-        const alternativeEndpoints = [
-          "/api/node/requests",
-          "/api/node/application",
-          "/api/node/applications",
-        ];
-
-        for (const endpoint of alternativeEndpoints) {
-          try {
-            console.log(`Trying alternative endpoint: ${endpoint}`);
-            response = await api.post(endpoint, payload, {
-              headers: {
-                "Content-Type": "application/vnd.api+json",
-              },
-            });
-            console.log(
-              `Request created successfully via ${endpoint}:`,
-              response.data
-            );
-            return response;
-          } catch (altError: unknown) {
-            const altErr = altError as ApiError;
-            console.log(`${endpoint} failed:`, altErr.message);
-            continue;
-          }
-        }
-
-        // If all JSON:API endpoints fail, try Drupal REST API
-        console.log("All JSON:API endpoints failed, trying Drupal REST API...");
-
-        // Convert JSON:API payload to Drupal REST API format
-        const drupalPayload: Record<string, unknown> = {
-          type: [{ target_id: "request" }], // Use the correct content type
-          title: [{ value: payload.data.attributes.title }],
-          field_application_number: [
-            { value: payload.data.attributes.field_application_number },
-          ],
-          field_application_score: [
-            { value: payload.data.attributes.field_application_score },
-          ],
-          field_entry_date: [
-            { value: payload.data.attributes.field_entry_date },
-          ],
-          field_estimated_application_hour: [
-            { value: payload.data.attributes.field_estimated_application_hour },
-          ],
-          field_logistics_costs: [
-            { value: payload.data.attributes.field_logistics_costs },
-          ],
-          field_service_value: [
-            { value: payload.data.attributes.field_service_value },
-          ],
-          field_estimated_prioritized_hour:
-            payload.data.attributes.field_estimated_prioritized_hour !== null
-              ? [
-                  {
-                    value:
-                      payload.data.attributes.field_estimated_prioritized_hour,
-                  },
-                ]
-              : null,
-          field_prioritized_value:
-            payload.data.attributes.field_prioritized_value !== null
-              ? [{ value: payload.data.attributes.field_prioritized_value }]
-              : null,
-          field_is_recurring: [
-            { value: payload.data.attributes.field_is_recurring ? 1 : 0 },
-          ],
-          status: [{ value: payload.data.attributes.status ? 1 : 0 }],
-          promote: [{ value: payload.data.attributes.promote ? 1 : 0 }],
-          sticky: [{ value: payload.data.attributes.sticky ? 1 : 0 }],
-        };
-
-        if (payload.data.attributes.field_observations) {
-          drupalPayload.field_observations = [
-            { value: payload.data.attributes.field_observations },
-          ];
-        }
-
-        // Add dynamic subservice fields
-        Object.keys(payload.data.attributes).forEach((key) => {
-          if (key.startsWith("field_") && !drupalPayload[key]) {
-            const value = payload.data.attributes[key];
-            if (value !== undefined && value !== null) {
-              if (Array.isArray(value)) {
-                // Handle file arrays
-                drupalPayload[key] = value;
-              } else {
-                drupalPayload[key] = [{ value }];
-              }
-            }
-          }
-        });
-
-        // Add relationships - convert to Drupal format
-        if (payload.data.relationships) {
-          // Required relationships
-          if (payload.data.relationships.field_applicant?.data?.id) {
-            drupalPayload.field_applicant = [
-              { target_id: payload.data.relationships.field_applicant.data.id },
-            ];
-          }
-
-          // Optional relationships
-          if (payload.data.relationships.field_distributor_data?.data?.id) {
-            drupalPayload.field_distributor_data = [
-              {
-                target_id:
-                  payload.data.relationships.field_distributor_data.data.id,
-              },
-            ];
-          } else {
-            drupalPayload.field_distributor_data = null;
-          }
-
-          if (payload.data.relationships.field_category?.data?.id) {
-            drupalPayload.field_category = [
-              { target_id: payload.data.relationships.field_category.data.id },
-            ];
-          }
-
-          if (payload.data.relationships.field_service?.data?.id) {
-            drupalPayload.field_service = [
-              { target_id: payload.data.relationships.field_service.data.id },
-            ];
-          }
-
-          if (payload.data.relationships.field_subservice?.data?.id) {
-            drupalPayload.field_subservice = [
-              {
-                target_id: payload.data.relationships.field_subservice.data.id,
-              },
-            ];
-          }
-
-          if (payload.data.relationships.field_coverage_area?.data?.id) {
-            drupalPayload.field_coverage_area = [
-              {
-                target_id:
-                  payload.data.relationships.field_coverage_area.data.id,
-              },
-            ];
-          }
-
-          // Required status relationships
-          if (payload.data.relationships.field_application_statuses?.data?.id) {
-            drupalPayload.field_application_statuses = [
-              {
-                target_id:
-                  payload.data.relationships.field_application_statuses.data.id,
-              },
-            ];
-          }
-
-          if (payload.data.relationships.field_service_status?.data?.id) {
-            drupalPayload.field_service_status = [
-              {
-                target_id:
-                  payload.data.relationships.field_service_status.data.id,
-              },
-            ];
-          }
-
-          // Optional status relationships
-          if (payload.data.relationships.field_payment_status?.data?.id) {
-            drupalPayload.field_payment_status = [
-              {
-                target_id:
-                  payload.data.relationships.field_payment_status.data.id,
-              },
-            ];
-          } else {
-            drupalPayload.field_payment_status = null;
-          }
-
-          if (payload.data.relationships.field_used_channel?.data?.id) {
-            drupalPayload.field_used_channel = [
-              {
-                target_id:
-                  payload.data.relationships.field_used_channel.data.id,
-              },
-            ];
-          } else {
-            drupalPayload.field_used_channel = null;
-          }
-
-          if (payload.data.relationships.field_info_service?.data?.id) {
-            drupalPayload.field_info_service = [
-              {
-                target_id:
-                  payload.data.relationships.field_info_service.data.id,
-              },
-            ];
-          } else {
-            drupalPayload.field_info_service = null;
-          }
-        }
-
-        console.log("Drupal REST API payload with request:", drupalPayload);
-
-        response = await api.post("/node?_format=json", drupalPayload, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        console.log(
-          "Request created successfully via Drupal REST API with request:",
-          response.data
-        );
-        return response;
-      }
-
-      // Re-throw the original error if it's not a 404
-      throw jsonApiError;
-    }
-  } catch (error: unknown) {
-    const apiError = error as ApiError;
-    console.error("Error creating request:", apiError);
-
-    if (apiError.response?.status === 403) {
-      throw new Error(
-        "Error de permisos: No tienes autorización para crear solicitudes. Verifica tu autenticación."
-      );
-    }
-
-    if (apiError.response?.status === 422) {
-      const validationErrors = apiError.response.data?.errors || [];
-      const errorMessages = validationErrors
-        .map((err) => err.detail || err.title)
-        .join(", ");
-
-      if (errorMessages) {
-        throw new Error(`Error de validación: ${errorMessages}`);
-      } else {
-        throw new Error(
-          "Error de validación: Los datos enviados no son válidos. Verifica que todos los campos requeridos estén completos."
-        );
-      }
-    }
-
-    if (apiError.response?.status === 400) {
-      const errorData = apiError.response.data;
-
-      if (errorData?.errors && Array.isArray(errorData.errors)) {
-        const errorMessages = errorData.errors
-          .map((err) => err.detail || err.title)
-          .join(", ");
-        throw new Error(`Error en la solicitud: ${errorMessages}`);
-      } else if (errorData?.message) {
-        throw new Error(`Error en la solicitud: ${errorData.message}`);
-      } else if (errorData?.error) {
-        throw new Error(`Error en la solicitud: ${errorData.error}`);
-      } else {
-        throw new Error(
-          "Error en la solicitud: Los datos enviados no son válidos. Verifica que todos los campos requeridos estén completos."
-        );
-      }
-    }
-
-    throw error;
-  }
+  console.warn(
+    "createRequest está obsoleto con la nueva API backend. Usa createBackendRequest.",
+    payload,
+  );
+  throw new Error("createRequest no está soportado con la nueva API backend");
 };
 
 export const deleteRequest = async (requestId: string) => {
   try {
-    return api.delete(`/api/node/request/${requestId}`);
+    await deleteBackendRequest(requestId);
   } catch (error) {
     console.warn("API no disponible para eliminación:", error);
-    return Promise.resolve({ data: { success: true } });
   }
 };
 
@@ -576,29 +182,11 @@ export const assignDistributorToRequest = async (
   requestId: string,
   distributorId: string
 ) => {
-  try {
-    const payload: AssignDistributorPayload = {
-      data: {
-        type: "node--request",
-        id: requestId,
-        relationships: {
-          field_distributor_data: {
-            data: { type: "node--distributor", id: distributorId },
-          },
-        },
-      },
-    };
+  const dto: AssignDistributorDto = {
+    distributorId,
+  };
 
-    return api.patch(`/api/node/request/${requestId}`, payload, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-        "X-Csrf-Token": localStorage.getItem("csrf_token") || "",
-      },
-    });
-  } catch (error) {
-    console.warn("API no disponible para asignar repartidor:", error);
-    return Promise.resolve({ data: { success: true } });
-  }
+  return assignBackendRequestDistributor(requestId, dto);
 };
 
 export const assignApplicantToRequest = async (
@@ -606,24 +194,11 @@ export const assignApplicantToRequest = async (
   applicantId: string
 ) => {
   try {
-    const payload: AssignApplicantPayload = {
-      data: {
-        type: "node--request",
-        id: requestId,
-        relationships: {
-          field_applicant: {
-            data: { type: "node--profile", id: applicantId },
-          },
-        },
-      },
-    };
-
-    return api.patch(`/api/node/request/${requestId}`, payload, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-        "X-Csrf-Token": localStorage.getItem("csrf_token") || "",
-      },
-    });
+    console.warn(
+      "assignApplicantToRequest no está implementado en la API backend. Ningún cambio fue enviado.",
+      { requestId, applicantId },
+    );
+    return Promise.resolve({ data: { success: true } });
   } catch (error) {
     console.warn("API no disponible para asignar cliente:", error);
     return Promise.resolve({ data: { success: true } });
@@ -785,12 +360,17 @@ export const transformRequestForDisplay = (
 // Funciones para obtener entidades relacionadas
 export const fetchApplicants = async () => {
   try {
-    const response = await api.get("/api/node/profile", {
-      params: {
-        "page[limit]": 100,
-      },
-    });
-    return response.data;
+    const { customers } = await fetchProfiles("", "", "", 1, 100);
+
+    return {
+      data: customers.map((customer) => ({
+        id: customer.id,
+        attributes: {
+          field_full_name: customer.fullName,
+          field_document_number: customer.documentNumber,
+        },
+      })),
+    };
   } catch (error) {
     console.warn("API no disponible para clientes:", error);
     return null;
@@ -799,15 +379,27 @@ export const fetchApplicants = async () => {
 
 export const fetchDistributors = async () => {
   try {
-    const response = await api.get("/api/node/distributor", {
+    const response = await api.get("/distributors", {
       params: {
-        "page[limit]": 100,
+        page: 1,
+        limit: 1000,
       },
     });
-    return response.data;
+
+    const raw = response.data;
+
+    const items: any[] = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)
+      ? (raw as { data: unknown[] }).data
+      : raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)
+      ? (raw as { items: unknown[] }).items
+      : [];
+
+    return items;
   } catch (error) {
     console.error("Error fetching distributors:", error);
-    return null;
+    return [];
   }
 };
 
@@ -932,7 +524,7 @@ export const fetchServicesByCategory = async (categoryId: string) => {
       },
     });
 
-    const services = response.data.data.map((item: TaxonomyEntity) => ({
+    const services = response.data.data.map((item: { id: string; attributes?: { name?: string } }) => ({
       id: item.id,
       name: item.attributes?.name || "",
       categoryId: categoryId,
@@ -954,7 +546,7 @@ export const fetchSubservicesByService = async (serviceId: string) => {
       },
     });
 
-    const subservices = response.data.data.map((item: TaxonomyEntity) => ({
+    const subservices = response.data.data.map((item: { id: string; attributes?: { name?: string } }) => ({
       id: item.id,
       name: item.attributes?.name || "",
       serviceId: serviceId,
@@ -981,15 +573,15 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
 
     const subservice = response.data.data;
     const parentService = response.data.included?.find(
-      (item: TaxonomyEntity) =>
+      (item: { type: string; id: string }) =>
         item.type === "taxonomy_term--category" &&
         item.id === subservice.relationships?.parent?.data?.[0]?.id
-    );
+    ) as { id: string; attributes?: { name?: string }; relationships?: { parent?: { data?: Array<{ id: string }> } } } | undefined;
     const parentCategory = response.data.included?.find(
-      (item: TaxonomyEntity) =>
+      (item: { type: string; id: string }) =>
         item.type === "taxonomy_term--category" &&
         item.id === parentService?.relationships?.parent?.data?.[0]?.id
-    );
+    ) as { id: string; attributes?: { name?: string } } | undefined;
 
     return {
       subservice: {
@@ -1016,4 +608,87 @@ export const fetchSubserviceWithHierarchy = async (subserviceId: string) => {
     console.error("Error fetching subservice hierarchy:", error);
     return null;
   }
+};
+
+
+
+export const fetchBackendRequests = async (
+  params: { page?: number; limit?: number } = {},
+): Promise<RequestsListResponse> => {
+  const response = await api.get("/requests", { params });
+  const raw = response.data;
+
+  if (Array.isArray(raw)) {
+    return { data: raw as BackendRequest[] };
+  }
+
+  type RequestsListLike = { data?: unknown[] };
+
+  if (
+    raw &&
+    typeof raw === "object" &&
+    Array.isArray((raw as RequestsListLike).data)
+  ) {
+    return raw as RequestsListResponse;
+  }
+
+  return { data: [] };
+};
+
+export const fetchBackendRequestById = async (
+  id: string,
+): Promise<BackendRequest | null> => {
+  const response = await api.get(`/requests/${id}`);
+  const request = response.data;
+  if (!request) return null;
+  return request as BackendRequest;
+};
+
+export const createBackendRequest = async (
+  dto: CreateRequestDto,
+): Promise<BackendRequest> => {
+  const payload = {
+    applicantId: dto.applicantId,
+    serviceId: dto.serviceId,
+    title: dto.title ?? null,
+    entryDate: dto.entryDate,
+    data: dto.data.map((item) => ({
+      fieldId: item.fieldId,
+      value: item.value,
+    })),
+    paymentMethod: dto.paymentMethod ?? null,
+    isPrioritized: dto.isPrioritized ?? false,
+    requestStatus: dto.requestStatus ?? "EnProceso",
+  };
+
+  const response = await api.post("/requests", payload);
+  return response.data as BackendRequest;
+};
+
+export const updateBackendRequest = async (
+  id: string,
+  dto: UpdateRequestMetaDto,
+): Promise<BackendRequest> => {
+  const response = await api.put(`/requests/${id}`, dto);
+  return response.data as BackendRequest;
+};
+
+export const assignBackendRequestDistributor = async (
+  id: string,
+  dto: AssignDistributorDto,
+): Promise<BackendRequest> => {
+  const response = await api.patch(`/requests/${id}/assign`, dto);
+  return response.data as BackendRequest;
+};
+
+export const updateBackendRequestStatus = async (
+  id: string,
+  dto: UpdateStatusDto,
+): Promise<BackendRequest> => {
+  const response = await api.patch(`/requests/${id}/status`, dto);
+  return response.data as BackendRequest;
+};
+
+export const deleteBackendRequest = async (id: string): Promise<void> => {
+  await api.delete(`/requests/${id}`);
 };

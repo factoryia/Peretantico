@@ -12,7 +12,7 @@ import { CustomerCard } from "./customer-card";
 import { CustomerFormDialog } from "./customer-dialog";
 import { Paginator } from "@/components/common/paginator";
 import { CustomerCardSkeleton } from "./skeletons/customer-card-skeleton";
-import { fetchTaxonomyTerms } from "@/utils/global";
+// import { fetchTaxonomyTerms } from "@/utils/global";
 import { PROFILE_QUERY_KEY } from "../constants";
 
 export default function CustomerManagementPage() {
@@ -27,10 +27,7 @@ export default function CustomerManagementPage() {
   const [pageSize, setPageSize] = useState(10);
 
   // --- Carga de taxonomías ---
-  const { data: documentTypes = [] } = useQuery({
-    queryKey: ["document-types"],
-    queryFn: () => fetchTaxonomyTerms("/api/taxonomy_term/document_type"),
-  });
+  // Eliminado: traducción del tipo de documento por nombre para evitar inconsistencias de valor
 
   // --- Carga de clientes desde el backend ---
   const { data, isLoading: isLoadingCustomers } = useQuery({
@@ -39,15 +36,7 @@ export default function CustomerManagementPage() {
     staleTime: 0,
   });
 
-  const customers = useMemo(() => {
-    const rawCustomers = data?.customers ?? [];
-    return rawCustomers.map((c) => ({
-      ...c,
-      documentType:
-        documentTypes.find((t: any) => t.id === c.documentType)?.name ||
-        "Cédula",
-    }));
-  }, [data, documentTypes]);
+  const customers = useMemo(() => data?.customers ?? [], [data]);
 
   const totalPages = data?.totalPages ?? 1;
 

@@ -1,27 +1,21 @@
 import { useState } from "react";
 import { SidebarHeader } from "@/components/navigation/sidebar-header";
 import { ConfigSidebar } from "@/features/config/components/config-sidebar";
-import { CategoriesTab } from "@/features/config/components/categories-tab";
-import { SubservicesTab } from "@/features/config/components/services/subservices-tab";
 import { ServicesTab } from "@/features/config/components/services-tab";
 import { SpecialDatesTab } from "../components/dates/especial-dates-tab";
 import { ConfigMobileTabs } from "../components/config-mobile-tabs";
 
 export function Configuration() {
-  const [activeSection, setActiveSection] = useState("categorias");
+  const [activeSection, setActiveSection] = useState("servicios");
 
   const renderContent = () => {
     switch (activeSection) {
-      case "categorias":
-        return <CategoriesTab />;
       case "servicios":
         return <ServicesTab />;
-      case "subservicios":
-        return <SubservicesTab />;
       case "fechas":
         return <SpecialDatesTab />;
       default:
-        return <CategoriesTab />;
+        return <ServicesTab />;
     }
   };
 

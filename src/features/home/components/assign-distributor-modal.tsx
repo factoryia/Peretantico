@@ -50,16 +50,16 @@ export function AssignDistributorModal({
     const loadDistributors = async () => {
       try {
         const apiData = await fetchDistributors();
-        if (apiData?.data) {
-          const apiDistributors: Distributor[] = apiData.data.map((item: any) => ({
+        if (Array.isArray(apiData)) {
+          const apiDistributors: Distributor[] = apiData.map((item: any) => ({
             id: item.id,
-            title: item.attributes.title,
-            documentNumber: item.attributes.field_document_number,
-            phoneNumber: item.attributes.field_phone_number,
-            email: item.attributes.field_mail,
-            currentAvailability: item.attributes.field_current_availability,
-            coverageArea: getIncludedEntityName(item.relationships.field_coverage_area?.data?.id, "taxonomy_term--coverage_area", apiData.included),
-            transportationType: getIncludedEntityName(item.relationships.field_type_transportation?.data?.id, "taxonomy_term--type_transportation", apiData.included),
+            title: item.title,
+            documentNumber: item.documentNumber,
+            phoneNumber: item.phoneNumber,
+            email: item.email,
+            currentAvailability: item.currentAvailability,
+            coverageArea: item.coverageArea?.name || "",
+            transportationType: item.transportationType?.name || "",
           }));
           setDistributors(apiDistributors);
           setFilteredDistributors(apiDistributors);
@@ -178,16 +178,6 @@ export function AssignDistributorModal({
       <Badge className="bg-red-100 text-red-800">No disponible</Badge>
     )
   }
-
-  // Función helper para obtener nombres de entidades relacionadas
-  const getIncludedEntityName = (entityId: string, entityType: string, included: any[]): string => {
-    if (!included || !entityId) return "Sin especificar";
-    
-    const entity = included.find(
-      (item) => item.id === entityId && item.type === entityType
-    );
-    return entity?.attributes?.name || "Sin especificar";
-  };
 
   if (!data) return null
 

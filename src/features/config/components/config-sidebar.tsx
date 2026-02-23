@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, FileText, Layers, BarChart3, Calendar } from "lucide-react";
+import { Layers, BarChart3, Calendar } from "lucide-react";
 
 interface ConfigSidebarProps {
   activeSection: string;
@@ -10,22 +10,10 @@ interface ConfigSidebarProps {
 
 const menuItems = [
   {
-    id: "categorias",
-    title: "Categorías",
-    description: "Gestionar categorías de servicios",
-    icon: Settings,
-  },
-  {
     id: "servicios",
     title: "Servicios",
     description: "Administrar tipos de servicios",
     icon: Layers,
-  },
-  {
-    id: "subservicios",
-    title: "Subservicios",
-    description: "Configurar subservicios específicos",
-    icon: FileText,
   },
   {
     id: "fechas",

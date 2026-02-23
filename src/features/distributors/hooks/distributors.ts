@@ -10,13 +10,24 @@ export const useDistributorsQuery = ({
   status,
   fullName,
   documentNumber,
+  transportationTypeId,
+  documentType,
   page = 1,
   limit = 10,
 }: UseDistributorsQueryProps) => {
   return useQuery({
     queryKey: [
       DISTRIBUTORS_QUERY_KEY,
-      { coverageAreaId, status, fullName, documentNumber, page, limit },
+      {
+        coverageAreaId,
+        status,
+        fullName,
+        documentNumber,
+        transportationTypeId,
+        documentType,
+        page,
+        limit,
+      },
     ],
     queryFn: () =>
       fetchDistributors({
@@ -24,6 +35,8 @@ export const useDistributorsQuery = ({
         status,
         fullName,
         documentNumber,
+        transportationTypeId,
+        documentType,
         page,
         limit,
       }),

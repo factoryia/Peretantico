@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -30,6 +30,16 @@ import type { Distributor } from "@/features/distributors/types/distributors";
 import type { TaxonomyTerm } from "@/types/global";
 import { distributorSchema, type DistributorFormValues } from "../schemas";
 import { createDistributor, updateDistributor } from "../utils/distributors";
+import {
+  fetchCoverageAreas,
+  fetchTransportationTypes,
+  createCoverageArea,
+  createTransportationType,
+  deleteCoverageArea,
+  deleteTransportationType,
+  updateCoverageArea,
+  updateTransportationType,
+} from "../utils/taxonomies";
 import { toast } from "sonner";
 import {
   Loader,
@@ -67,6 +77,27 @@ export function DistributorDialog({
 
   const queryClient = useQueryClient();
 
+  const [localCoverageAreas, setLocalCoverageAreas] = useState<TaxonomyTerm[]>(
+    coverageAreas
+  );
+  const [localTransportationTypes, setLocalTransportationTypes] = useState<
+    TaxonomyTerm[]
+  >(transportationTypes);
+  const [creatingCoverageArea, setCreatingCoverageArea] = useState(false);
+  const [creatingTransportationType, setCreatingTransportationType] =
+    useState(false);
+  const [newTransportationName, setNewTransportationName] = useState("");
+  const [newCoverageName, setNewCoverageName] = useState("");
+  const [manageTransportationOpen, setManageTransportationOpen] =
+    useState(false);
+  const [manageCoverageOpen, setManageCoverageOpen] = useState(false);
+  const [transportationManagerItems, setTransportationManagerItems] = useState<
+    TaxonomyTerm[]
+  >([]);
+  const [coverageManagerItems, setCoverageManagerItems] = useState<
+    TaxonomyTerm[]
+  >([]);
+
   const form = useForm<DistributorFormValues>({
     resolver: zodResolver(distributorSchema),
     defaultValues: {
@@ -103,6 +134,8 @@ export function DistributorDialog({
         transportationTypeId: distributor.transportationType.id,
         status: distributor.status,
       });
+      setLocalCoverageAreas(coverageAreas);
+      setLocalTransportationTypes(transportationTypes);
     } else {
       form.reset({
         title: "",
@@ -118,8 +151,28 @@ export function DistributorDialog({
         coverageAreaId: "",
         transportationTypeId: "",
       });
+      setLocalCoverageAreas(coverageAreas);
+      setLocalTransportationTypes(transportationTypes);
     }
-  }, [isEditing, distributor, form, open]);
+  }, [isEditing, distributor, form, open, coverageAreas, transportationTypes]);
+
+  useEffect(() => {
+    if (manageTransportationOpen) {
+      (async () => {
+        const items = await fetchTransportationTypes();
+        setTransportationManagerItems(items);
+      })();
+    }
+  }, [manageTransportationOpen]);
+
+  useEffect(() => {
+    if (manageCoverageOpen) {
+      (async () => {
+        const items = await fetchCoverageAreas();
+        setCoverageManagerItems(items);
+      })();
+    }
+  }, [manageCoverageOpen]);
 
   const handleSubmit = async (values: DistributorFormValues) => {
     try {
@@ -170,6 +223,7 @@ export function DistributorDialog({
       : "Registre un nuevo repartidor completando los campos indicados";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto p-0 border-none bg-white">
         <DialogHeader className="p-6 bg-white border-b border-gray-100 rounded-t-3xl">
@@ -290,7 +344,7 @@ export function DistributorDialog({
             <div className="space-y-6">
               {sectionHeader(Truck, "Transporte y Logística")}
               <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="transportationTypeId"
@@ -299,23 +353,41 @@ export function DistributorDialog({
                         <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           Tipo Transporte <RequiredDot />
                         </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm">
-                              <SelectValue placeholder="Seleccione" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                            {transportationTypes.map((type) => (
-                              <SelectItem key={type.id} value={type.id}>
-                                {type.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-col gap-2">
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm">
+                                <SelectValue placeholder="Seleccione" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                              {localTransportationTypes.length === 0 ? (
+                                <div className="px-3 py-2 text-xs text-slate-500">
+                                  No hay tipos de transporte disponibles.
+                                </div>
+                              ) : (
+                                localTransportationTypes.map((type) => (
+                                  <SelectItem key={type.id} value={type.id}>
+                                    {type.name}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-[11px] font-bold uppercase tracking-wider justify-start"
+                            onClick={() => setManageTransportationOpen(true)}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Gestionar tipos de transporte
+                          </Button>
+                        </div>
                         <FormMessage className="text-[10px] font-bold" />
                       </FormItem>
                     )}
@@ -350,23 +422,41 @@ export function DistributorDialog({
                       <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                         Zona de Cobertura <RequiredDot />
                       </FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm">
-                            <SelectValue placeholder="Seleccione la zona de trabajo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                          {coverageAreas.map((area) => (
-                            <SelectItem key={area.id} value={area.id}>
-                              {area.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex flex-col gap-2">
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm">
+                              <SelectValue placeholder="Seleccione la zona de trabajo" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                            {localCoverageAreas.length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-slate-500">
+                                No hay zonas de cobertura disponibles.
+                              </div>
+                            ) : (
+                              localCoverageAreas.map((area) => (
+                                <SelectItem key={area.id} value={area.id}>
+                                  {area.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-[11px] font-bold uppercase tracking-wider justify-start"
+                          onClick={() => setManageCoverageOpen(true)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Gestionar zonas de cobertura
+                        </Button>
+                      </div>
                       <FormMessage className="text-[10px] font-bold" />
                     </FormItem>
                   )}
@@ -377,7 +467,7 @@ export function DistributorDialog({
             {/* COMMUNICATION SECTION */}
             <div className="space-y-6">
               {sectionHeader(Phone, "Comunicación")}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="phoneNumber"
@@ -552,5 +642,252 @@ export function DistributorDialog({
         </Form>
       </DialogContent>
     </Dialog>
+
+      <Dialog open={manageTransportationOpen} onOpenChange={setManageTransportationOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gestionar tipos de transporte</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nuevo tipo de transporte"
+                className="h-9 bg-slate-50/50 border-slate-200 rounded-lg text-sm"
+                value={newTransportationName}
+                onChange={(e) => setNewTransportationName(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="h-9"
+                disabled={
+                  creatingTransportationType ||
+                  !newTransportationName.trim()
+                }
+                onClick={async () => {
+                  const name = newTransportationName.trim();
+                  if (!name) return;
+                  try {
+                    setCreatingTransportationType(true);
+                    const created = await createTransportationType(name);
+                    const next: TaxonomyTerm = {
+                      id: created.id,
+                      name: created.name,
+                    };
+                    setTransportationManagerItems((prev) => [...prev, next]);
+                    setLocalTransportationTypes((prev) => [...prev, next]);
+                    form.setValue("transportationTypeId", next.id, {
+                      shouldValidate: true,
+                    });
+                    setNewTransportationName("");
+                    queryClient.invalidateQueries({
+                      queryKey: ["transportationTypes"],
+                    });
+                    toast.success("Tipo de transporte creado correctamente");
+                  } catch {
+                    toast.error("Error al crear el tipo de transporte");
+                  } finally {
+                    setCreatingTransportationType(false);
+                  }
+                }}
+              >
+                Agregar
+              </Button>
+            </div>
+            <div className="border border-slate-100 rounded-lg max-h-64 overflow-auto">
+              {transportationManagerItems.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-slate-500">
+                  No hay tipos de transporte configurados.
+                </div>
+              ) : (
+                transportationManagerItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 px-4 py-2 border-b last:border-b-0 border-slate-100"
+                  >
+                    <Input
+                      defaultValue={item.name}
+                      className="h-8 bg-slate-50/50 border-slate-200 rounded-lg text-xs"
+                      onBlur={async (e) => {
+                        const name = e.target.value.trim();
+                        if (!name || name === item.name) return;
+                        try {
+                          await updateTransportationType(item.id, { name });
+                          const updated = transportationManagerItems.map(
+                            (current) =>
+                              current.id === item.id
+                                ? { ...current, name }
+                                : current
+                          );
+                          setTransportationManagerItems(updated);
+                          setLocalTransportationTypes(updated);
+                          queryClient.invalidateQueries({
+                            queryKey: ["transportationTypes"],
+                          });
+                          toast.success("Tipo de transporte actualizado");
+                        } catch {
+                          toast.error("Error al actualizar el tipo");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-red-500"
+                      onClick={async () => {
+                        try {
+                          await deleteTransportationType(item.id);
+                          const remaining = transportationManagerItems.filter(
+                            (current) => current.id !== item.id
+                          );
+                          setTransportationManagerItems(remaining);
+                          setLocalTransportationTypes(remaining);
+                          if (form.getValues("transportationTypeId") === item.id) {
+                            form.setValue("transportationTypeId", "", {
+                              shouldValidate: true,
+                            });
+                          }
+                          queryClient.invalidateQueries({
+                            queryKey: ["transportationTypes"],
+                          });
+                          toast.success("Tipo de transporte eliminado");
+                        } catch {
+                          toast.error("Error al eliminar el tipo");
+                        }
+                      }}
+                    >
+                      <FileText className="hidden" />
+                      <span className="text-xs font-semibold">X</span>
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manageCoverageOpen} onOpenChange={setManageCoverageOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gestionar zonas de cobertura</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nueva zona de cobertura"
+                className="h-9 bg-slate-50/50 border-slate-200 rounded-lg text-sm"
+                value={newCoverageName}
+                onChange={(e) => setNewCoverageName(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="h-9"
+                disabled={creatingCoverageArea || !newCoverageName.trim()}
+                onClick={async () => {
+                  const name = newCoverageName.trim();
+                  if (!name) return;
+                  try {
+                    setCreatingCoverageArea(true);
+                    const created = await createCoverageArea(name);
+                    const next: TaxonomyTerm = {
+                      id: created.id,
+                      name: created.name,
+                    };
+                    setCoverageManagerItems((prev) => [...prev, next]);
+                    setLocalCoverageAreas((prev) => [...prev, next]);
+                    form.setValue("coverageAreaId", next.id, {
+                      shouldValidate: true,
+                    });
+                    setNewCoverageName("");
+                    queryClient.invalidateQueries({
+                      queryKey: ["coverageAreas"],
+                    });
+                    toast.success("Zona de cobertura creada correctamente");
+                  } catch {
+                    toast.error("Error al crear la zona de cobertura");
+                  } finally {
+                    setCreatingCoverageArea(false);
+                  }
+                }}
+              >
+                Agregar
+              </Button>
+            </div>
+            <div className="border border-slate-100 rounded-lg max-h-64 overflow-auto">
+              {coverageManagerItems.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-slate-500">
+                  No hay zonas de cobertura configuradas.
+                </div>
+              ) : (
+                coverageManagerItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 px-4 py-2 border-b last:border-b-0 border-slate-100"
+                  >
+                    <Input
+                      defaultValue={item.name}
+                      className="h-8 bg-slate-50/50 border-slate-200 rounded-lg text-xs"
+                      onBlur={async (e) => {
+                        const name = e.target.value.trim();
+                        if (!name || name === item.name) return;
+                        try {
+                          await updateCoverageArea(item.id, { name });
+                          const updated = coverageManagerItems.map((current) =>
+                            current.id === item.id
+                              ? { ...current, name }
+                              : current
+                          );
+                          setCoverageManagerItems(updated);
+                          setLocalCoverageAreas(updated);
+                          queryClient.invalidateQueries({
+                            queryKey: ["coverageAreas"],
+                          });
+                          toast.success("Zona de cobertura actualizada");
+                        } catch {
+                          toast.error("Error al actualizar la zona");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-red-500"
+                      onClick={async () => {
+                        try {
+                          await deleteCoverageArea(item.id);
+                          const remaining = coverageManagerItems.filter(
+                            (current) => current.id !== item.id
+                          );
+                          setCoverageManagerItems(remaining);
+                          setLocalCoverageAreas(remaining);
+                          if (form.getValues("coverageAreaId") === item.id) {
+                            form.setValue("coverageAreaId", "", {
+                              shouldValidate: true,
+                            });
+                          }
+                          queryClient.invalidateQueries({
+                            queryKey: ["coverageAreas"],
+                          });
+                          toast.success("Zona de cobertura eliminada");
+                        } catch {
+                          toast.error("Error al eliminar la zona");
+                        }
+                      }}
+                    >
+                      <FileText className="hidden" />
+                      <span className="text-xs font-semibold">X</span>
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

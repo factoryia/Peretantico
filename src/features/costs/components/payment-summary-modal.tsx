@@ -28,7 +28,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import type { Request } from "../types";
-import { createPayment } from "../utils/costs";
+import { createPaymentRecord, type CreatePaymentDto } from "../utils/costs";
 import { usePaymentStatusesQuery } from "../hooks/use-payment-taxonomies";
 import { toast } from "sonner";
 
@@ -57,6 +57,7 @@ export function PaymentSummaryModal({
   onSuccess,
 }: PaymentSummaryModalProps) {
   const { data: statuses } = usePaymentStatusesQuery();
+  void statuses;
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
@@ -97,27 +98,17 @@ export function PaymentSummaryModal({
 
   const handleConfirm = async (values: PaymentFormValues) => {
     try {
-      // Buscar el ID del estado "Recibido"
-      const recibidoStatus = statuses?.find(
-        (s) => s.name.toLowerCase() === "recibido"
-      );
-
-      if (!recibidoStatus) {
-        toast.error("No se encontró el estado de pago 'Recibido'");
-        return;
-      }
-
-      const paymentData = {
+      const dto: CreatePaymentDto = {
         title: `Pago de ${numRequests} solicitudes - ${distributorName}`,
-        observations: values.observations,
-        additionalAmount: values.valuePerRequest * numRequests, // Usamos esto como el valor base si el API lo requiere así
+        observations: values.observations || "",
+        additionalAmount: values.valuePerRequest * numRequests,
         discountAmount: 0,
         distributorId,
-        requestIds: selectedRequests.map((r) => r.id),
-        paymentStatusId: recibidoStatus.id,
+        status: "PAID",
+        totalAmount: values.valuePerRequest * numRequests,
       };
 
-      await createPayment(paymentData);
+      await createPaymentRecord(dto);
 
       toast.success("Pago realizado correctamente");
       onSuccess();

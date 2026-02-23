@@ -27,38 +27,36 @@ export async function uploadEvidence(file: File): Promise<string> {
   return res.data.uuid[0].value;
 }
 
-export async function completeRequestWithEvidence(
-  requestId: string,
-  fileUuid: string
-) {
-  const csrfToken = localStorage.getItem(CSRF_TOKEN);
+export async function uploadServiceFieldFile(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
 
-  const payload = {
-    data: {
-      type: "node--request",
-      id: requestId,
-      relationships: {
-        field_image: {
-          data: {
-            type: "file--file",
-            id: fileUuid,
-          },
-        },
-        field_application_statuses: {
-          data: {
-            type: "taxonomy_term--application_statuses",
-            id: "23fb747d-8ed4-4ba5-9369-150c6995eefe", // Atendida con éxito
-          },
-        },
-      },
+  const res = await api.post("/uploads/profile-documents", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
     },
+  });
+
+  const data = res.data as {
+    url?: string;
+    fileName?: string;
+    mimeType?: string;
+    size?: number;
   };
 
-  await api.patch(`/api/node/request/${requestId}`, payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-      Accept: "application/vnd.api+json",
-      "X-Csrf-Token": csrfToken || "",
-    },
+  if (!data || typeof data.url !== "string") {
+    throw new Error("No se pudo obtener la URL del archivo");
+  }
+
+  return data.url;
+}
+
+export async function completeRequestWithEvidence(
+  requestId: string,
+  _fileUuid: string
+) {
+  await api.patch(`/requests/${requestId}/status`, {
+    status: true,
+    observations: "Actualizada desde evidencia",
   });
 }

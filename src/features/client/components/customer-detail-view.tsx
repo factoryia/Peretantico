@@ -6,10 +6,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Customer } from "../types";
-import { fetchDocumentTypeTaxonomy, getNameFromId } from "../utils/customer";
+import {
+  fetchDocumentTypeTaxonomy,
+  getNameFromId,
+  fetchProfileById,
+} from "../utils/customer";
 import { DOCUMENT_TYPE_TAXONOMY_KEY } from "../constants";
 import { DataPoint } from "@/features/home/components/data-point";
 import { FaWhatsapp } from "react-icons/fa";
+import { API_BASE_URL } from "@/features/auth/constants";
 
 interface CustomerDetailViewProps {
   customer: Customer;
@@ -25,11 +30,14 @@ export function CustomerDetailView({
     queryFn: fetchDocumentTypeTaxonomy,
   });
 
+  const { data: profileData } = useQuery({
+    queryKey: ["profile-by-id", customer.id],
+    queryFn: () => fetchProfileById(customer.id),
+    enabled: !!customer.id,
+  });
+
   const getDocTypeName = (id: string) => {
-    if (id.length > 20) {
-      return getNameFromId(id, documentTypeOptions);
-    }
-    return id || "No especificado";
+    return getNameFromId(id, documentTypeOptions) || id || "No especificado";
   };
 
   const getInitials = (name: string) => {
@@ -144,29 +152,49 @@ export function CustomerDetailView({
           noBorder
         />
 
-        {customer.photo_document && (
+        {((profileData?.attachments && profileData.attachments.length > 0) ||
+          (customer.attachments && customer.attachments.length > 0)) && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold flex items-center gap-2.5 mb-4">
               <FileText className="size-5 text-blue-600" />
               Documentos Adjuntos
             </div>
-            <div className="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <FileText className="w-5 h-5 text-blue-600 mr-3" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-900">
-                  Documento de Identidad
-                </p>
-                <p className="text-[10px] text-slate-500 uppercase font-bold">
-                  Cargado
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-blue-600 font-bold text-xs uppercase"
-              >
-                Ver
-              </Button>
+            <div className="space-y-2">
+              {(profileData?.attachments ?? customer.attachments ?? []).map(
+                (att: any) => {
+                  const url =
+                    typeof att.url === "string" && att.url.startsWith("http")
+                      ? att.url
+                      : `${API_BASE_URL}${att.url ?? ""}`;
+                  return (
+                    <div
+                      key={att.id}
+                      className="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200"
+                    >
+                      <FileText className="w-5 h-5 text-blue-600 mr-3" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {att.fileName || "Documento"}
+                        </p>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold">
+                          {att.mimeType || "Archivo"}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 font-bold text-xs uppercase"
+                        onClick={() => {
+                          if (url) window.open(url, "_blank");
+                        }}
+                      >
+                        Ver
+                      </Button>
+                      {/* Solo ver en detalles; eliminar se hace en edición */}
+                    </div>
+                  );
+                }
+              )}
             </div>
           </div>
         )}

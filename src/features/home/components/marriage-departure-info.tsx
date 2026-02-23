@@ -6,7 +6,7 @@ interface MarriageDepartureInfoProps {
 }
 
 export function MarriageDepartureInfo({ request }: MarriageDepartureInfoProps) {
-  const infoService = request?.infoService;
+  const infoService = request?.infoService as any;
 
   if (
     !infoService ||

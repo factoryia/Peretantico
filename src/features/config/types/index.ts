@@ -6,6 +6,22 @@ export interface Category {
   created: string;
 }
 
+export type FieldType = "Text" | "Number" | "Date" | "Boolean" | "Select" | "File";
+
+export interface ServiceField {
+  id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  type: FieldType;
+  required: boolean;
+  multiple: boolean;
+  order: number;
+  options?: unknown | null;
+  status: boolean;
+  settings?: unknown | null;
+}
+
 export interface Service {
   id: string;
   categoryId: string;
@@ -14,6 +30,7 @@ export interface Service {
   description?: string;
   status: "activo" | "inactivo";
   creationDate: string;
+  fields?: ServiceField[];
 }
 
 export interface Subservice {

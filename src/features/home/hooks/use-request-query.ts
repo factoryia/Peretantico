@@ -10,6 +10,7 @@ import {
   fetchSubservicesByService
 } from "../utils/request"
 import { fetchAllActiveCategories } from "@/features/config/utils/category"
+import { fetchServices } from "@/features/config/utils/service"
 import type { RequestFilters } from "../types/request"
 
 export const REQUESTS_QUERY_KEY = "requests"
@@ -111,6 +112,15 @@ export const useSubservicesByServiceQuery = (serviceId: string) => {
     queryFn: () => fetchSubservicesByService(serviceId),
     enabled: !!serviceId,
     staleTime: 300000, // 5 minutos
+    refetchOnWindowFocus: false,
+  })
+}
+
+export const useServicesQuery = () => {
+  return useQuery({
+    queryKey: [SERVICES_QUERY_KEY],
+    queryFn: () => fetchServices("", 1, 100),
+    staleTime: 300000,
     refetchOnWindowFocus: false,
   })
 }

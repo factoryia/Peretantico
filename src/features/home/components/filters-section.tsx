@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label";
 import { X, Plus, Search, Filter } from "lucide-react";
 import type { RequestFilters } from "../types/request";
 import {
-  useSubservicesQuery,
+  useServicesQuery,
   useDistributorsQuery,
-  useApplicationStatusesQuery,
 } from "../hooks/use-request-query";
 import {
   Select,
@@ -29,12 +28,10 @@ export function FiltersSection({
   onFiltersChange,
   onNewRequest,
 }: FiltersSectionProps) {
-  const { data: subservicesData, isLoading: isLoadingSubservices } =
-    useSubservicesQuery();
+  const { data: servicesData, isLoading: isLoadingServices } =
+    useServicesQuery();
   const { data: distributorsData, isLoading: isLoadingDistributors } =
     useDistributorsQuery();
-  const { data: statusesData, isLoading: isLoadingStatuses } =
-    useApplicationStatusesQuery();
 
   const handleFilterChange = (key: string, value: string) => {
     const newFilters = { ...filters, [key]: value };
@@ -109,7 +106,6 @@ export function FiltersSection({
             <Select
               value={filters.status || "all"}
               onValueChange={(value) => handleFilterChange("status", value)}
-              disabled={isLoadingStatuses}
             >
               <SelectTrigger
                 id="status"
@@ -118,46 +114,39 @@ export function FiltersSection({
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">
-                  {isLoadingStatuses ? "Cargando..." : "Todos"}
-                </SelectItem>
-                {statusesData?.data?.map((status: any) => (
-                  <SelectItem key={status.id} value={status.id}>
-                    {status.attributes?.name || "Sin nombre"}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="active">Activo</SelectItem>
+                <SelectItem value="inactive">Inactivo</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Subservicio */}
+          {/* Servicio */}
           <div className="space-y-1.5">
             <Label
               htmlFor="subservice"
               className="text-xs font-semibold text-gray-500 uppercase tracking-wide"
             >
-              Subservicio
+              Servicio
             </Label>
             <Select
               value={filters.subservice || "all"}
               onValueChange={(value) => handleFilterChange("subservice", value)}
-              disabled={isLoadingSubservices}
+              disabled={isLoadingServices}
             >
               <SelectTrigger
                 id="subservice"
                 className="bg-gray-50/50 border-gray-200 h-10"
               >
-                <SelectValue placeholder="Subservicio" />
+                <SelectValue placeholder="Servicio" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">
-                  {isLoadingSubservices ? "Cargando..." : "Todos"}
+                  {isLoadingServices ? "Cargando..." : "Todos"}
                 </SelectItem>
-                {subservicesData?.data?.map((subservice: any) => (
-                  <SelectItem key={subservice.id} value={subservice.id}>
-                    {subservice.attributes?.name ||
-                      subservice.attributes?.title ||
-                      "Sin nombre"}
+                {servicesData?.services?.map((service: any) => (
+                  <SelectItem key={service.id} value={service.id}>
+                    {service.name || "Sin nombre"}
                   </SelectItem>
                 )) || []}
               </SelectContent>
@@ -185,18 +174,19 @@ export function FiltersSection({
               >
                 <SelectValue placeholder="Repartidor" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {isLoadingDistributors ? "Cargando..." : "Todos"}
-                </SelectItem>
-                {distributorsData?.data?.map((distributor: any) => (
-                  <SelectItem key={distributor.id} value={distributor.id}>
-                    {distributor.attributes?.title ||
-                      distributor.attributes?.name ||
-                      "Sin nombre"}
+                <SelectContent>
+                  <SelectItem value="all">
+                    {isLoadingDistributors ? "Cargando..." : "Todos"}
                   </SelectItem>
-                )) || []}
-              </SelectContent>
+                  {(Array.isArray(distributorsData)
+                    ? (distributorsData as any[])
+                    : []
+                  ).map((distributor: any) => (
+                    <SelectItem key={distributor.id} value={distributor.id}>
+                      {distributor.title || "Sin nombre"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
             </Select>
           </div>
 

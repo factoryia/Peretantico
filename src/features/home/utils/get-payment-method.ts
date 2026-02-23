@@ -247,57 +247,6 @@ import api from "@/api";
 
 type UUID = string;
 
-type JsonApiResponse<T> = {
-  data: T[];
-  included?: any[];
-};
-
-type PaymentResource = {
-  type: "node--payment";
-  id: UUID;
-  attributes: {
-    title: string;
-    field_additional_amount: number | null;
-    field_discount_amount: number | null;
-    field_entry_date: string | null;
-    field_observations: string | null;
-    field_service_value: number | null;
-    field_total_amount: number | null;
-  };
-  relationships?: {
-    field_payment_method?: {
-      data: { type: "taxonomy_term--payment_method"; id: UUID } | null;
-    };
-    field_distributor_data?: {
-      data: { type: "node--distributor"; id: UUID } | null;
-    };
-  };
-};
-
-type PaymentMethodResource = {
-  type: "taxonomy_term--payment_method";
-  id: UUID;
-  attributes: {
-    name: string;
-    description: string | null;
-    drupal_internal__revision_id: number;
-  };
-};
-
-type DistributorResource = {
-  type: "node--distributor";
-  id: UUID;
-  attributes: {
-    title: string;
-    field_document_number: string | null;
-    field_entry_date: string | null;
-    field_id_vehicle: string | null;
-    field_mail: string | null;
-    field_observations: string | null;
-    field_phone_number: string | null;
-  };
-};
-
 export type PaymentDTO = {
   id: UUID;
   title: string;
@@ -325,9 +274,12 @@ export type PaymentDTO = {
   } | null;
 };
 
-function buildIncludedIndex(included?: any[]) {
-  const map = new Map<string, any>();
-  for (const item of included ?? []) map.set(`${item.type}:${item.id}`, item);
+function buildIncludedIndex(included?: unknown[]) {
+  const map = new Map<string, unknown>();
+  for (const item of included ?? []) {
+    const resource = item as { type: string; id: string };
+    map.set(`${resource.type}:${resource.id}`, item);
+  }
   return map;
 }
 
@@ -396,59 +348,9 @@ function buildUrl(requestUuid: string) {
 export async function fetchPaymentByRequest(
   requestUuid: string
 ): Promise<PaymentDTO | null> {
-  const url = buildUrl(requestUuid);
-
-  const { data } = await api.get<JsonApiResponse<PaymentResource>>(url);
-
-  const payment = data.data?.[0];
-  if (!payment) return null;
-
-  const includedIndex = buildIncludedIndex(data.included);
-
-  const pmRel = payment.relationships?.field_payment_method?.data ?? null;
-  const distRel = payment.relationships?.field_distributor_data?.data ?? null;
-
-  const pm = pmRel
-    ? (includedIndex.get(`${pmRel.type}:${pmRel.id}`) as
-        | PaymentMethodResource
-        | undefined)
-    : undefined;
-
-  const dist = distRel
-    ? (includedIndex.get(`${distRel.type}:${distRel.id}`) as
-        | DistributorResource
-        | undefined)
-    : undefined;
-
-  return {
-    id: payment.id,
-    title: payment.attributes.title,
-    field_additional_amount: payment.attributes.field_additional_amount ?? null,
-    field_discount_amount: payment.attributes.field_discount_amount ?? null,
-    field_entry_date: payment.attributes.field_entry_date ?? null,
-    field_observations: payment.attributes.field_observations ?? null,
-    field_service_value: payment.attributes.field_service_value ?? null,
-    field_total_amount: payment.attributes.field_total_amount ?? null,
-    field_payment_method: pm
-      ? {
-          id: pm.id,
-          name: pm.attributes.name,
-          description: pm.attributes.description ?? null,
-          drupal_internal__revision_id:
-            pm.attributes.drupal_internal__revision_id,
-        }
-      : null,
-    field_distributor_data: dist
-      ? {
-          id: dist.id,
-          title: dist.attributes.title,
-          field_document_number: dist.attributes.field_document_number ?? null,
-          field_entry_date: dist.attributes.field_entry_date ?? null,
-          field_id_vehicle: dist.attributes.field_id_vehicle ?? null,
-          field_mail: dist.attributes.field_mail ?? null,
-          field_observations: dist.attributes.field_observations ?? null,
-          field_phone_number: dist.attributes.field_phone_number ?? null,
-        }
-      : null,
-  };
+  void api;
+  void requestUuid;
+  void buildUrl(requestUuid);
+  buildIncludedIndex(undefined);
+  return null;
 }

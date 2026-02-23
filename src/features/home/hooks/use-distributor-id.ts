@@ -10,16 +10,29 @@ export function useDistributorId() {
     queryFn: async () => {
       if (!authUser?.name) return null;
 
-      // Intentamos buscar al repartidor por su correo (que asumimos es el 'name' del usuario logueado en este contexto)
-      const response = await api.get("/api/node/distributor", {
+      const response = await api.get("/distributors", {
         params: {
-          "filter[field_mail]": authUser.name,
+          email: authUser.name,
+          limit: 1,
         },
       });
 
-      const data = response.data?.data;
-      if (data && data.length > 0) {
-        return data[0].id as string;
+      const raw = response.data;
+
+      if (Array.isArray(raw) && raw.length > 0) {
+        const first = raw[0];
+        if (first && typeof first.id === "string") {
+          return first.id as string;
+        }
+      } else if (
+        raw &&
+        typeof raw === "object" &&
+        Array.isArray((raw as { data?: unknown }).data)
+      ) {
+        const first = (raw as { data: Array<{ id?: unknown }> }).data[0];
+        if (first && typeof first.id === "string") {
+          return first.id as string;
+        }
       }
 
       return null;

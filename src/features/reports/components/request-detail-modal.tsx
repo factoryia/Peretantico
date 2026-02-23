@@ -346,11 +346,11 @@ export function RequestDetailModal({
         // Obtener información del servicio o subservicio
         if (
           request.relationships?.field_info_service?.data &&
-          request.relationships.field_info_service.data.meta
+          (request.relationships.field_info_service.data as any)?.meta
             ?.drupal_internal__target_id
         ) {
           const serviceId = String(
-            request.relationships.field_info_service.data.meta
+            (request.relationships.field_info_service.data as any).meta
               .drupal_internal__target_id
           );
           const serviceType =
@@ -389,11 +389,11 @@ export function RequestDetailModal({
         // Intentar obtener desde field_info_service (que es el nodo real del subservicio)
         if (
           request?.relationships?.field_info_service?.data &&
-          request.relationships.field_info_service.data.meta
+          (request.relationships.field_info_service.data as any)?.meta
             ?.drupal_internal__target_id
         ) {
           const serviceId = String(
-            request.relationships.field_info_service.data.meta
+            (request.relationships.field_info_service.data as any).meta
               .drupal_internal__target_id
           );
           const serviceType =
@@ -428,7 +428,7 @@ export function RequestDetailModal({
     // Solo ejecutar si tenemos field_info_service y es un subservicio
     const hasInfoService =
       request?.relationships?.field_info_service?.data &&
-      request.relationships.field_info_service.data.meta
+      (request.relationships.field_info_service.data as any)?.meta
         ?.drupal_internal__target_id;
     const isPropertyCertification =
       request?.relationships?.field_info_service?.data?.type?.includes(

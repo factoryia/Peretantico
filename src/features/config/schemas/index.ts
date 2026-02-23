@@ -1,7 +1,27 @@
 import * as z from "zod";
 
+const fieldTypeEnum = z.enum(["Text", "Number", "Date", "Boolean", "Select", "File"]);
+
+export const serviceFieldSchema = z.object({
+  id: z.string().optional(),
+  name: z
+    .string()
+    .min(1, "El nombre del campo es obligatorio")
+    .max(100, "Máximo 100 caracteres"),
+  code: z
+    .string()
+    .max(100, "Máximo 100 caracteres")
+    .optional()
+    .or(z.literal("")),
+  description: z.string().max(500, "Máximo 500 caracteres").optional(),
+  type: fieldTypeEnum,
+  required: z.boolean().default(false),
+  multiple: z.boolean().default(false),
+  order: z.coerce.number().int().min(0).default(0),
+  status: z.boolean().default(true),
+});
+
 export const serviceSchema = z.object({
-  categoryId: z.string().min(1, "Debe seleccionar una categoría"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -10,8 +30,10 @@ export const serviceSchema = z.object({
   status: z.enum(["activo", "inactivo"], {
     required_error: "Debe seleccionar un estado",
   }),
+  fields: z.array(serviceFieldSchema).default([]),
 });
 
+export type ServiceFieldFormValues = z.infer<typeof serviceFieldSchema>;
 export type ServiceFormValues = z.infer<typeof serviceSchema>;
 
 export const subserviceSchema = z.object({

@@ -34,6 +34,8 @@ interface DistributorFilters {
   status: string;
   fullName: string;
   documentNumber: string;
+  transportationTypeId: string;
+  documentType: string;
   page: number;
   limit: number;
 }
@@ -60,6 +62,8 @@ export function Distributors() {
     status: "all",
     fullName: "",
     documentNumber: "",
+    transportationTypeId: "all",
+    documentType: "all",
     page: 1,
     limit: 10,
   });
@@ -78,6 +82,8 @@ export function Distributors() {
       status: "all",
       fullName: "",
       documentNumber: "",
+      transportationTypeId: "all",
+      documentType: "all",
       page: 1,
       limit: 10,
     });
@@ -94,6 +100,12 @@ export function Distributors() {
     status: filters.status !== "all" ? filters.status === "true" : undefined,
     fullName: filters.fullName || undefined,
     documentNumber: filters.documentNumber || undefined,
+    transportationTypeId:
+      filters.transportationTypeId !== "all"
+        ? filters.transportationTypeId
+        : undefined,
+    documentType:
+      filters.documentType !== "all" ? filters.documentType : undefined,
     page: filters.page,
     limit: filters.limit,
   });
@@ -126,7 +138,9 @@ export function Distributors() {
     filters.fullName ||
     filters.documentNumber ||
     filters.coverageAreaId !== "all" ||
-    filters.status !== "all";
+    filters.status !== "all" ||
+    filters.transportationTypeId !== "all" ||
+    filters.documentType !== "all";
 
   return (
     <>
@@ -197,7 +211,7 @@ export function Distributors() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-gray-500 ml-1">
                     NOMBRE COMPLETO
@@ -250,6 +264,54 @@ export function Distributors() {
                       {coverageAreaOptions.map((area) => (
                         <SelectItem key={area.id} value={area.id}>
                           {area.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    TIPO TRANSPORTE
+                  </Label>
+                  <Select
+                    value={filters.transportationTypeId}
+                    onValueChange={(value) =>
+                      updateFilters({ transportationTypeId: value })
+                    }
+                  >
+                    <SelectTrigger className="h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 transition-all">
+                      <SelectValue placeholder="Todos los tipos" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                      <SelectItem value="all">Todos los tipos</SelectItem>
+                      {transportationTypes.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    TIPO DOCUMENTO
+                  </Label>
+                  <Select
+                    value={filters.documentType}
+                    onValueChange={(value) =>
+                      updateFilters({ documentType: value })
+                    }
+                  >
+                    <SelectTrigger className="h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 transition-all">
+                      <SelectValue placeholder="Todos los documentos" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                      <SelectItem value="all">Todos los documentos</SelectItem>
+                      {documentTypesOptions.map((dt) => (
+                        <SelectItem key={dt.id} value={dt.id}>
+                          {dt.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

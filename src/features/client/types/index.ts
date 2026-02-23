@@ -129,6 +129,7 @@ export interface Customer {
   municipality: string;
   address: string;
   photo_document: File | null;
+  attachments?: Attachment[];
 }
 
 export type FormMode = "create" | "view" | "edit";
@@ -143,4 +144,12 @@ export interface CustomerFormValues {
   municipality: string;
   address: string;
   photo_document?: File | null;
+}
+
+export interface Attachment {
+  id: string;
+  url: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
 }

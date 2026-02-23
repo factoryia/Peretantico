@@ -127,6 +127,7 @@ export function RequestsTable({
       handleCloseModal("assignDistributor");
     } catch (error) {
       console.error("Error al asignar repartidor:", error);
+      throw error;
     }
   };
 
@@ -141,6 +142,7 @@ export function RequestsTable({
       handleCloseModal("assignApplicant");
     } catch (error) {
       console.error("Error al asignar solicitante:", error);
+      throw error;
     }
   };
 
@@ -148,13 +150,9 @@ export function RequestsTable({
     requestId: string,
     data: UpdateRequestPayload
   ) => {
-    try {
-      if (requestId) {
-        await updateRequest(requestId, data);
-        await refetch();
-      }
-    } catch (error) {
-      console.error("Error al actualizar la solicitud:", error);
+    if (requestId) {
+      await updateRequest(requestId, data);
+      await refetch();
     }
   };
 
@@ -292,30 +290,36 @@ export function RequestsTable({
           </TableHeader>
           <TableBody>
             {completeRequestsData?.data.map((requestData) => {
-              const statusName =
-                requestData.applicationStatus?.name || "Sin asignar";
+              const mapRequestStatusToLabel = (status?: string | null) => {
+                switch (status) {
+                  case "Atendida":
+                    return "Atendida";
+                  case "EnProceso":
+                    return "En proceso";
+                  case "Finalizada":
+                    return "Finalizada";
+                  case "Incompleta":
+                    return "Incompleta";
+                  default:
+                    return "En proceso";
+                }
+              };
 
-              const getStatusVariant = (status: string) => {
-                const lowerStatus = status.toLowerCase();
-                if (
-                  lowerStatus.includes("rechaz") ||
-                  lowerStatus.includes("cancel")
-                )
-                  return "cancelado";
-                if (lowerStatus.includes("nuevo")) return "nuevo";
-                if (
-                  lowerStatus.includes("proceso") ||
-                  lowerStatus.includes("asignado") ||
-                  lowerStatus.includes("camino") ||
-                  lowerStatus.includes("pendiente")
-                )
-                  return "en-proceso";
-                if (
-                  lowerStatus.includes("completado") ||
-                  lowerStatus.includes("entregado")
-                )
-                  return "completado";
-                return "nuevo";
+              const mapRequestStatusToVariant = (
+                status?: string | null,
+              ): "nuevo" | "en-proceso" | "completado" | "cancelado" => {
+                switch (status) {
+                  case "Atendida":
+                    return "completado";
+                  case "EnProceso":
+                    return "en-proceso";
+                  case "Finalizada":
+                    return "completado";
+                  case "Incompleta":
+                    return "cancelado";
+                  default:
+                    return "en-proceso";
+                }
               };
 
               const getServiceTitle = (type: string | undefined) => {
@@ -341,7 +345,12 @@ export function RequestsTable({
                 }
               };
 
-              const variant = getStatusVariant(statusName);
+              const statusLabel = mapRequestStatusToLabel(
+                requestData.requestStatus,
+              );
+              const variant = mapRequestStatusToVariant(
+                requestData.requestStatus,
+              );
               const serviceType = requestData.infoService?.type;
 
               const statusStyles = {
@@ -394,7 +403,7 @@ export function RequestsTable({
                       variant="outline"
                       className={`rounded-full shadow-none font-medium ${statusStyles[variant]}`}
                     >
-                      {statusName}
+                      {statusLabel}
                     </Badge>
                   </TableCell>
 

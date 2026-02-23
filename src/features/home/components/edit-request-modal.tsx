@@ -37,23 +37,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
-import {
-  updateRequest,
-  fetchApplicants,
-  fetchSubserviceWithHierarchy,
-} from "@/features/home/utils/request";
+import { updateRequest, fetchApplicants } from "@/features/home/utils/request";
+import { uploadServiceFieldFile } from "@/features/home/utils/evidence";
+import { API_BASE_URL } from "@/features/auth/constants";
 import {
   useDistributorsQuery,
-  useCategoriesQuery,
-  useServicesByCategoryQuery,
-  useSubservicesByServiceQuery,
+  useServicesQuery,
 } from "@/features/home/hooks/use-request-query";
 import type {
   EditRequestFormData,
-  Category,
-  Service,
-  Subservice,
   Applicant,
   Distributor,
 } from "@/features/home/types/request";
@@ -65,6 +62,24 @@ interface EditRequestModalProps {
   request: CompleteRequest | null;
 }
 
+function parseDateFromString(value: string): Date | undefined {
+  const parts = value.split("-");
+  if (parts.length !== 3) return undefined;
+  const [yearStr, monthStr, dayStr] = parts;
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateToString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function EditRequestModal({
   isOpen,
   onOpenChange,
@@ -73,60 +88,28 @@ export function EditRequestModal({
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
 
   // Obtener datos para las opciones del formulario
   const { data: distributorsData } = useDistributorsQuery();
-  const { data: categoriesData } = useCategoriesQuery();
-
-  // Obtener servicios basados en la categoría seleccionada
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
-  const { data: servicesData } = useServicesByCategoryQuery(selectedCategoryId);
-
-  // Obtener subservicios basados en el servicio seleccionado
-  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
-  const { data: filteredSubservicesData } =
-    useSubservicesByServiceQuery(selectedServiceId);
-
-  // Manejar cambio de categoría
-  const handleCategoryChange = (categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-    setSelectedServiceId("");
-    form.setValue("serviceId", "");
-    form.setValue("subserviceId", "");
-  };
-
-  // Manejar cambio de servicio
-  const handleServiceChange = (serviceId: string) => {
-    setSelectedServiceId(serviceId);
-    form.setValue("subserviceId", "");
-  };
+  const { data: servicesData } = useServicesQuery();
 
   // Transform data to match our interface with safety checks
-  const distributors: Distributor[] = Array.isArray(
-    (distributorsData as { data?: unknown[] })?.data
-  )
-    ? (distributorsData as { data: unknown[] }).data.map((item: unknown) => {
-        const itemRecord = item as Record<string, unknown>;
-        const attributes = itemRecord.attributes as Record<string, unknown>;
-        return {
-          id: itemRecord.id as string,
-          title: (attributes?.title as string) || "",
-          documentNumber: (attributes?.field_document_number as string) || "",
-          documentType: (attributes?.field_document_type as string) || "",
-          phone: (attributes?.field_phone as string) || "",
-          email: (attributes?.field_email as string) || "",
-          status: attributes?.field_current_availability
-            ? "Disponible"
-            : "No disponible",
-        };
-      })
+  const distributors: Distributor[] = Array.isArray(distributorsData)
+    ? (distributorsData as any[]).map((item: any) => ({
+        id: item.id as string,
+        title: (item.title as string) || "",
+        documentNumber: (item.documentNumber as string) || "",
+        documentType: item.documentType?.name || "",
+        phone: (item.phoneNumber as string) || "",
+        email: (item.email as string) || "",
+        status: item.currentAvailability ? "Disponible" : "No disponible",
+      }))
     : [];
 
-  const categories: Category[] = categoriesData || [];
-  const services: Service[] = servicesData?.services || [];
-
-  // Get subservices from the hook
-  const subservices: Subservice[] = filteredSubservicesData?.subservices || [];
+  const services = Array.isArray(servicesData?.services)
+    ? servicesData.services
+    : [];
 
   const loadApplicants = useCallback(async () => {
     try {
@@ -140,10 +123,15 @@ export function EditRequestModal({
               fullName: (attributes?.field_full_name as string) || "",
               documentNumber:
                 (attributes?.field_document_number as string) || "",
+              documentType: "",
+              birthDate: "",
+              gender: "",
+              phone: "",
+              email: "",
             };
           }
         );
-        setApplicants(applicantsData);
+        setApplicants(applicantsData as Applicant[]);
       }
     } catch {
       // Manejar error silenciosamente - los solicitantes permanecerán vacíos
@@ -190,6 +178,9 @@ export function EditRequestModal({
       priorityEstimatedHours: 0,
       logisticsCosts: 0,
       isRecurring: false,
+      dataValues: {},
+      paymentMethod: "",
+      isPrioritized: false,
 
       // Campos del repartidor
       distributorId: "",
@@ -206,11 +197,17 @@ export function EditRequestModal({
     },
   });
 
+  const currentServiceId =
+    form.watch("serviceId") || request?.subservice?.id || "";
+  const currentService =
+    services.find((service: any) => service.id === currentServiceId) || null;
+  const serviceFields: any[] = Array.isArray((currentService as any)?.fields)
+    ? (currentService as any).fields
+    : [];
+
   useEffect(() => {
     const loadRequestData = async () => {
       if (request && isOpen) {
-        const subserviceId = request.subservice?.id || "";
-
         form.reset({
           // Campos del solicitante
           applicantId: request.applicant?.id || "",
@@ -220,9 +217,9 @@ export function EditRequestModal({
           applicationNumber: request.field_application_number || "",
           applicationScore: request.field_application_score || 4,
           entryDate: request.field_entry_date || "",
-          categoryId: "", // Se determinará basado en el subservicio
-          serviceId: "", // Se determinará basado en el subservicio
-          subserviceId: subserviceId,
+          categoryId: "",
+          serviceId: request.subservice?.id || "",
+          subserviceId: "",
           serviceCode: "", // TODO: Implementar cuando esté disponible en la API
           serviceValue: request.field_service_value || 0,
           priorityValue: request.field_priority_value || 0,
@@ -232,6 +229,14 @@ export function EditRequestModal({
           priorityEstimatedHours: request.field_estimated_prioritized_hour || 0,
           logisticsCosts: request.field_logistics_costs || 0,
           isRecurring: request.field_is_recurring || false,
+          paymentMethod: request.paymentMethod || "",
+          isPrioritized: request.isPrioritized || false,
+          dataValues:
+            Array.isArray(request.data)
+              ? Object.fromEntries(
+                  request.data.map((d) => [d.fieldId, d.value])
+                )
+              : {},
 
           // Campos del repartidor
           distributorId: request.distributor?.id || "",
@@ -247,38 +252,11 @@ export function EditRequestModal({
           sticky: request.sticky ?? false,
         });
 
-        // Si hay subservicio, determinar categoría y servicio
-        if (subserviceId) {
-          try {
-            const hierarchy = await fetchSubserviceWithHierarchy(subserviceId);
-            if (hierarchy?.category && hierarchy?.service) {
-              setSelectedCategoryId(hierarchy.category.uuid);
-              setSelectedServiceId(hierarchy.service.id);
-              form.setValue("categoryId", hierarchy.category.uuid);
-              form.setValue("serviceId", hierarchy.service.id);
-            }
-          } catch {
-            // Manejar error silenciosamente - el formulario funcionará sin jerarquía
-          }
-        }
       }
     };
 
     loadRequestData();
   }, [request, isOpen, form]);
-
-  // Sync form values when selections change
-  useEffect(() => {
-    if (selectedCategoryId) {
-      form.setValue("categoryId", selectedCategoryId);
-    }
-  }, [selectedCategoryId, form]);
-
-  useEffect(() => {
-    if (selectedServiceId) {
-      form.setValue("serviceId", selectedServiceId);
-    }
-  }, [selectedServiceId, form]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -313,12 +291,6 @@ export function EditRequestModal({
         };
       }
 
-      if (data.subserviceId) {
-        relationships.field_subservice = {
-          data: { type: "taxonomy_term--category", id: data.subserviceId },
-        };
-      }
-
       const requestData = {
         data: {
           type: "node--request" as const,
@@ -331,12 +303,20 @@ export function EditRequestModal({
             field_estimated_application_hour: data.estimatedHours,
             field_logistics_costs: data.logisticsCosts,
             field_service_value: data.serviceValue,
+            field_is_recurring: data.isRecurring,
+            field_observations: data.observations || null,
+            serviceId: data.serviceId || undefined,
             status: data.status,
             promote: data.promote,
             sticky: data.sticky,
           },
           relationships: relationships,
         },
+        serviceData: Object.entries(data.dataValues || {}).map(
+          ([fieldId, value]) => ({ fieldId, value })
+        ),
+        paymentMethod: data.paymentMethod || null,
+        isPrioritized: data.isPrioritized ?? false,
       };
 
       await updateRequest(request.id, requestData);
@@ -345,7 +325,7 @@ export function EditRequestModal({
 
       requestAnimationFrame(() => {
         toast.success("Solicitud actualizada correctamente");
-        queryClient.invalidateQueries({ queryKey: ["requests"] });
+        queryClient.invalidateQueries({ queryKey: ["complete-requests"] });
       });
     } catch {
       toast.error("Error al actualizar la solicitud");
@@ -471,117 +451,31 @@ export function EditRequestModal({
                 <User className="h-5 w-5" />
                 Asignaciones
               </h3>
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="categoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Categoría *</FormLabel>
-                      <Select
-                        key={`category-${isOpen}`}
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleCategoryChange(value);
-                        }}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="max-w-[200px]">
-                            <SelectValue placeholder="Seleccionar categoría" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-w-[300px]">
-                          {categories.map((category) => (
-                            <SelectItem
-                              key={category.uuid}
-                              value={category.uuid}
-                              className="truncate"
-                            >
-                              {category.name ?? "Sin nombre"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="serviceId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tipo de Servicio *</FormLabel>
+                      <FormLabel>Servicio *</FormLabel>
                       <Select
                         key={`service-${isOpen}`}
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleServiceChange(value);
-                        }}
+                        onValueChange={field.onChange}
                         defaultValue={field.value}
-                        disabled={!selectedCategoryId}
                       >
                         <FormControl>
-                          <SelectTrigger className="max-w-[200px]">
-                            <SelectValue
-                              placeholder={
-                                selectedCategoryId
-                                  ? "Seleccionar servicio"
-                                  : "Seleccione categoría primero"
-                              }
-                            />
+                          <SelectTrigger className="max-w-[260px]">
+                            <SelectValue placeholder="Seleccionar servicio" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="max-w-[300px]">
-                          {services.map((service) => (
+                        <SelectContent className="max-w-[320px]">
+                          {services.map((service: any) => (
                             <SelectItem
                               key={service.id}
                               value={service.id}
                               className="truncate"
                             >
                               {service.name ?? "Sin servicio"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="subserviceId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Subservicio *</FormLabel>
-                      <Select
-                        key={`subservice-${isOpen}`}
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        disabled={!selectedServiceId}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="max-w-[200px]">
-                            <SelectValue
-                              placeholder={
-                                selectedServiceId
-                                  ? "Seleccionar subservicio"
-                                  : "Seleccione servicio primero"
-                              }
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="max-w-[300px]">
-                          {subservices.map((subservice) => (
-                            <SelectItem
-                              key={subservice.id}
-                              value={subservice.id}
-                              className="truncate"
-                            >
-                              {subservice.name ?? "Sin subservicio"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -658,6 +552,274 @@ export function EditRequestModal({
                   )}
                 />
               </div>
+
+              {/* Datos del Servicio (campos dinámicos del servicio) */}
+              {Array.isArray(serviceFields) && serviceFields.length > 0 && (
+                <div className="space-y-4 mt-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
+                    <CreditCard className="h-5 w-5" />
+                    {currentService?.name || "Datos del Servicio"}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {serviceFields
+                      .slice()
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((fieldMeta) => {
+                        const fieldType = fieldMeta.type || "Text";
+                        const name = `dataValues.${fieldMeta.id}`;
+                        if (fieldType === "Select") {
+                          const optionsRaw = (fieldMeta.options as any) || {};
+                          const items: { label: string; value: string }[] =
+                            Array.isArray(optionsRaw.items)
+                              ? optionsRaw.items
+                              : [];
+                          return (
+                            <FormField
+                              key={fieldMeta.id}
+                              control={form.control}
+                              name={name as any}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>
+                                    {fieldMeta.name || "Campo"}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Select
+                                      onValueChange={field.onChange}
+                                      value={
+                                        (field.value as string | undefined) ??
+                                        ""
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Seleccionar" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {items.map((opt) => (
+                                          <SelectItem
+                                            key={opt.value}
+                                            value={opt.value}
+                                          >
+                                            {opt.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          );
+                        }
+                        if (fieldType === "File") {
+                          return (
+                            <FormField
+                              key={fieldMeta.id}
+                              control={form.control}
+                              name={name as any}
+                              render={({ field }) => {
+                                const rawUrl = field.value as string | undefined;
+                                const href =
+                                  rawUrl && rawUrl.startsWith("http")
+                                    ? rawUrl
+                                    : rawUrl
+                                    ? `${API_BASE_URL}${rawUrl}`
+                                    : "";
+                                const isUploading =
+                                  uploadingFieldId === fieldMeta.id;
+                                return (
+                                  <FormItem>
+                                    <FormLabel>
+                                      {fieldMeta.name || "Archivo"}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <div className="flex flex-col gap-2">
+                                        <Input
+                                          type="file"
+                                          disabled={isUploading}
+                                          onChange={async (e) => {
+                                            const file =
+                                              e.target.files?.[0] || null;
+                                            if (!file) return;
+                                            try {
+                                              setUploadingFieldId(fieldMeta.id);
+                                              const url =
+                                                await uploadServiceFieldFile(
+                                                  file
+                                                );
+                                              field.onChange(url);
+                                              toast.success(
+                                                "Archivo subido correctamente"
+                                              );
+                                            } catch {
+                                              toast.error(
+                                                "Error al subir el archivo"
+                                              );
+                                            } finally {
+                                              setUploadingFieldId(null);
+                                              e.target.value = "";
+                                            }
+                                          }}
+                                        />
+                                        {href && (
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              window.open(href, "_blank");
+                                            }}
+                                          >
+                                            Ver archivo
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          );
+                        }
+                        if (fieldType === "Boolean") {
+                          return (
+                            <FormField
+                              key={fieldMeta.id}
+                              control={form.control}
+                              name={name as any}
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                                  <div className="space-y-0.5">
+                                    <FormLabel className="text-base">
+                                      {fieldMeta.name || "Campo"}
+                                    </FormLabel>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={!!field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          );
+                        }
+                        if (fieldType === "Number") {
+                          return (
+                            <FormField
+                              key={fieldMeta.id}
+                              control={form.control}
+                              name={name as any}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>
+                                    {fieldMeta.name || "Campo"}
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      value={field.value as number | string | undefined}
+                                      onChange={(e) =>
+                                        field.onChange(
+                                          Number(e.target.value || 0)
+                                        )
+                                      }
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          );
+                        }
+                        if (fieldType === "Date") {
+                          return (
+                            <FormField
+                              key={fieldMeta.id}
+                              control={form.control}
+                              name={name as any}
+                              render={({ field }) => {
+                                const valueString =
+                                  typeof field.value === "string"
+                                    ? field.value
+                                    : "";
+                                const dateValue = valueString
+                                  ? parseDateFromString(valueString)
+                                  : undefined;
+                                return (
+                                  <FormItem className="flex flex-col">
+                                    <FormLabel>
+                                      {fieldMeta.name || "Campo"}
+                                    </FormLabel>
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <FormControl>
+                                          <Button
+                                            variant="outline"
+                                            className={cn(
+                                              "w-full justify-start text-left font-normal",
+                                              !dateValue && "text-muted-foreground"
+                                            )}
+                                          >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dateValue
+                                              ? dateValue.toLocaleDateString()
+                                              : "Seleccionar fecha"}
+                                          </Button>
+                                        </FormControl>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                          mode="single"
+                                          selected={dateValue}
+                                          onSelect={(date) => {
+                                            if (date) {
+                                              const formatted = formatDateToString(
+                                                date
+                                              );
+                                              field.onChange(formatted);
+                                            } else {
+                                              field.onChange("");
+                                            }
+                                          }}
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
+                                    <FormMessage />
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          );
+                        }
+                        return (
+                          <FormField
+                            key={fieldMeta.id}
+                            control={form.control}
+                            name={name as any}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  {fieldMeta.name || "Campo"}
+                                </FormLabel>
+                                <FormControl>
+                                  <Input
+                                    value={(field.value as string) ?? ""}
+                                    onChange={(e) => field.onChange(e.target.value)}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Valores y Costos */}
@@ -742,6 +904,71 @@ export function EditRequestModal({
                 <MessageSquare className="h-5 w-5" />
                 Gestión de Solicitud
               </h3>
+
+              <p className="text-sm text-muted-foreground">
+                Seleccione los ajustes de su solicitud
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <FormItem className="grid gap-2">
+                      <FormLabel>Método de pago</FormLabel>
+                      <FormControl>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccione un método" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="tarjeta">
+                              Tarjeta de crédito/débito
+                            </SelectItem>
+                            <SelectItem value="online">
+                              Pago en línea
+                            </SelectItem>
+                            <SelectItem value="transferencia">
+                              Transferencia bancaria
+                            </SelectItem>
+                            <SelectItem value="efectivo">
+                              Efectivo
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="isPrioritized"
+                  render={({ field }) => (
+                    <FormItem className="grid gap-2">
+                      <FormLabel>Solicitud prioritaria</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                          <span className="text-xs text-gray-500">
+                            ¿Es una solicitud prioritaria?
+                          </span>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}

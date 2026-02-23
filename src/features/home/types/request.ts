@@ -85,9 +85,6 @@ export interface Request {
       data?: {
         id: string;
         type: string;
-        meta?: {
-          drupal_internal__target_id: number;
-        };
       };
     };
     field_image?: {
@@ -152,6 +149,9 @@ export interface UpdateRequestPayload {
       field_estimated_application_hour?: number;
       field_logistics_costs?: number;
       field_service_value?: number;
+      field_is_recurring?: boolean;
+      field_observations?: string | null;
+      serviceId?: string;
       status?: boolean;
       promote?: boolean;
       sticky?: boolean;
@@ -168,6 +168,10 @@ export interface UpdateRequestPayload {
       };
     };
   };
+  serviceData?: RequestDataDto[];
+  paymentMethod?: string | null;
+  isPrioritized?: boolean;
+  requestStatus?: RequestStatusEnum;
 }
 
 export interface CreateRequestPayload {
@@ -263,30 +267,6 @@ export interface ApplicationStatusBasic {
 }
 
 // Nuevos tipos para asignación
-export interface AssignDistributorPayload {
-  data: {
-    type: "node--request";
-    id: string;
-    relationships: {
-      field_distributor_data: {
-        data: { type: "node--distributor"; id: string };
-      };
-    };
-  };
-}
-
-export interface AssignApplicantPayload {
-  data: {
-    type: "node--request";
-    id: string;
-    relationships: {
-      field_applicant: {
-        data: { type: "node--profile"; id: string };
-      };
-    };
-  };
-}
-
 // Tipo para el modal de asignación
 export interface AssignmentModalData {
   requestId: string;
@@ -316,6 +296,9 @@ export interface EditRequestFormData {
   priorityEstimatedHours: number;
   logisticsCosts: number;
   isRecurring: boolean;
+  dataValues?: Record<string, unknown>;
+  paymentMethod: string;
+  isPrioritized: boolean;
 
   // Campos del repartidor
   distributorId: string;
@@ -390,4 +373,76 @@ export interface UsedChannel extends TaxonomyTerm {
 
 export interface ApplicationStatus extends TaxonomyTerm {
   type: "taxonomy_term--application_statuses";
+}
+
+// DTOs for Backend Requests (Simplified API)
+export interface RequestDataDto {
+  fieldId: string;
+  value: unknown;
+}
+
+export type RequestStatusEnum = "Atendida" | "EnProceso" | "Finalizada" | "Incompleta";
+
+export interface CreateRequestDto {
+  applicantId: string;
+  serviceId: string;
+  title?: string | null;
+  entryDate: string;
+  data: RequestDataDto[];
+  paymentMethod?: string | null;
+  isPrioritized?: boolean;
+  requestStatus?: RequestStatusEnum;
+}
+
+export interface UpdateRequestMetaDto {
+  title?: string | null;
+  observations?: string | null;
+  status?: boolean;
+  promote?: boolean;
+  sticky?: boolean;
+  isRecurring?: boolean;
+  applicantId?: string;
+  serviceId?: string;
+  distributorId?: string;
+  entryDate?: string;
+  estimatedApplicationHour?: number;
+  estimatedPrioritizedHour?: number;
+  logisticsCosts?: number;
+  serviceValue?: number;
+  prioritizedValue?: number;
+  data?: RequestDataDto[];
+  paymentMethod?: string | null;
+  isPrioritized?: boolean;
+  requestStatus?: RequestStatusEnum;
+}
+
+export interface AssignDistributorDto {
+  distributorId: string;
+}
+
+export interface UpdateStatusDto {
+  status: boolean;
+  observations?: string | null;
+}
+
+export interface BackendRequest {
+  id: string;
+  applicationNumber?: string | null;
+  title?: string | null;
+  entryDate?: string | null;
+  applicant?: unknown;
+  distributor?: unknown;
+  service?: unknown;
+  data?: unknown;
+  attachments?: unknown;
+  paymentMethod?: string | null;
+  isPrioritized?: boolean;
+  requestStatus?: RequestStatusEnum;
+}
+
+export interface RequestsListResponse {
+  data: BackendRequest[];
+  total?: number;
+  page?: number;
+  limit?: number;
 }

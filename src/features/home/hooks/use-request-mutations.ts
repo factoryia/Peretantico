@@ -1,22 +1,35 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateRequest, deleteRequest, createRequest } from "../utils/request";
+import {
+  updateRequest,
+  deleteRequest,
+  createBackendRequest,
+} from "../utils/request";
 import { REQUESTS_QUERY_KEY } from "./use-request-query";
-import type { CreateRequestPayload, UpdateRequestPayload } from "../types/request";
+import type {
+  CreateRequestDto,
+  UpdateRequestPayload,
+} from "../types/request";
 import { toast } from "sonner";
 
 export const useUpdateRequestMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ requestId, data }: { requestId: string; data: UpdateRequestPayload }) =>
-      updateRequest(requestId, data),
+    mutationFn: ({
+      requestId,
+      data,
+    }: {
+      requestId: string;
+      data: UpdateRequestPayload;
+    }) => updateRequest(requestId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [REQUESTS_QUERY_KEY] });
-      toast("Solicitud actualizada correctamente");
+      queryClient.invalidateQueries({ queryKey: ["complete-requests"] });
+      toast.success("Solicitud actualizada correctamente");
     },
     onError: (error) => {
       console.error("Error updating request:", error);
-      toast("Error al actualizar la solicitud");
+      toast.error("Error al actualizar la solicitud");
     },
   });
 };
@@ -25,14 +38,15 @@ export const useCreateRequestMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: CreateRequestPayload) => createRequest(payload),
+    mutationFn: (payload: CreateRequestDto) => createBackendRequest(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [REQUESTS_QUERY_KEY] });
-      toast( "Solicitud creada correctamente");
+      queryClient.invalidateQueries({ queryKey: ["complete-requests"] });
+      toast.success("Solicitud creada correctamente");
     },
     onError: (error) => {
       console.error("Error creating request:", error);
-      toast("Error al crear la solicitud");
+      toast.error("Error al crear la solicitud");
     },
   });
 };

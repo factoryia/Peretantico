@@ -1,19 +1,19 @@
-// utils.ts
-import api from "@/api"; // Assuming this is an Axios instance or similar configured for your API base URL
-import type {
-  ProfileApiResponse,
-  ProfileDataItem,
-  Customer,
-  CustomerFormValues,
-} from "../types";
+import api from "@/api";
+import type { Customer, CustomerFormValues, Attachment } from "../types";
 import { fetchTaxonomyTerms } from "@/utils/global";
 
 export const fetchGenderTaxonomy = () =>
-  fetchTaxonomyTerms("/api/taxonomy_term/gender");
+  fetchTaxonomyTerms("/taxonomies/genders");
 export const fetchParentTypeTaxonomy = () =>
-  fetchTaxonomyTerms("/api/taxonomy_term/parent_type");
-export const fetchDocumentTypeTaxonomy = () =>
-  fetchTaxonomyTerms("/api/taxonomy_term/document_type");
+  fetchTaxonomyTerms("/taxonomies/parent-types");
+export const fetchDocumentTypeTaxonomy = async () =>
+  Promise.resolve([
+    { id: "CC", name: "Cédula de ciudadanía" },
+    { id: "CE", name: "Cédula de extranjería" },
+    { id: "TI", name: "Tarjeta de identidad" },
+    { id: "PASSPORT", name: "Pasaporte" },
+    { id: "NIT", name: "Número de identificación tributaria" },
+  ]);
 
 // Helper to get name from id
 export const getNameFromId = (
@@ -22,6 +22,132 @@ export const getNameFromId = (
 ) => {
   const found = options.find((option) => option.id === id);
   return found ? found.name : "N/A";
+};
+
+type RawProfile = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getStringField = (
+  source: RawProfile,
+  keys: string[],
+  fallback = ""
+): string => {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return fallback;
+};
+
+const getOptionalStringField = (
+  source: RawProfile,
+  keys: string[]
+): string | "" => {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return "";
+};
+
+const getIdFromField = (source: RawProfile, keys: string[]): string => {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (isRecord(value) && typeof value.id === "string") {
+      return value.id;
+    }
+  }
+
+  return "";
+};
+
+const mapToCustomer = (raw: RawProfile): Customer => {
+  const id = getStringField(raw, ["id"]);
+
+  const fullName = getStringField(raw, [
+    "fullName",
+    "name",
+    "title",
+    "field_full_name",
+  ]);
+
+  const documentNumber = getStringField(raw, [
+    "documentNumber",
+    "document_number",
+    "field_document_number",
+  ]);
+
+  const email = getOptionalStringField(raw, [
+    "email",
+    "mail",
+    "field_mail",
+  ]);
+
+  const phoneNumber = getStringField(raw, [
+    "phoneNumber",
+    "phone",
+    "field_phone_number",
+  ]);
+
+  const department = getOptionalStringField(raw, [
+    "department",
+    "field_department",
+  ]);
+
+  const municipality = getOptionalStringField(raw, [
+    "municipality",
+    "field_municipality_residence",
+  ]);
+
+  const address = getOptionalStringField(raw, [
+    "address",
+    "field_address",
+  ]);
+
+  const documentType = getIdFromField(raw, [
+    "documentTypeId",
+    "documentType",
+    "field_type_document",
+  ]);
+
+  let attachments: Attachment[] | undefined = undefined;
+  const rawAttachments = (raw as any).attachments;
+  if (Array.isArray(rawAttachments)) {
+    attachments = rawAttachments
+      .filter((a) => isRecord(a))
+      .map((a: any) => ({
+        id: typeof a.id === "string" ? a.id : "",
+        url: typeof a.url === "string" ? a.url : "",
+        fileName: typeof a.fileName === "string" ? a.fileName : "",
+        mimeType: typeof a.mimeType === "string" ? a.mimeType : "",
+        size: typeof a.size === "number" ? a.size : 0,
+      }));
+  }
+
+  return {
+    id,
+    fullName,
+    documentType,
+    documentNumber,
+    phoneNumber,
+    email,
+    department,
+    municipality,
+    address,
+    photo_document: null,
+    attachments,
+  };
 };
 
 export const fetchProfiles = async (
@@ -36,55 +162,55 @@ export const fetchProfiles = async (
   totalCount: number;
 }> => {
   try {
-    const offset = (page - 1) * limit;
     const params: Record<string, string | number> = {
-      "page[limit]": limit,
-      "page[offset]": offset,
+      page,
+      limit,
     };
 
-    // Filtro por nombre
     if (searchTerm) {
-      params["filter[field_full_name][condition][path]"] = "field_full_name";
-      params["filter[field_full_name][condition][operator]"] = "CONTAINS";
-      params["filter[field_full_name][condition][value]"] = searchTerm;
-    }
-    // Filtro por departamento
-    if (department) {
-      params["filter[field_department][condition][path]"] = "field_department";
-      params["filter[field_department][condition][operator]"] = "CONTAINS";
-      params["filter[field_department][condition][value]"] = department;
-    }
-    // Filtro por municipio
-    if (municipality) {
-      params["filter[field_municipality_residence][condition][path]"] =
-        "field_municipality_residence";
-      params["filter[field_municipality_residence][condition][operator]"] =
-        "CONTAINS";
-      params["filter[field_municipality_residence][condition][value]"] =
-        municipality;
+      params.search = searchTerm;
     }
 
-    const response = await api.get<ProfileApiResponse>("/api/node/profile", {
+    if (department) {
+      params.department = department;
+    }
+
+    if (municipality) {
+      params.municipality = municipality;
+    }
+
+    const response = await api.get<unknown>("/profiles", {
       params,
     });
 
-    const customers: Customer[] = response.data.data.map(
-      (item: ProfileDataItem) => ({
-        id: item.id,
-        fullName: item.attributes.field_full_name,
-        documentNumber: item.attributes.field_document_number,
-        email: item.attributes.field_mail,
-        phoneNumber: item.attributes.field_phone_number,
-        documentType: item.relationships.field_type_document?.data?.id ?? "",
-        department: item.attributes.field_department || "",
-        municipality: item.attributes.field_municipality_residence || "",
-        address: item.attributes.field_address || "",
-        photo_document: null,
-      })
-    );
+    const raw = response.data;
 
-    const totalCount = response.data.meta?.count ?? customers.length;
-    const totalPages = Math.ceil(totalCount / limit);
+    const items: RawProfile[] = Array.isArray(raw)
+      ? raw.filter(isRecord)
+      : isRecord(raw) && Array.isArray(raw.items)
+      ? raw.items.filter(isRecord)
+      : isRecord(raw) && Array.isArray(raw.data)
+      ? raw.data.filter(isRecord)
+      : [];
+
+    const customers: Customer[] = items.map(mapToCustomer);
+
+    let totalCount = customers.length;
+
+    if (isRecord(raw)) {
+      if (typeof raw.total === "number") {
+        totalCount = raw.total;
+      } else if (typeof raw.count === "number") {
+        totalCount = raw.count;
+      } else if (
+        isRecord(raw.meta) &&
+        typeof raw.meta.total === "number"
+      ) {
+        totalCount = raw.meta.total;
+      }
+    }
+
+    const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
     return { customers, totalPages, totalCount };
   } catch (error) {
@@ -95,65 +221,51 @@ export const fetchProfiles = async (
 
 export async function createProfile(data: CustomerFormValues) {
   const payload = {
-    data: {
-      type: "node--profile",
-      attributes: {
-        title: data.fullName,
-        field_full_name: data.fullName,
-        field_document_number: data.documentNumber,
-        field_phone_number: data.phoneNumber,
-        field_mail: data.email,
-        field_department: data.department,
-        field_municipality_residence: data.municipality,
-        field_address: data.address,
-        status: true, // always send status
-      },
-      relationships: {
-        field_type_document: {
-          data: data.documentType
-            ? { type: "taxonomy_term--document_type", id: data.documentType }
-            : null,
-        },
-      },
-    },
+    fullName: data.fullName,
+    documentType: data.documentType,
+    documentNumber: data.documentNumber,
+    phoneNumber: data.phoneNumber,
+    email: data.email,
+    department: data.department,
+    municipality: data.municipality,
+    address: data.address,
   };
 
-  return api.post("/api/node/profile", payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-    },
-  });
+  return api.post("/profiles", payload);
 }
 
 export async function updateProfile(id: string, data: CustomerFormValues) {
   const payload = {
-    data: {
-      id: id,
-      type: "node--profile",
-      attributes: {
-        title: data.fullName,
-        field_full_name: data.fullName,
-        field_document_number: data.documentNumber,
-        field_phone_number: data.phoneNumber,
-        field_mail: data.email ?? null, // ensure email is sent as empty string if null
-        field_department: data.department,
-        field_municipality_residence: data.municipality,
-        field_address: data.address,
-        status: true, // always send status
-      },
-      relationships: {
-        field_type_document: {
-          data: data.documentType
-            ? { type: "taxonomy_term--document_type", id: data.documentType }
-            : null,
-        },
-      },
-    },
+    fullName: data.fullName,
+    documentType: data.documentType,
+    documentNumber: data.documentNumber,
+    phoneNumber: data.phoneNumber,
+    email: data.email ?? null,
+    department: data.department,
+    municipality: data.municipality,
+    address: data.address,
   };
 
-  return api.patch(`/api/node/profile/${id}`, payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-    },
+  return api.put(`/profiles/${id}`, payload);
+}
+
+export async function uploadIdentityDocument(profileId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return api.post(`/profiles/${profileId}/identity-document`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
   });
+}
+
+export async function fetchProfileById(id: string) {
+  const response = await api.get(`/profiles/${id}`);
+  return response.data;
+}
+
+export async function deleteAttachment(profileId: string, attachmentId: string) {
+  const response = await api.delete(
+    `/profiles/${profileId}/attachments/${attachmentId}`
+  );
+  return response.data;
 }

@@ -1,18 +1,147 @@
 import type { AxiosResponse } from "axios";
-import type {
-  Distributor,
-  DistributorsApiResponse,
-  FetchDistributorsParams,
-} from "../types/distributors";
+import type { Distributor, FetchDistributorsParams } from "../types/distributors";
 import api from "@/api";
-import { CSRF_TOKEN } from "@/features/auth/constants";
 import type { DistributorFormValues } from "../schemas";
+
+type RawDistributor = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getStringField = (
+  source: RawDistributor,
+  keys: string[],
+  fallback = ""
+): string => {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return fallback;
+};
+
+const getOptionalStringField = (
+  source: RawDistributor,
+  keys: string[]
+): string | null => {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return null;
+};
+
+const getBooleanField = (
+  source: RawDistributor,
+  keys: string[],
+  fallback = false
+): boolean => {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "number") {
+      return value !== 0;
+    }
+  }
+  return fallback;
+};
+
+const getTaxonomyField = (
+  source: RawDistributor,
+  keys: string[]
+): { id: string; name: string } => {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "string") {
+      return { id: value, name: value };
+    }
+
+    if (isRecord(value)) {
+      const id =
+        typeof value.id === "string"
+          ? value.id
+          : getStringField(value, ["id"], "");
+      const name =
+        typeof value.name === "string"
+          ? value.name
+          : getStringField(value, ["name", "title"], "");
+
+      return { id, name };
+    }
+  }
+
+  return { id: "", name: "" };
+};
+
+export const mapToDistributor = (raw: RawDistributor): Distributor => {
+  const id = getStringField(raw, ["id"]);
+  const title = getStringField(raw, ["title", "name"]);
+  const status = getBooleanField(raw, ["status"]);
+  const currentAvailability = getBooleanField(raw, [
+    "currentAvailability",
+    "current_availability",
+  ]);
+  const documentNumber = getStringField(raw, [
+    "documentNumber",
+    "document_number",
+  ]);
+  const entryDate = getStringField(raw, ["entryDate", "entry_date", "created"]);
+  const vehicleId =
+    getOptionalStringField(raw, ["vehicleId", "vehicle_id"]) ?? null;
+  const email =
+    getOptionalStringField(raw, ["email", "mail", "field_mail"]) ?? null;
+  const observations =
+    getOptionalStringField(raw, ["observations", "notes"]) ?? null;
+  const phoneNumber = getStringField(raw, [
+    "phoneNumber",
+    "phone",
+    "field_phone_number",
+  ]);
+
+  const documentType = getTaxonomyField(raw, [
+    "documentType",
+    "document_type",
+  ]);
+  const coverageArea = getTaxonomyField(raw, [
+    "coverageArea",
+    "coverage_area",
+  ]);
+  const transportationType = getTaxonomyField(raw, [
+    "transportationType",
+    "transportation_type",
+  ]);
+
+  return {
+    id,
+    status,
+    title,
+    currentAvailability,
+    documentNumber,
+    entryDate,
+    vehicleId,
+    email,
+    observations,
+    phoneNumber,
+    documentType,
+    coverageArea,
+    transportationType,
+  };
+};
 
 export const fetchDistributors = async ({
   coverageAreaId,
   status,
   fullName,
   documentNumber,
+  transportationTypeId,
+  documentType,
   page = 1,
   limit = 10,
 }: FetchDistributorsParams): Promise<{
@@ -20,92 +149,62 @@ export const fetchDistributors = async ({
   totalPages: number;
 }> => {
   try {
-    const offset = (page - 1) * limit;
-
-    // Build query parameters
     const params: Record<string, string | number | boolean> = {
-      include:
-        "field_type_document,field_coverage_area,field_type_transportation",
-      "page[limit]": limit,
-      "page[offset]": offset,
+      page,
+      limit,
     };
 
-    // Add filters if provided
-    if (coverageAreaId) {
-      params["filter[field_coverage_area.id]"] = coverageAreaId;
+    if (coverageAreaId && coverageAreaId !== "all") {
+      params.coverageAreaId = coverageAreaId;
     }
     if (status !== undefined) {
-      params["filter[field_current_availability]"] = status ? "1" : "0";
+      params.status = status;
     }
     if (fullName) {
-      params["filter[title][condition][path]"] = "title";
-      params["filter[title][condition][operator]"] = "CONTAINS";
-      params["filter[title][condition][value]"] = fullName;
+      params.search = fullName;
     }
     if (documentNumber) {
-      params["filter[field_document_number][condition][path]"] =
-        "field_document_number";
-      params["filter[field_document_number][condition][operator]"] = "CONTAINS";
-      params["filter[field_document_number][condition][value]"] =
-        documentNumber;
+      params.documentNumber = documentNumber;
+    }
+    if (transportationTypeId && transportationTypeId !== "all") {
+      params.transportationTypeId = transportationTypeId;
+    }
+    if (documentType && documentType !== "all") {
+      params.documentType = documentType;
     }
 
-    // Make API request
-    const response: AxiosResponse<DistributorsApiResponse> = await api.get(
-      "/api/node/distributor",
-      {
-        params,
-      }
-    );
-
-    // Process distributors
-    const distributors: Distributor[] = response.data.data.map((item) => {
-      // Find related data in included array
-      const documentType = response.data.included?.find(
-        (included) =>
-          included.type === "taxonomy_term--document_type" &&
-          included.id === item.relationships.field_type_document.data.id
-      );
-      const coverageArea = response.data.included?.find(
-        (included) =>
-          included.type === "taxonomy_term--coverage_area" &&
-          included.id === item.relationships.field_coverage_area.data.id
-      );
-      const transportationType = response.data.included?.find(
-        (included) =>
-          included.type === "taxonomy_term--type_transportation" &&
-          included.id === item.relationships.field_type_transportation.data.id
-      );
-
-      return {
-        id: item.id,
-        title: item.attributes.title,
-        status: item.attributes.status,
-        currentAvailability: item.attributes.field_current_availability,
-        documentNumber: item.attributes.field_document_number,
-        entryDate: item.attributes.field_entry_date,
-        vehicleId: item.attributes.field_id_vehicle ?? null,
-        email: item.attributes.field_mail ?? null,
-        observations: item.attributes.field_observations ?? null,
-        phoneNumber: item.attributes.field_phone_number,
-        documentType: {
-          id: item.relationships.field_type_document.data.id,
-          name: documentType?.attributes.name || "Unknown",
-        },
-        coverageArea: {
-          id: item.relationships.field_coverage_area.data.id,
-          name: coverageArea?.attributes.name || "Unknown",
-        },
-        transportationType: {
-          id: item.relationships.field_type_transportation.data.id,
-          name: transportationType?.attributes.name || "Unknown",
-        },
-      };
+    const response: AxiosResponse<unknown> = await api.get("/distributors", {
+      params,
     });
 
-    // Calculate total pages
-    const totalItems = response.data.meta?.count ?? distributors.length;
-    const totalPages = Math.ceil(totalItems / limit);
+    const raw = response.data;
+
+    const items: RawDistributor[] = Array.isArray(raw)
+      ? raw.filter(isRecord)
+      : isRecord(raw) && Array.isArray(raw.items)
+      ? raw.items.filter(isRecord)
+      : isRecord(raw) && Array.isArray(raw.data)
+      ? raw.data.filter(isRecord)
+      : [];
+
+    const distributors: Distributor[] = items.map(mapToDistributor);
+
+    let totalItems = distributors.length;
+
+    if (isRecord(raw)) {
+      if (typeof raw.total === "number") {
+        totalItems = raw.total;
+      } else if (typeof raw.count === "number") {
+        totalItems = raw.count;
+      } else if (
+        isRecord(raw.meta) &&
+        typeof raw.meta.total === "number"
+      ) {
+        totalItems = raw.meta.total;
+      }
+    }
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / limit));
 
     return { distributors, totalPages };
   } catch (error) {
@@ -118,51 +217,22 @@ export const createDistributor = async (
   values: DistributorFormValues
 ): Promise<void> => {
   const payload = {
-    data: {
-      type: "node--distributor",
-      attributes: {
-        title: values.title,
-        field_document_number: values.documentNumber,
-        field_phone_number: values.phoneNumber,
-        field_mail: values.email || null,
-        field_id_vehicle: values.vehicleId || null,
-        field_current_availability: values.currentAvailability,
-        field_entry_date: values.entryDate,
-        field_observations: values.observations || null,
-        status: values.status,
-      },
-      relationships: {
-        field_type_document: {
-          data: {
-            type: "taxonomy_term--document_type",
-            id: values.documentTypeId,
-          },
-        },
-        field_coverage_area: {
-          data: {
-            type: "taxonomy_term--coverage_area",
-            id: values.coverageAreaId,
-          },
-        },
-        field_type_transportation: {
-          data: {
-            type: "taxonomy_term--type_transportation",
-            id: values.transportationTypeId,
-          },
-        },
-      },
-    },
+    title: values.title,
+    documentNumber: values.documentNumber,
+    phoneNumber: values.phoneNumber,
+    email: values.email || null,
+    vehicleId: values.vehicleId || null,
+    currentAvailability: values.currentAvailability,
+    entryDate: values.entryDate,
+    observations: values.observations || null,
+    status: values.status,
+    documentType: values.documentTypeId,
+    coverageAreaId: values.coverageAreaId,
+    transportationTypeId: values.transportationTypeId,
   };
 
   try {
-    const csrfToken = localStorage.getItem(CSRF_TOKEN);
-    const res = await api.post("/api/node/distributor", payload, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-        Accept: "application/vnd.api+json",
-        "X-Csrf-Token": csrfToken || "",
-      },
-    });
+    const res = await api.post("/distributors", payload);
     console.log("RES: ", res);
   } catch (error: any) {
     if (error.response) {
@@ -178,52 +248,22 @@ export const updateDistributor = async (
   values: DistributorFormValues
 ): Promise<void> => {
   const payload = {
-    data: {
-      type: "node--distributor",
-      id: distributorId,
-      attributes: {
-        title: values.title,
-        field_document_number: values.documentNumber,
-        field_phone_number: values.phoneNumber,
-        field_mail: values.email || null,
-        field_id_vehicle: values.vehicleId || null,
-        field_current_availability: values.currentAvailability,
-        field_entry_date: values.entryDate,
-        field_observations: values.observations || null,
-        status: values.status,
-      },
-      relationships: {
-        field_type_document: {
-          data: {
-            type: "taxonomy_term--document_type",
-            id: values.documentTypeId,
-          },
-        },
-        field_coverage_area: {
-          data: {
-            type: "taxonomy_term--coverage_area",
-            id: values.coverageAreaId,
-          },
-        },
-        field_type_transportation: {
-          data: {
-            type: "taxonomy_term--type_transportation",
-            id: values.transportationTypeId,
-          },
-        },
-      },
-    },
+    title: values.title,
+    documentNumber: values.documentNumber,
+    phoneNumber: values.phoneNumber,
+    email: values.email || null,
+    vehicleId: values.vehicleId || null,
+    currentAvailability: values.currentAvailability,
+    entryDate: values.entryDate,
+    observations: values.observations || null,
+    status: values.status,
+    documentType: values.documentTypeId,
+    coverageAreaId: values.coverageAreaId,
+    transportationTypeId: values.transportationTypeId,
   };
 
   try {
-    const csrfToken = localStorage.getItem(CSRF_TOKEN);
-    await api.patch(`/api/node/distributor/${distributorId}`, payload, {
-      headers: {
-        "Content-Type": "application/vnd.api+json",
-        Accept: "application/vnd.api+json",
-        "X-Csrf-Token": csrfToken || "",
-      },
-    });
+    await api.put(`/distributors/${distributorId}`, payload);
   } catch (error: any) {
     if (error.response) {
       console.error("DEBUG - PATCH API Error Data:", error.response.data);
@@ -236,5 +276,5 @@ export const updateDistributor = async (
 export const deleteDistributor = async (
   distributorId: string
 ): Promise<void> => {
-  await api.delete(`/api/node/distributor/${distributorId}`);
+  await api.delete(`/distributors/${distributorId}`);
 };

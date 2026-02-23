@@ -36,16 +36,20 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-import { type Customer, type FormMode } from "../types";
+import { type Customer, type FormMode, type Attachment } from "../types";
 import { customerSchema } from "../schema";
 import {
   createProfile,
   updateProfile,
   fetchDocumentTypeTaxonomy,
+  uploadIdentityDocument,
+  fetchProfileById,
+  deleteAttachment,
 } from "../utils/customer";
 import { DOCUMENT_TYPE_TAXONOMY_KEY, PROFILE_QUERY_KEY } from "../constants";
 import { RequiredDot } from "@/components/common/required-dot";
 import { departamento } from "../constants/colombia";
+import { API_BASE_URL } from "@/features/auth/constants";
 
 // --- Normalización de datos opcionales ---
 function normalizeCustomerData(customer?: Customer) {
@@ -66,6 +70,9 @@ interface CustomerFormProps {
 export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
   const queryClient = useQueryClient();
   const [selectedDepto, setSelectedDepto] = useState<string>("");
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    customer?.attachments ?? []
+  );
 
   const form = useForm<z.infer<typeof customerSchema>>({
     resolver: zodResolver(customerSchema),
@@ -92,9 +99,11 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
       if (normalizedCustomer?.department) {
         setSelectedDepto(normalizedCustomer.department);
       }
+      setAttachments(customer.attachments ?? []);
     } else if (mode === "create") {
       form.reset();
       setSelectedDepto("");
+      setAttachments([]);
     }
   }, [customer, mode, form]);
 
@@ -103,16 +112,32 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
   // --- Envío de formulario ---
   const handleSubmit = async (values: z.infer<typeof customerSchema>) => {
     const cleanValues = { ...values };
+    const files =
+      Array.isArray(cleanValues.photo_document) &&
+      cleanValues.photo_document.length > 0
+        ? cleanValues.photo_document
+        : [];
 
     if (!cleanValues.email) delete cleanValues.email;
+    delete cleanValues.photo_document;
 
     try {
+      let profileId = customer?.id ?? "";
+
       if (mode === "create") {
-        await createProfile(cleanValues);
+        const response = await createProfile(cleanValues);
+        profileId =
+          (response?.data as { id?: string } | undefined)?.id ?? profileId;
         toast.success("Cliente creado correctamente");
       } else if (mode === "edit" && customer?.id) {
         await updateProfile(customer.id, cleanValues);
+        profileId = customer.id;
         toast.success("Cliente actualizado correctamente");
+      }
+
+      if (mode === "create" && profileId && files.length > 0) {
+        await uploadIdentityDocument(profileId, files[0] as File);
+        toast.success("Documento de identidad cargado");
       }
 
       queryClient.invalidateQueries({ queryKey: [PROFILE_QUERY_KEY] });
@@ -429,11 +454,32 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
                           multiple
                           accept="image/*,application/pdf"
                           disabled={isFieldDisabled()}
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const files = e.target.files
                               ? Array.from(e.target.files)
                               : [];
                             field.onChange(files);
+                            if (files.length > 0) {
+                              const first = files[0] as File;
+                              if (mode !== "create" && customer?.id) {
+                                try {
+                                  await uploadIdentityDocument(customer.id, first);
+                                  toast.success("Documento de identidad cargado");
+                                  try {
+                                    const refreshed = await fetchProfileById(customer.id);
+                                    if (Array.isArray(refreshed?.attachments)) {
+                                      setAttachments(refreshed.attachments);
+                                    }
+                                  } catch {}
+                                } catch {
+                                  toast.error("Error al subir el documento");
+                                }
+                              } else {
+                                toast.info(
+                                  "El documento se subirá al crear el cliente"
+                                );
+                              }
+                            }
                           }}
                         />
                       </label>
@@ -483,6 +529,63 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
                 </FormItem>
               )}
             />
+            {attachments.length > 0 && (
+              <div className="space-y-2">
+                {attachments.map((att) => {
+                  const url =
+                    att.url.startsWith("http")
+                      ? att.url
+                      : `${API_BASE_URL}${att.url}`;
+                  return (
+                    <div
+                      key={att.id}
+                      className="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200"
+                    >
+                      <FileText className="w-5 h-5 text-blue-600 mr-3" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {att.fileName || "Documento"}
+                        </p>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold">
+                          {att.mimeType || "Archivo"}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 font-bold text-xs uppercase"
+                        onClick={() => {
+                          if (url) window.open(url, "_blank");
+                        }}
+                      >
+                        Ver
+                      </Button>
+                      {mode === "edit" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 font-bold text-xs uppercase"
+                          onClick={async () => {
+                            if (!customer?.id) return;
+                            try {
+                              await deleteAttachment(customer.id, att.id);
+                              setAttachments((prev) =>
+                                prev.filter((a) => a.id !== att.id)
+                              );
+                              toast.success("Adjunto eliminado");
+                            } catch {
+                              toast.error("Error al eliminar el adjunto");
+                            }
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

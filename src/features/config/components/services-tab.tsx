@@ -11,22 +11,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AlertModal } from "@/components/common/alert-modal";
-import type { Category, Service } from "@/features/config/types";
-import { fetchAllActiveCategories } from "@/features/config/utils/category";
+import type { Service } from "@/features/config/types";
 import { ServiceTable } from "@/features/config/components/services/services-table";
 import { ServiceDialog } from "@/features/config/components/services/service-dialog";
 import { deleteService, fetchServices } from "@/features/config/utils/service";
-import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
-import { CATEGORY_QUERY_KEY, SERVICE_QUERY_KEY } from "../constants/query-keys";
+import { SERVICE_QUERY_KEY } from "../constants/query-keys";
 import { SearchInput } from "@/components/common/search-input";
 import { Paginator } from "@/components/common/paginator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export const ServicesTab = () => {
   const queryClient = useQueryClient();
@@ -37,32 +28,14 @@ export const ServicesTab = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [serviceId, setServiceId] = useState("");
-  const [selectedCategoriaId, setSelectedCategoriaId] = useState<string>("");
   const [editingService, setEditingService] = useState<Service | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const { data: categories = [], isLoading: isLoadingCategories } = useQuery<
-    Category[],
-    Error
-  >({
-    queryKey: [CATEGORY_QUERY_KEY],
-    queryFn: fetchAllActiveCategories,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
   const { data: servicesData, isLoading: isLoadingServices } = useQuery({
-    queryKey: [
-      SERVICE_QUERY_KEY,
-      selectedCategoriaId,
-      searchTerm,
-      currentPage,
-      pageSize,
-    ],
-    queryFn: () =>
-      fetchServices(selectedCategoriaId, searchTerm, currentPage, pageSize),
-    enabled: !!selectedCategoriaId,
+    queryKey: [SERVICE_QUERY_KEY, searchTerm, currentPage, pageSize],
+    queryFn: () => fetchServices(searchTerm, currentPage, pageSize),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -84,13 +57,7 @@ export const ServicesTab = () => {
         });
 
         await queryClient.invalidateQueries({
-          queryKey: [
-            SERVICE_QUERY_KEY,
-            selectedCategoriaId,
-            searchTerm,
-            currentPage,
-            pageSize,
-          ],
+          queryKey: [SERVICE_QUERY_KEY, searchTerm, currentPage, pageSize],
         });
       } catch (error) {
         const err = error as AxiosError<{ message: string }>;
@@ -140,40 +107,13 @@ export const ServicesTab = () => {
                     Crear nuevo servicio
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Selecciona una categoría para asociar un nuevo servicio.
+                    Define el tipo de servicio y su estado.
                   </p>
                 </div>
                 <div className="grid items-end gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <label
-                      htmlFor="category-select"
-                      className="text-sm font-medium"
-                    >
-                      Categoría
-                    </label>
-                    <Select
-                      value={selectedCategoriaId || undefined}
-                      onValueChange={setSelectedCategoriaId}
-                    >
-                      <SelectTrigger className="min-w-fit w-full bg-white h-auto">
-                        <SelectValue placeholder="Seleccione una categoría" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((categorie) => (
-                          <SelectItem
-                            key={categorie.uuid}
-                            value={categorie.uuid}
-                          >
-                            {categorie.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <ServiceDialog
                     open={isDialogOpen}
-                    categories={categories}
-                    categoryId={selectedCategoriaId}
+                    editingService={editingService}
                     onOpenChange={(open) => {
                       setIsDialogOpen(open);
                       if (!open && editingService) {
@@ -182,7 +122,6 @@ export const ServicesTab = () => {
                     }}
                     setEditingService={setEditingService}
                     setIsDialogOpen={setIsDialogOpen}
-                    editingService={editingService}
                   />
                 </div>
               </div>
@@ -208,31 +147,27 @@ export const ServicesTab = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingCategories ? (
-              <TableSkeleton />
-            ) : (
-              <>
-                <ServiceTable
-                  services={services}
-                  onEdit={handleEdit}
-                  onDelete={(id) => {
-                    setServiceId(id);
-                    setIsAlertOpen(true);
-                  }}
-                  isLoading={isLoadingServices}
-                />
-                <Paginator
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                  pageSize={pageSize}
-                  onPageSizeChange={(size) => {
-                    setPageSize(size);
-                    setCurrentPage(1);
-                  }}
-                />
-              </>
-            )}
+            <>
+              <ServiceTable
+                services={services}
+                onEdit={handleEdit}
+                onDelete={(id) => {
+                  setServiceId(id);
+                  setIsAlertOpen(true);
+                }}
+                isLoading={isLoadingServices}
+              />
+              <Paginator
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                pageSize={pageSize}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+              />
+            </>
           </CardContent>
         </Card>
       </div>

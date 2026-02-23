@@ -5,7 +5,13 @@ export const customerSchema = z.object({
     .string()
     .min(1, "El nombre completo es requerido")
     .max(100, "Máximo 100 caracteres"),
-  documentType: z.string().min(1, "El tipo de documento es requerido"),
+  documentType: z
+    .string()
+    .min(1, "El tipo de documento es requerido")
+    .refine(
+      (v) => ["CC", "CE", "TI", "PASSPORT", "NIT"].includes(v),
+      "Seleccione un tipo de documento válido"
+    ),
   documentNumber: z
     .string()
     .min(1, "El número de documento es requerido")

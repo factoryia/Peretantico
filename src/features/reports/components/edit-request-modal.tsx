@@ -102,24 +102,16 @@ export function EditRequestModal({
   };
 
   // Transform data to match our interface with safety checks
-  const distributors: Distributor[] = Array.isArray(
-    (distributorsData as { data?: unknown[] })?.data
-  )
-    ? (distributorsData as { data: unknown[] }).data.map((item: unknown) => {
-        const itemRecord = item as Record<string, unknown>;
-        const attributes = itemRecord.attributes as Record<string, unknown>;
-        return {
-          id: itemRecord.id as string,
-          title: (attributes?.title as string) || "",
-          documentNumber: (attributes?.field_document_number as string) || "",
-          documentType: (attributes?.field_document_type as string) || "",
-          phone: (attributes?.field_phone as string) || "",
-          email: (attributes?.field_email as string) || "",
-          status: attributes?.field_current_availability
-            ? "Disponible"
-            : "No disponible",
-        };
-      })
+  const distributors: Distributor[] = Array.isArray(distributorsData)
+    ? (distributorsData as any[]).map((item: any) => ({
+        id: item.id as string,
+        title: (item.title as string) || "",
+        documentNumber: (item.documentNumber as string) || "",
+        documentType: item.documentType?.name || "",
+        phone: (item.phoneNumber as string) || "",
+        email: (item.email as string) || "",
+        status: item.currentAvailability ? "Disponible" : "No disponible",
+      }))
     : [];
 
   const categories: Category[] = categoriesData || [];
@@ -140,10 +132,15 @@ export function EditRequestModal({
               fullName: (attributes?.field_full_name as string) || "",
               documentNumber:
                 (attributes?.field_document_number as string) || "",
+              documentType: "",
+              birthDate: "",
+              gender: "",
+              phone: "",
+              email: "",
             };
           }
         );
-        setApplicants(applicantsData);
+        setApplicants(applicantsData as Applicant[]);
       }
     } catch {
       // Manejar error silenciosamente - los solicitantes permanecerán vacíos

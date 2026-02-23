@@ -7,7 +7,13 @@ export const distributorSchema = z.object({
     .min(1)
     .max(15)
     .regex(/^\d+$/, "Solo se permiten números"),
-  documentTypeId: z.string().min(1),
+  documentTypeId: z
+    .string()
+    .min(1, "El tipo de documento es requerido")
+    .refine(
+      (v) => ["CC", "CE", "TI", "PASSPORT", "NIT"].includes(v),
+      "Seleccione un tipo de documento válido"
+    ),
   phoneNumber: z
     .string()
     .min(1)

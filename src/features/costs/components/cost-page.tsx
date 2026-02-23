@@ -11,7 +11,7 @@ import { FinishedRequestsTable } from "./finished-requests-table";
 import { PaymentSummaryModal } from "./payment-summary-modal";
 import {
   fetchDistributors,
-  fetchFinishedRequestsByDistributor,
+  fetchFinishedRequestsByDistributorBackend as fetchFinishedRequestsByDistributor,
 } from "../utils/costs";
 import type { Request } from "../types";
 import {

@@ -13,7 +13,10 @@ import { AssignDistributorModal } from "./assign-distributor-modal";
 import { AssignApplicantModal } from "./assign-applicant-modal";
 import { EditRequestModal } from "./edit-request-modal";
 import type { CompleteRequest } from "../utils/complete-request";
-import type { AssignmentModalData } from "../types/request";
+import type {
+  AssignmentModalData,
+  UpdateRequestPayload,
+} from "../types/request";
 
 interface RequestsTableDialogsProps {
   modals: {
@@ -33,7 +36,10 @@ interface RequestsTableDialogsProps {
   onAssignApplicant: (applicantId: string) => Promise<void>;
   onConfirmDelete: () => Promise<void>;
   setDeleteRequestId: (id: string | null) => void;
-  onUpdateRequest: (requestId: string, data: any) => Promise<void>;
+  onUpdateRequest: (
+    requestId: string,
+    data: UpdateRequestPayload,
+  ) => Promise<void>;
 }
 
 export function RequestsTableDialogs({

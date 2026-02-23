@@ -65,9 +65,9 @@ export function AssignApplicantModal({
             department: item.attributes.field_department,
             municipality: item.attributes.field_municipality_residence,
             address: item.attributes.field_address,
-            documentType: getIncludedEntityName(item.relationships.field_type_document?.data?.id, "taxonomy_term--document_type", apiData.included),
-            gender: getIncludedEntityName(item.relationships.field_gender?.data?.id, "taxonomy_term--gender", apiData.included),
-            parentStatus: getIncludedEntityName(item.relationships.field_parent_type?.data?.id, "taxonomy_term--parent_type", apiData.included),
+            documentType: "",
+            gender: "",
+            parentStatus: "",
           }));
           setApplicants(apiApplicants);
           setFilteredApplicants(apiApplicants);
@@ -212,16 +212,6 @@ export function AssignApplicantModal({
       day: 'numeric'
     })
   }
-
-  // Función helper para obtener nombres de entidades relacionadas
-  const getIncludedEntityName = (entityId: string, entityType: string, included: any[]): string => {
-    if (!included || !entityId) return "Sin especificar";
-    
-    const entity = included.find(
-      (item) => item.id === entityId && item.type === entityType
-    );
-    return entity?.attributes?.name || "Sin especificar";
-  };
 
   if (!data) return null
 
