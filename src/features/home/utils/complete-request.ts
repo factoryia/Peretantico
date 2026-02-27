@@ -130,6 +130,11 @@ export interface CompleteRequestFilters {
   applicantName?: string;
   page?: number;
   limit?: number;
+  periodo?: string;
+  zonaId?: string;
+  isPrioritized?: boolean;
+  paymentStatus?: string;
+  search?: string;
 }
 
 // --- Main Service Logic ---
@@ -145,10 +150,19 @@ export const fetchCompleteRequests = async (
       subservice,
       assignedDistributor,
       requestNumber,
+      periodo,
+      zonaId,
+      isPrioritized,
+      paymentStatus,
+      search,
     } = filters;
 
     // Build params for new backend
     const params: Record<string, any> = {};
+
+    // Pagination
+    params.page = page;
+    params.limit = limit;
 
     // Status mapping: backend expects boolean true/false or string "true"/"false"
     if (status) {
@@ -157,7 +171,6 @@ export const fetchCompleteRequests = async (
         } else if (status === "false" || status === "0" || status === "inactive") {
             params.status = "false";
         }
-        // If it's a UUID (taxonomy), ignore for now as backend only supports active/inactive boolean
     }
 
     // Subservice -> ServiceId
@@ -175,7 +188,22 @@ export const fetchCompleteRequests = async (
         params.applicationNumber = requestNumber;
     }
 
-    // Note: applicantName filter is not supported by the simplified backend yet
+    // New filters
+    if (periodo && periodo !== "all") {
+        params.periodo = periodo;
+    }
+    if (zonaId && zonaId !== "all") {
+        params.zonaId = zonaId;
+    }
+    if (isPrioritized !== undefined) {
+        params.isPrioritized = isPrioritized;
+    }
+    if (paymentStatus && paymentStatus !== "all") {
+        params.paymentStatus = paymentStatus;
+    }
+    if (search) {
+        params.search = search;
+    }
 
     const response = await api.get<any[]>("/requests", { params });
     const requests = Array.isArray(response.data) ? response.data : [];
@@ -237,6 +265,14 @@ export const fetchCompleteRequests = async (
             // InfoService (RequestData) mapping could be added here if needed
             infoService: undefined,
             paymentInfo: null,
+            evidenceImage:
+              req.attachments && req.attachments.length > 0
+                ? {
+                    id: req.attachments[0].id,
+                    uri: req.attachments[0].url,
+                    alt: req.attachments[0].fileName,
+                  }
+                : undefined,
             data: rawServiceData.map((item: any) => ({
               id: item.id,
               fieldId: item.fieldId,

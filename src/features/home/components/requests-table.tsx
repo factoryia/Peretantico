@@ -301,13 +301,13 @@ export function RequestsTable({
                   case "Incompleta":
                     return "Incompleta";
                   default:
-                    return "En proceso";
+                    return "Sin estado";
                 }
               };
 
               const mapRequestStatusToVariant = (
                 status?: string | null,
-              ): "nuevo" | "en-proceso" | "completado" | "cancelado" => {
+              ): "nuevo" | "en-proceso" | "completado" | "cancelado" | "sin-estado" => {
                 switch (status) {
                   case "Atendida":
                     return "completado";
@@ -318,7 +318,7 @@ export function RequestsTable({
                   case "Incompleta":
                     return "cancelado";
                   default:
-                    return "en-proceso";
+                    return "sin-estado";
                 }
               };
 
@@ -362,6 +362,8 @@ export function RequestsTable({
                   "bg-gray-200 text-gray-800 hover:bg-gray-200/80 border-none",
                 cancelado:
                   "bg-red-100 text-red-900 hover:bg-red-100/80 border-none",
+                "sin-estado":
+                  "bg-gray-100 text-gray-500 hover:bg-gray-100/80 border border-gray-200",
               };
 
               return (

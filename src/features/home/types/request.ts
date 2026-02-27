@@ -126,6 +126,8 @@ export interface RequestFilters {
   assignedDistributor?: string;
   requestNumber?: string;
   applicantName?: string;
+  paymentStatus?: string;
+  search?: string;
   page?: number;
   limit?: number;
 }
@@ -172,6 +174,7 @@ export interface UpdateRequestPayload {
   paymentMethod?: string | null;
   isPrioritized?: boolean;
   requestStatus?: RequestStatusEnum;
+  attachment?: string | null;
 }
 
 export interface CreateRequestPayload {
@@ -323,6 +326,7 @@ export interface Service {
   id: string;
   name: string;
   categoryId: string;
+  price: number;
 }
 
 export interface Subservice {
@@ -392,6 +396,7 @@ export interface CreateRequestDto {
   paymentMethod?: string | null;
   isPrioritized?: boolean;
   requestStatus?: RequestStatusEnum;
+  attachment?: string | null;
 }
 
 export interface UpdateRequestMetaDto {
@@ -414,6 +419,7 @@ export interface UpdateRequestMetaDto {
   paymentMethod?: string | null;
   isPrioritized?: boolean;
   requestStatus?: RequestStatusEnum;
+  attachment?: string | null;
 }
 
 export interface AssignDistributorDto {
@@ -423,6 +429,8 @@ export interface AssignDistributorDto {
 export interface UpdateStatusDto {
   status: boolean;
   observations?: string | null;
+  attachment?: string | null;
+  requestStatus?: RequestStatusEnum;
 }
 
 export interface BackendRequest {

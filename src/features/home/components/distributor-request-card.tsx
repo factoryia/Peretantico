@@ -43,7 +43,22 @@ export function DistributorRequestCard({
     caption: string;
   }>({ url: "", caption: "" });
 
-  const statusName = request.applicationStatus?.name || "Sin asignar";
+  const mapRequestStatusToLabel = (status?: string | null) => {
+    switch (status) {
+      case "Atendida":
+        return "Atendida";
+      case "EnProceso":
+        return "En proceso";
+      case "Finalizada":
+        return "Finalizada";
+      case "Incompleta":
+        return "Incompleta";
+      default:
+        return "Sin estado";
+    }
+  };
+
+  const statusName = mapRequestStatusToLabel(request.requestStatus);
 
   const openImageModal = (url: string, caption: string) => {
     setModalImageData({ url, caption });
@@ -52,8 +67,18 @@ export function DistributorRequestCard({
 
   const getStatusStyles = (status: string) => {
     const lowerStatus = status.toLowerCase();
-    if (lowerStatus.includes("atendida") || lowerStatus.includes("exito")) {
+    if (
+      lowerStatus.includes("atendida") ||
+      lowerStatus.includes("finalizada") ||
+      lowerStatus.includes("exito")
+    ) {
       return "bg-green-100 text-green-700 border-green-200";
+    }
+    if (lowerStatus.includes("proceso")) {
+      return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    }
+    if (lowerStatus.includes("incompleta") || lowerStatus.includes("cancel")) {
+      return "bg-red-100 text-red-700 border-red-200";
     }
     return "bg-blue-100 text-blue-700 border-blue-200";
   };
@@ -126,8 +151,6 @@ export function DistributorRequestCard({
     return request.applicant?.address || "Sin dirección";
   };
 
-  const address = getAddress();
-
   // Resolver nombre adecuadamente para el repartidor
   const getFullName = () => {
     const info = request.infoService;
@@ -151,7 +174,7 @@ export function DistributorRequestCard({
 
   const fullName = getFullName();
 
-  console.log(request.evidenceImage);
+  const address = getAddress();
 
   return (
     <Card className="overflow-hidden border-2 transition-all hover:shadow-md py-0">

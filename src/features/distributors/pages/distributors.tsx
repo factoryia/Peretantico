@@ -33,6 +33,7 @@ interface DistributorFilters {
   coverageAreaId: string;
   status: string;
   fullName: string;
+  paymentStatus: string;
   documentNumber: string;
   transportationTypeId: string;
   documentType: string;
@@ -61,6 +62,7 @@ export function Distributors() {
     coverageAreaId: "all",
     status: "all",
     fullName: "",
+    paymentStatus: "all",
     documentNumber: "",
     transportationTypeId: "all",
     documentType: "all",
@@ -81,6 +83,7 @@ export function Distributors() {
       coverageAreaId: "all",
       status: "all",
       fullName: "",
+      paymentStatus: "all",
       documentNumber: "",
       transportationTypeId: "all",
       documentType: "all",
@@ -99,6 +102,7 @@ export function Distributors() {
       filters.coverageAreaId !== "all" ? filters.coverageAreaId : undefined,
     status: filters.status !== "all" ? filters.status === "true" : undefined,
     fullName: filters.fullName || undefined,
+    paymentStatus: filters.paymentStatus !== "all" ? filters.paymentStatus : undefined,
     documentNumber: filters.documentNumber || undefined,
     transportationTypeId:
       filters.transportationTypeId !== "all"
@@ -139,6 +143,7 @@ export function Distributors() {
     filters.documentNumber ||
     filters.coverageAreaId !== "all" ||
     filters.status !== "all" ||
+    filters.paymentStatus !== "all" ||
     filters.transportationTypeId !== "all" ||
     filters.documentType !== "all";
 
@@ -211,7 +216,7 @@ export function Distributors() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-gray-500 ml-1">
                     NOMBRE COMPLETO
@@ -314,6 +319,25 @@ export function Distributors() {
                           {dt.name}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-500 ml-1">
+                    ESTADO PAGO
+                  </Label>
+                  <Select
+                    value={filters.paymentStatus}
+                    onValueChange={(value) => updateFilters({ paymentStatus: value })}
+                  >
+                    <SelectTrigger className="h-11 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500/10 transition-all">
+                      <SelectValue placeholder="Todos los pagos" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-gray-100 shadow-xl">
+                      <SelectItem value="all">Todos los pagos</SelectItem>
+                      <SelectItem value="pendiente">Pendiente</SelectItem>
+                      <SelectItem value="pagado">Pagado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

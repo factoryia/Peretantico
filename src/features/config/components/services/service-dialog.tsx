@@ -63,6 +63,7 @@ export const ServiceDialog = ({
     defaultValues: {
       name: editingService?.name || "",
       description: editingService?.description || "",
+      price: editingService?.price || 0,
       status: editingService?.status || "activo",
       fields:
         editingService?.fields?.map((f) => ({
@@ -92,6 +93,7 @@ export const ServiceDialog = ({
       form.reset({
         name: "",
         description: "",
+        price: 0,
         status: "activo",
         fields: [],
       });
@@ -99,6 +101,7 @@ export const ServiceDialog = ({
       form.reset({
         name: editingService.name,
         description: editingService.description,
+        price: editingService.price,
         status: editingService.status,
         fields:
           editingService.fields?.map((f) => ({
@@ -216,6 +219,29 @@ export const ServiceDialog = ({
                   <FormMessage />
                   <FormDescription>
                     Descripción detallada del servicio (si aplica).
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Precio base <RequiredDot />
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="Ingrese el precio del servicio"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.value)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <FormDescription>
+                    Precio base del servicio sin impuestos.
                   </FormDescription>
                 </FormItem>
               )}

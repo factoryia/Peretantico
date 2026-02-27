@@ -37,7 +37,11 @@ export function useDistributorId() {
 
       return null;
     },
-    enabled: !!authUser?.name && authUser.roles.includes("distributor"),
+    enabled:
+      !!authUser?.name &&
+      authUser.roles.some((role) =>
+        ["distributor", "Repartidor"].includes(role)
+      ),
     staleTime: Infinity, // El ID del repartidor no suele cambiar
   });
 }

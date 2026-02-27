@@ -137,9 +137,15 @@ export function RequestDetailViewModal({
   // Determinar variante del estado
   const getStatusVariant = (
     statusName: string
-  ): "nuevo" | "en-proceso" | "completado" | "cancelado" => {
+  ): "nuevo" | "en-proceso" | "completado" | "cancelado" | "sin-estado" => {
     const lowerStatus = statusName.toLowerCase();
-    if (lowerStatus.includes("rechaz") || lowerStatus.includes("cancel"))
+    if (lowerStatus.includes("sin estado") || lowerStatus === "")
+      return "sin-estado";
+    if (
+      lowerStatus.includes("rechaz") ||
+      lowerStatus.includes("cancel") ||
+      lowerStatus.includes("incompleta")
+    )
       return "cancelado";
     if (lowerStatus.includes("nuevo")) return "nuevo";
     if (
@@ -148,10 +154,32 @@ export function RequestDetailViewModal({
       lowerStatus.includes("camino")
     )
       return "en-proceso";
-    if (lowerStatus.includes("completado") || lowerStatus.includes("entregado"))
+    if (
+      lowerStatus.includes("completado") ||
+      lowerStatus.includes("entregado") ||
+      lowerStatus.includes("atendida") ||
+      lowerStatus.includes("finalizada")
+    )
       return "completado";
-    return "nuevo";
+    return "sin-estado";
   };
+
+  const mapRequestStatusToLabel = (status?: string | null) => {
+    switch (status) {
+      case "Atendida":
+        return "Atendida";
+      case "EnProceso":
+        return "En proceso";
+      case "Finalizada":
+        return "Finalizada";
+      case "Incompleta":
+        return "Incompleta";
+      default:
+        return "Sin estado";
+    }
+  };
+
+  const statusLabel = mapRequestStatusToLabel(request.requestStatus);
 
   const getEps = (): string => {
     const info = request.infoService as any;
@@ -247,10 +275,8 @@ export function RequestDetailViewModal({
             type={request.infoService?.type || "Sin tipo"}
             requestId={request.field_application_number || "Sin número"}
             createdDate={formatDate(request.created)}
-            status={request.applicationStatus?.name || "Sin estado"}
-            statusVariant={getStatusVariant(
-              request.applicationStatus?.name || ""
-            )}
+            status={statusLabel}
+            statusVariant={getStatusVariant(statusLabel)}
           />
 
           {/* Primera fila de tarjetas */}

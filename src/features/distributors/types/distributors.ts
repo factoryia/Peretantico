@@ -20,6 +20,8 @@ export interface FetchDistributorsParams {
   coverageAreaId?: string;
   status?: boolean;
   fullName?: string;
+  search?: string;
+  paymentStatus?: string;
   documentNumber?: string;
   transportationTypeId?: string;
   documentType?: string;

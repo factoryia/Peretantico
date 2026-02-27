@@ -1,23 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/api";
 
-export interface StatItem {
-  key: string;
-  count: number;
-  term_id: string;
-  uuid: string;
-  name: string;
-  internal_id: string;
+export interface DashboardStats {
+  totalRequests: number;
+  requestsByStatus: {
+    Atendida: number;
+    EnProceso: number;
+    Finalizada: number;
+    Incompleta: number;
+  };
+  totalDistributors: number;
+  totalServices: number;
+  totalPayments: number;
+  totalPaymentsAmount: string;
 }
 
-export const fetchRequestStats = async (): Promise<StatItem[]> => {
-  const { data } = await api.get<StatItem[]>("/api/peretantico/request-stats");
+export const fetchDashboardStats = async (): Promise<DashboardStats> => {
+  const { data } = await api.get<DashboardStats>("/dashboard/stats");
   return data;
 };
 
 export const useStatsQuery = () => {
   return useQuery({
-    queryKey: ["request-stats"],
-    queryFn: fetchRequestStats,
+    queryKey: ["dashboard-stats"],
+    queryFn: fetchDashboardStats,
   });
 };

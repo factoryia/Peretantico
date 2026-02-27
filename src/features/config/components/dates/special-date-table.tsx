@@ -26,10 +26,10 @@ export const SpecialDateTable = ({ specialDates, onEdit, onView }: Props) => (
             {specialDates.map(fecha => (
                 <TableRow key={fecha.id}>
                     <TableCell className="font-medium">{fecha.title}</TableCell>
-                    <TableCell>{new Date(fecha.field_date).toLocaleDateString("es-ES")}</TableCell>
+                    <TableCell>{new Date(fecha.date).toLocaleDateString("es-ES")}</TableCell>
                     <TableCell>
-                        <Badge variant={fecha.field_is_annual ? "default" : "outline"}>
-                            {fecha.field_is_annual ? "Sí" : "No"}
+                        <Badge variant={fecha.repeat ? "default" : "outline"}>
+                            {fecha.repeat ? "Sí" : "No"}
                         </Badge>
                     </TableCell>
                     <TableCell>

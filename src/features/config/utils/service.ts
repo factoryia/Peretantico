@@ -72,6 +72,7 @@ export const fetchServicesByCategoryWithoutFilters = async (
         categoryName: category.name,
         name: item.attributes.name,
         description: item.attributes.description?.value ?? undefined,
+        price: 0,
         status: item.attributes.status ? "activo" : "inactivo",
         creationDate: item.attributes.revision_created.split("T")[0],
       };
@@ -136,6 +137,7 @@ export const fetchServicesByCategory = async (
         categoryName: category.name,
         name: item.attributes.name,
         description: item.attributes.description?.value ?? undefined,
+        price: 0,
         status: item.attributes.status ? "activo" : "inactivo",
         creationDate: item.attributes.revision_created.split("T")[0],
       };
@@ -182,6 +184,7 @@ export const fetchServices = async (
         categoryName: "",
         name: s.name,
         description: s.description ?? undefined,
+        price: s.price ?? 0,
         status: s.status ? "activo" : "inactivo",
         creationDate: "",
         fields,
@@ -295,6 +298,7 @@ export async function createService(data: ServiceFormValues) {
   const payload = {
     name: data.name,
     description: data.description ?? null,
+    price: data.price,
     status: data.status === "activo",
     fields: (data.fields ?? []).map((field, index) =>
       mapFieldToPayload(field, index)
@@ -312,6 +316,7 @@ export async function updateService(
   const payload = {
     name: data.name,
     description: data.description ?? null,
+    price: data.price,
     status: data.status === "activo",
     fields: (data.fields ?? []).map((field, index) =>
       mapFieldToPayload(field, index)

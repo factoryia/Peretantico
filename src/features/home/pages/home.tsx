@@ -11,7 +11,9 @@ import { DistributorDashboard } from "../components/distributor-dashboard";
 
 export function Home() {
   const { authUser } = useAuthStore();
-  const isDistributor = authUser?.roles?.includes("distributor");
+  const isDistributor = authUser?.roles?.some((role) =>
+    ["distributor", "Repartidor"].includes(role)
+  );
 
   const [filters, setFilters] = useState<RequestFilters>({});
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);

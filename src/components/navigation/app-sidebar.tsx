@@ -1,4 +1,4 @@
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut, Users } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import {
   Sidebar,
@@ -60,10 +60,11 @@ export function AppSidebar() {
             <SidebarMenu className="gap-2">
               {data.navMain
                 .filter((item) => {
-                  const isDistributor =
-                    authUser?.roles?.includes("distributor");
+                  const isDistributor = authUser?.roles?.some((role) =>
+                    ["distributor", "Repartidor"].includes(role)
+                  );
                   if (isDistributor) {
-                    // Solo mostrar "Solicitudes" para distribuidores
+                    // Mostrar solo "Solicitudes" para distribuidores
                     return item.url === "/";
                   }
                   return true;
@@ -164,6 +165,12 @@ export function AppSidebar() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/usuarios" className="cursor-pointer">
+                    <Users className="mr-2 h-4 w-4" />
+                    Gestión de usuarios
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="text-red-600 focus:text-red-600 cursor-pointer"

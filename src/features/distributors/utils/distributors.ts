@@ -139,6 +139,8 @@ export const fetchDistributors = async ({
   coverageAreaId,
   status,
   fullName,
+  search,
+  paymentStatus,
   documentNumber,
   transportationTypeId,
   documentType,
@@ -162,6 +164,12 @@ export const fetchDistributors = async ({
     }
     if (fullName) {
       params.search = fullName;
+    }
+    if (search) {
+      params.search = search;
+    }
+    if (paymentStatus && paymentStatus !== "all") {
+      params.paymentStatus = paymentStatus;
     }
     if (documentNumber) {
       params.documentNumber = documentNumber;

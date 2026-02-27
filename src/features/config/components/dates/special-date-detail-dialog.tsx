@@ -33,18 +33,18 @@ export function SpecialDateDetailDialog({ open, onOpenChange, viewingDate }: Pro
                     </div>
                     <div>
                         <label className="text-sm font-medium">Descripción</label>
-                        <div className="p-2 bg-muted rounded-md text-sm">{viewingDate.field_description || "Sin descripción"}</div>
+                        <div className="p-2 bg-muted rounded-md text-sm">{viewingDate.description || "Sin descripción"}</div>
                     </div>
                     <div>
                         <label className="text-sm font-medium">Fecha</label>
-                        <div className="p-2 bg-muted rounded-md text-sm">{formatDate(viewingDate.field_date)}</div>
+                        <div className="p-2 bg-muted rounded-md text-sm">{formatDate(viewingDate.date)}</div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-sm font-medium">Repetir cada año</label>
                             <div className="p-2 bg-muted rounded-md text-sm">
-                                <Badge variant={viewingDate.field_is_annual ? "default" : "outline"}>
-                                    {viewingDate.field_is_annual ? "Sí" : "No"}
+                                <Badge variant={viewingDate.repeat ? "default" : "outline"}>
+                                    {viewingDate.repeat ? "Sí" : "No"}
                                 </Badge>
                             </div>
                         </div>
@@ -60,7 +60,7 @@ export function SpecialDateDetailDialog({ open, onOpenChange, viewingDate }: Pro
                     <div>
                         <label className="text-sm font-medium">Fecha de creación</label>
                         <div className="p-2 bg-muted rounded-md text-sm">
-                            {formatDate(viewingDate.created ?? "")}
+                            {viewingDate.createdAt ? formatDate(viewingDate.createdAt) : "No disponible"}
                         </div>
                     </div>
                     <div className="flex justify-end">

@@ -28,6 +28,7 @@ export interface Service {
   categoryName: string;
   name: string;
   description?: string;
+  price: number;
   status: "activo" | "inactivo";
   creationDate: string;
   fields?: ServiceField[];
@@ -51,9 +52,10 @@ export interface Subservice {
 export interface SpecialDate {
   id: string;
   title: string;
-  field_description?: string;
-  field_date: string; // ISO date
-  field_is_annual: boolean; // <-- IMPORTANTE, boolean
-  status: boolean; // <-- IMPORTANTE, boolean
-  created?: string; // puede ser 'created', 'revision_timestamp', etc.
+  description?: string;
+  date: string; // ISO date
+  repeat: boolean;
+  status: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -3,8 +3,6 @@ import api from "@/api";
 import type {
   Distributor,
   Request,
-  CostRecord,
-  PaymentCalculation,
 } from "../types";
 import type { AxiosResponse } from "axios";
 
@@ -90,7 +88,7 @@ export const calculatePayment = (
   baseValue: number,
   additionalValue: number,
   discountValue: number
-): PaymentCalculation => {
+) => {
   const total = baseValue + additionalValue - discountValue;
   return {
     baseValue,
@@ -100,132 +98,14 @@ export const calculatePayment = (
   };
 };
 
-export const saveCostRecord = async (costData: {
-  distributorId: string;
-  requestId: string;
-  baseValue: number;
-  additionalValue: number;
-  discountValue: number;
-  observations?: string;
-}): Promise<CostRecord> => {
-  try {
-    const totalValue = calculatePayment(
-      costData.baseValue,
-      costData.additionalValue,
-      costData.discountValue
-    ).total;
-
-    // Intentar crear el pago con JSON:API
-    try {
-      const payload = {
-        data: {
-          type: "node--payment",
-          attributes: {
-            title: `Pago solicitud ${costData.requestId}`,
-            field_observations: costData.observations || "",
-            // Solo enviar montos necesarios
-            field_additional_amount: costData.additionalValue,
-            field_discount_amount: costData.discountValue,
-            status: true,
-          },
-          relationships: {
-            field_distributor_data: {
-              data: { type: "node--distributor", id: costData.distributorId },
-            },
-            // El backend espera arreglo de requests
-            field_request: {
-              data: [{ type: "node--request", id: costData.requestId }],
-            },
-            // Se establecerá más abajo cuando obtengamos el id de "Recibido"
-          },
-        },
-      };
-
-      void payload;
-      void totalValue;
-      throw new Error("JSON:API payment creation is no longer supported");
-    } catch {
-      // Fallback: intentar Drupal REST si JSON:API no está disponible
-      const restPayload: Record<string, unknown> = {
-        type: [{ target_id: "payment" }],
-        title: [{ value: `Pago solicitud ${costData.requestId}` }],
-        field_observations: [{ value: costData.observations || "" }],
-        field_additional_amount: [{ value: costData.additionalValue }],
-        field_discount_amount: [{ value: costData.discountValue }],
-        field_distributor_data: [{ target_id: costData.distributorId }],
-        field_request: [{ target_id: costData.requestId }],
-        status: [{ value: 1 }],
-      };
-
-      const response = await api.post("/node?_format=json", restPayload, {
-        headers: { "Content-Type": "application/json" },
-      });
-
-      return {
-        id:
-          response.data?.nid?.[0]?.value?.toString?.() ||
-          `payment_${Date.now()}`,
-        distributorId: costData.distributorId,
-        requestId: costData.requestId,
-        paymentCalculation: {
-          baseValue: costData.baseValue,
-          additionalValue: costData.additionalValue,
-          discountValue: costData.discountValue,
-          total: totalValue,
-        },
-        paymentStatus: undefined,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    }
-  } catch (error) {
-    console.error("Error saving cost record:", error);
-    throw error;
-  }
-};
-
-// Actualizar estado de pago de la solicitud
-export const updateRequestPaymentStatus = async (
-  requestId: string,
-  statusName: string
-): Promise<void> => {
-  try {
-    // Obtener taxonomías de estados de pago y buscar el estado
-    const statusesResponse = await api.get(
-      "/api/taxonomy_term/payment_status",
-      {
-        params: { "page[limit]": 100 },
-      }
-    );
-    const statuses: Array<{ id: string; attributes: { name?: string } }> =
-      statusesResponse?.data?.data || [];
-    const status = statuses.find(
-      (s) =>
-        (s.attributes?.name || "").toLowerCase() === statusName.toLowerCase()
-    );
-
-    if (!status?.id) {
-      throw new Error(`No se encontró el estado de pago '${statusName}'`);
-    }
-
-    await api.patch(`/requests/${requestId}/status`, {
-      status: true,
-      observations: `Estado de pago actualizado a ${statusName}`,
-    });
-  } catch (error) {
-    console.error("Error updating request payment status:", error);
-    throw error;
-  }
-};
-
 // Función para obtener historial de pagos de un distribuidor desde backend /payments
 export const fetchPaymentHistory = async (
   distributorId: string,
   limit: number = 5
-): Promise<CostRecord[]> => {
+): Promise<Payment[]> => {
   try {
     const response = await api.get("/payments", {
-      params: { limit },
+      params: { limit, distributorId },
     });
 
     const raw = response.data;
@@ -235,36 +115,19 @@ export const fetchPaymentHistory = async (
       ? raw.data
       : [];
 
-    return list
-      .filter((item) => item.distributorId === distributorId)
-      .map((item) => {
-        const baseValue = Number(item.baseValue ?? 0);
-        const additionalValue = Number(item.additionalAmount ?? 0);
-        const discountValue = Number(item.discountAmount ?? 0);
-        const total = calculatePayment(
-          baseValue,
-          additionalValue,
-          discountValue
-        ).total;
-
-        return {
-          id: item.id,
-          distributorId: item.distributorId || distributorId,
-          requestId: "",
-          requestApplicationNumber: undefined,
-          paymentCalculation: {
-            baseValue,
-            additionalValue,
-            discountValue,
-            total,
-          },
-          paymentStatus: item.status
-            ? { id: item.status, name: item.status }
-            : undefined,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-        } satisfies CostRecord;
-      });
+    return list.map((item) => ({
+      id: item.id,
+      title: item.title,
+      observations: item.observations,
+      baseValue: Number(item.baseValue ?? 0),
+      additionalAmount: Number(item.additionalAmount ?? 0),
+      discountAmount: Number(item.discountAmount ?? 0),
+      totalAmount: Number(item.totalAmount ?? 0),
+      status: item.status,
+      distributorId: item.distributorId,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    } satisfies Payment));
   } catch (error) {
     console.error("Error fetching payment history:", error);
     throw error;
@@ -274,23 +137,57 @@ export const fetchPaymentHistory = async (
 export const fetchFinishedRequestsByDistributorBackend = async (
   distributorId: string,
 ): Promise<Request[]> => {
-  const response = await api.get("/requests", { params: { distributorId } });
+  const response = await api.get("/requests", { 
+    params: { 
+      distributorId,
+      requestStatus: "Finalizada",
+      paymentStatus: "Pendiente"
+    } 
+  });
   const raw = response.data;
   const list: any[] = Array.isArray(raw)
     ? raw
     : Array.isArray(raw?.data)
     ? raw.data
     : [];
-  return list.map((item) => {
+  
+  // Filtrar por seguridad en el frontend también, por si el backend no soporta los filtros en params
+   const filteredList = list.filter(item => {
+     const status = (item.requestStatus || item.field_request_status || "").toLowerCase();
+     const payment = (item.paymentStatus || item.field_payment_status || "").toLowerCase();
+     
+     return (status === "finalizada" || status === "finalizada") && 
+            (payment !== "pagado" && payment !== "paid");
+   });
+
+  return filteredList.map((item) => {
     const applicant = item.applicant || {};
     const distributor = item.distributor || null;
     const service = item.service || {};
+
+    const mapRequestStatusToLabel = (status?: string | null) => {
+      switch (status) {
+        case "Atendida":
+          return "Atendida";
+        case "EnProceso":
+          return "En proceso";
+        case "Finalizada":
+          return "Finalizada";
+        case "Incompleta":
+          return "Incompleta";
+        default:
+          return "En proceso";
+      }
+    };
+
+    const statusLabel = mapRequestStatusToLabel(item.requestStatus || item.field_request_status);
+
     return {
       id: item.id,
       title: item.title || "",
       created: item.createdAt || item.entryDate || "",
       applicationNumber: item.applicationNumber || "",
-      status: "finalizado",
+      status: item.requestStatus || item.field_request_status || "EnProceso",
       entryDate: item.entryDate || "",
       estimatedApplicationHour: item.estimatedApplicationHour?.toString() ?? null,
       estimatedPrioritizedHour: item.estimatedPrioritizedHour?.toString() ?? null,
@@ -316,8 +213,8 @@ export const fetchFinishedRequestsByDistributorBackend = async (
         : undefined,
       infoServiceType: service.code || undefined,
       applicationStatus: undefined,
-      paymentStatus: undefined,
-      serviceStatus: { id: "finished", name: "Finalizado" },
+      paymentStatus: item.paymentStatus ? { id: item.paymentStatus, name: item.paymentStatus } : undefined,
+      serviceStatus: { id: item.requestStatus || item.field_request_status || "en-proceso", name: statusLabel },
     };
   });
 };
@@ -327,26 +224,27 @@ export const createPayment = async (): Promise<void> => {};
 export interface Payment {
   id: string;
   title: string;
-  observations: string | null;
-  baseValue: number | null;
-  additionalAmount: number | null;
-  discountAmount: number | null;
-  totalAmount: number | null;
-  status: string | null;
-  distributorId: string | null;
+  observations?: string;
+  baseValue?: number;
+  additionalAmount?: number;
+  discountAmount?: number;
+  totalAmount?: number;
+  status?: string;
+  distributorId?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreatePaymentDto {
   title: string;
-  observations?: string | null;
-  baseValue?: number | null;
-  additionalAmount?: number | null;
-  discountAmount?: number | null;
-  totalAmount?: number | null;
+  observations?: string;
+  baseValue?: number;
+  additionalAmount?: number;
+  discountAmount?: number;
+  totalAmount?: number;
   status?: string;
-  distributorId?: string | null;
+  distributorId?: string;
+  requests?: string[];
 }
 
 export interface PaymentsListResponse {
@@ -391,15 +289,16 @@ export const createPaymentRecord = async (
       (dto.additionalAmount || 0) -
       (dto.discountAmount || 0));
 
-  const payload = {
+  const payload: CreatePaymentDto = {
     title: dto.title,
-    observations: dto.observations ?? null,
-    baseValue: dto.baseValue ?? null,
-    additionalAmount: dto.additionalAmount ?? null,
-    discountAmount: dto.discountAmount ?? null,
+    observations: dto.observations,
+    baseValue: dto.baseValue,
+    additionalAmount: dto.additionalAmount,
+    discountAmount: dto.discountAmount,
     totalAmount,
-    status: dto.status ?? "PENDING",
-    distributorId: dto.distributorId ?? null,
+    status: dto.status ?? "Pendiente",
+    distributorId: dto.distributorId,
+    requests: dto.requests ?? [],
   };
 
   const response = await api.post("/payments", payload);

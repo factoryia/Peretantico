@@ -19,12 +19,14 @@ interface FinishedRequestsTableProps {
   requests: Request[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
+  disabled?: boolean;
 }
 
 export function FinishedRequestsTable({
   requests,
   selectedIds,
   onSelectionChange,
+  disabled = false,
 }: FinishedRequestsTableProps) {
   const isAllSelected =
     requests.length > 0 && selectedIds.length === requests.length;
@@ -68,22 +70,39 @@ export function FinishedRequestsTable({
     }
   };
 
+  const mapRequestStatusToColor = (statusName?: string | null) => {
+    switch (statusName) {
+      case "Atendida":
+      case "Finalizada":
+        return "bg-green-100 text-green-700 border-none";
+      case "En proceso":
+      case "EnProceso":
+        return "bg-blue-100 text-blue-700 border-none";
+      case "Incompleta":
+        return "bg-red-100 text-red-700 border-none";
+      default:
+        return "bg-gray-100 text-gray-700 border-none";
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm">
         <Table className="w-full min-w-[1000px]">
           <TableHeader className="bg-gray-50/50">
             <TableRow className="hover:bg-transparent border-b border-gray-100">
-              <TableHead className="w-[50px] text-center py-4">
-                <div className="flex items-center justify-center">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={toggleAll}
-                    aria-label="Select all"
-                    className="cursor-pointer"
-                  />
-                </div>
-              </TableHead>
+              {!disabled && (
+                <TableHead className="w-[50px] text-center py-4">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      checked={isAllSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all"
+                      className="cursor-pointer"
+                    />
+                  </div>
+                </TableHead>
+              )}
               <TableHead className="font-bold text-[11px] uppercase tracking-wider text-slate-500 py-4 px-6">
                 ID Solicitud
               </TableHead>
@@ -108,7 +127,7 @@ export function FinishedRequestsTable({
             {requests.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={disabled ? 6 : 7}
                   className="text-center py-16 text-muted-foreground italic bg-slate-50/30"
                 >
                   <div className="flex flex-col items-center gap-2">
@@ -130,16 +149,18 @@ export function FinishedRequestsTable({
                       isSelected ? "bg-blue-50/70 hover:bg-blue-50/80" : ""
                     }`}
                   >
-                    <TableCell className="text-center py-4">
-                      <div className="flex items-center justify-center">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleOne(request.id)}
-                          aria-label={`Select ${request.applicationNumber}`}
-                          className="cursor-pointer"
-                        />
-                      </div>
-                    </TableCell>
+                    {!disabled && (
+                      <TableCell className="text-center py-4">
+                        <div className="flex items-center justify-center">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleOne(request.id)}
+                            aria-label={`Select ${request.applicationNumber}`}
+                            className="cursor-pointer"
+                          />
+                        </div>
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium text-gray-900 py-4 px-6 text-[13px]">
                       {request.applicationNumber}
                     </TableCell>
@@ -177,7 +198,9 @@ export function FinishedRequestsTable({
                     <TableCell className="text-center py-4 px-6">
                       <Badge
                         variant="outline"
-                        className="rounded-full shadow-none font-bold text-[10px] uppercase tracking-wider bg-green-100 text-green-700 border-none px-3"
+                        className={`rounded-full shadow-none font-bold text-[10px] uppercase tracking-wider px-3 ${mapRequestStatusToColor(
+                          request.serviceStatus?.name || "Finalizado"
+                        )}`}
                       >
                         {request.serviceStatus?.name || "Finalizado"}
                       </Badge>

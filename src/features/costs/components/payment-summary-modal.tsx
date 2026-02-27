@@ -104,8 +104,9 @@ export function PaymentSummaryModal({
         additionalAmount: values.valuePerRequest * numRequests,
         discountAmount: 0,
         distributorId,
-        status: "PAID",
+        status: "Pagado",
         totalAmount: values.valuePerRequest * numRequests,
+        requests: selectedRequests.map((r) => r.id),
       };
 
       await createPaymentRecord(dto);

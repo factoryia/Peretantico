@@ -25,6 +25,8 @@ export const fetchRequests = async (
       assignedDistributor,
       requestNumber,
       applicantName,
+      paymentStatus,
+      search,
       page = 1,
       limit = 10,
     } = filters;
@@ -35,6 +37,8 @@ export const fetchRequests = async (
       assignedDistributor,
       requestNumber,
       applicantName,
+      paymentStatus,
+      search,
       page,
       limit,
     });
@@ -659,6 +663,7 @@ export const createBackendRequest = async (
     paymentMethod: dto.paymentMethod ?? null,
     isPrioritized: dto.isPrioritized ?? false,
     requestStatus: dto.requestStatus ?? "EnProceso",
+    attachment: dto.attachment ?? null,
   };
 
   const response = await api.post("/requests", payload);

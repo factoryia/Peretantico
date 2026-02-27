@@ -2,17 +2,6 @@ import api from "@/api";
 import type { SpecialDateFormValues } from "../schemas";
 import type { SpecialDate } from "../types";
 
-interface SpecialDateApiItem {
-  id: string;
-  type: string;
-  attributes: SpecialDate;
-}
-
-interface SpecialDateApiResponse {
-  data: SpecialDateApiItem[];
-  meta: { count: number };
-}
-
 // Obtener fechas especiales paginadas y filtradas
 export const fetchSpecialDates = async (
   searchTerm: string = "",
@@ -20,25 +9,34 @@ export const fetchSpecialDates = async (
   limit: number = 10
 ): Promise<{ specialDates: SpecialDate[]; totalPages: number }> => {
   try {
-    const offset = (page - 1) * limit;
     const params: Record<string, string | number> = {
-      "filter[title][condition][path]": "title",
-      "filter[title][condition][operator]": "CONTAINS",
-      "filter[title][condition][value]": searchTerm,
-      "page[limit]": limit,
-      "page[offset]": offset,
+      page,
+      limit,
     };
 
-    const response = await api.get<SpecialDateApiResponse>("/api/node/dates", {
+    if (searchTerm) {
+      params.search = searchTerm;
+    }
+
+    const response = await api.get<SpecialDate[] | { data: SpecialDate[], total: number } | { items: SpecialDate[], count: number }>("/special-dates", {
       params,
     });
-    const totalItems = response.data.meta?.count ?? response.data.data.length;
-    const totalPages = Math.ceil(totalItems / limit);
 
-    const specialDates = response.data.data.map((item) => ({
-      ...item.attributes,
-      id: item.id,
-    }));
+    let specialDates: SpecialDate[] = [];
+    let totalItems = 0;
+
+    if (Array.isArray(response.data)) {
+      specialDates = response.data;
+      totalItems = specialDates.length;
+    } else if ('data' in response.data && Array.isArray(response.data.data)) {
+      specialDates = response.data.data;
+      totalItems = response.data.total || specialDates.length;
+    } else if ('items' in response.data && Array.isArray(response.data.items)) {
+      specialDates = response.data.items;
+      totalItems = response.data.count || specialDates.length;
+    }
+
+    const totalPages = Math.ceil(totalItems / limit) || 1;
 
     return { specialDates, totalPages };
   } catch {
@@ -48,25 +46,14 @@ export const fetchSpecialDates = async (
 
 export async function createSpecialDate(data: SpecialDateFormValues) {
   const payload = {
-    data: {
-      type: "node--dates",
-      attributes: {
-        title: data.title,
-        field_date: data.field_date,
-        field_description: data.field_description ?? "",
-        field_is_annual: data.field_is_annual === "si", // <-- STRING A BOOLEAN
-        status: data.status === "activo", // <-- STRING A BOOLEAN
-        promote: false,
-        sticky: false,
-      },
-    },
+    title: data.title,
+    description: data.description,
+    date: data.date,
+    repeat: data.repeat === "si",
+    status: data.status === "activo",
   };
 
-  const response = await api.post("/api/node/dates", payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-    },
-  });
+  const response = await api.post("/special-dates", payload);
   return response.data;
 }
 
@@ -75,26 +62,18 @@ export async function updateSpecialDate(
   data: SpecialDateFormValues
 ) {
   const payload = {
-    data: {
-      type: "node--dates",
-      id,
-      attributes: {
-        title: data.title,
-        field_date: data.field_date,
-        field_description: data.field_description ?? "",
-        field_is_annual: data.field_is_annual === "si", // <-- STRING A BOOLEAN
-        status: data.status === "activo", // <-- STRING A BOOLEAN
-        promote: false,
-        sticky: false,
-      },
-    },
+    title: data.title,
+    description: data.description,
+    date: data.date,
+    repeat: data.repeat === "si",
+    status: data.status === "activo",
   };
 
-  const response = await api.patch(`/api/node/dates/${id}`, payload, {
-    headers: {
-      "Content-Type": "application/vnd.api+json",
-    },
-  });
+  const response = await api.patch(`/special-dates/${id}`, payload);
+  return response.data;
+}
 
+export async function deleteSpecialDate(id: string) {
+  const response = await api.delete(`/special-dates/${id}`);
   return response.data;
 }

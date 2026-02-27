@@ -23,8 +23,17 @@ export async function uploadEvidence(file: File): Promise<string> {
     throw new Error("No se pudo obtener el ID del archivo");
   }
 
-  // Generalmente retorna un objeto con el UUID o el FID. El payload para actualizar el request usa UUID.
-  return res.data.uuid[0].value;
+  // El backend de NestJS retorna el uuid directamente como string o en la propiedad uuid
+  // Usamos fid si está disponible ya que contiene el nombre de archivo con extensión
+  const fileId = res.data.fid || (typeof res.data.uuid === 'string' 
+    ? res.data.uuid 
+    : (Array.isArray(res.data.uuid) ? res.data.uuid[0]?.value : res.data.uuid));
+
+  if (!fileId) {
+    throw new Error("No se pudo obtener el identificador del archivo");
+  }
+
+  return fileId;
 }
 
 export async function uploadServiceFieldFile(file: File): Promise<string> {
@@ -53,10 +62,12 @@ export async function uploadServiceFieldFile(file: File): Promise<string> {
 
 export async function completeRequestWithEvidence(
   requestId: string,
-  _fileUuid: string
+  fileUuid: string
 ) {
   await api.patch(`/requests/${requestId}/status`, {
     status: true,
     observations: "Actualizada desde evidencia",
+    attachment: fileUuid,
+    requestStatus: "Atendida",
   });
 }

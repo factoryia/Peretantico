@@ -49,9 +49,9 @@ export function SpecialDateDialog({
     resolver: zodResolver(specialDateSchema),
     defaultValues: {
       title: "",
-      field_description: "",
-      field_date: "",
-      field_is_annual: "no",
+      description: "",
+      date: "",
+      repeat: "no",
       status: "activo",
     },
   });
@@ -59,17 +59,17 @@ export function SpecialDateDialog({
     if (editingDate) {
       form.reset({
         title: editingDate.title,
-        field_description: editingDate.field_description ?? "",
-        field_date: editingDate.field_date,
-        field_is_annual: editingDate.field_is_annual ? "si" : "no", // <-- TRADUCE
-        status: editingDate.status ? "activo" : "inactivo", // <-- TRADUCE
+        description: editingDate.description ?? "",
+        date: editingDate.date,
+        repeat: editingDate.repeat ? "si" : "no",
+        status: editingDate.status ? "activo" : "inactivo",
       });
     } else if (open) {
       form.reset({
         title: "",
-        field_description: "",
-        field_date: "",
-        field_is_annual: "no",
+        description: "",
+        date: "",
+        repeat: "no",
         status: "activo",
       });
     }
@@ -113,7 +113,7 @@ export function SpecialDateDialog({
             />
             <FormField
               control={form.control}
-              name="field_description"
+              name="description"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Descripción</FormLabel>
@@ -130,7 +130,7 @@ export function SpecialDateDialog({
             />
             <FormField
               control={form.control}
-              name="field_date"
+              name="date"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
@@ -145,7 +145,7 @@ export function SpecialDateDialog({
             />
             <FormField
               control={form.control}
-              name="field_is_annual"
+              name="repeat"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
@@ -200,9 +200,7 @@ export function SpecialDateDialog({
               >
                 Cancelar
               </Button>
-              <Button type="submit">
-                {editingDate ? "Actualizar" : "Crear"}
-              </Button>
+              <Button type="submit">Guardar</Button>
             </div>
           </form>
         </Form>

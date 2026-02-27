@@ -77,46 +77,6 @@ export interface Request {
   };
 }
 
-export interface PaymentCalculation {
-  baseValue: number;
-  additionalValue: number;
-  discountValue: number;
-  total: number;
-}
-
-export interface CostRecord {
-  id: string;
-  distributorId: string;
-  requestId: string;
-  requestApplicationNumber?: string;
-  paymentCalculation: PaymentCalculation;
-  paymentStatus?: {
-    id: string;
-    name: string;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PaymentData {
-  title: string;
-  observations?: string;
-  additionalAmount?: number;
-  discountAmount?: number;
-  distributorId: string;
-  requestIds: string[];
-  paymentStatusId: string;
-}
-
 export interface DistributorWithRequests extends Distributor {
   assignedRequests: Request[];
-}
-
-export interface CostFormData {
-  distributorId: string;
-  requestId: string;
-  baseValue: number;
-  additionalValue: number;
-  discountValue: number;
-  observations?: string;
 }

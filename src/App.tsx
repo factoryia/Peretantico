@@ -9,6 +9,7 @@ import { AuthRoutes } from "@/features/auth/routes/auth-routes";
 import { PrivateRoutes } from "@/features/auth/components/private-routes";
 import { RoleGuard } from "@/features/auth/components/role-guard";
 import { Configuration } from "./features/config/pages/configuration";
+import { UsersPage } from "./features/users/pages/users";
 import CostPage from "@/features/costs/pages/page";
 import Client from "./features/client/pages/client";
 
@@ -36,8 +37,13 @@ export default function App() {
               <Route path="/" element={<Home />} />
 
               {/* Rutas exclusivas para admin (excluidas para distribuidores) */}
-              <Route element={<RoleGuard excludedRoles={["distributor"]} />}>
+              <Route
+                element={
+                  <RoleGuard excludedRoles={["distributor", "Repartidor"]} />
+                }
+              >
                 <Route path="/repartidores" element={<Distributors />} />
+                <Route path="/usuarios" element={<UsersPage />} />
                 <Route path="/reportes" element={<Reports />} />
                 <Route path="/configuraciones" element={<Configuration />} />
                 <Route path="/clientes" element={<Client />} />

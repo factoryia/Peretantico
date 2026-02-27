@@ -86,11 +86,26 @@ function mapToCurrentUser(data: unknown): CurrentUser {
   const rolesSource =
     (record.roles as unknown) ?? (record.permissions as unknown);
 
-  const roles =
-    Array.isArray(rolesSource) &&
-    rolesSource.every((role) => typeof role === "string")
-      ? (rolesSource as string[])
-      : [];
+  let roles: string[] = [];
+
+  if (Array.isArray(rolesSource)) {
+    roles = rolesSource
+      .map((role: any) => {
+        if (typeof role === "string") return role;
+        if (typeof role === "object" && role !== null) {
+          // Estructura: { role: { name: "Repartidor" } }
+          if (role.role && typeof role.role.name === "string") {
+            return role.role.name;
+          }
+          // Estructura: { name: "Repartidor" }
+          if (typeof role.name === "string") {
+            return role.name;
+          }
+        }
+        return null;
+      })
+      .filter((r): r is string => typeof r === "string");
+  }
 
   return {
     uid: String(uidValue ?? ""),

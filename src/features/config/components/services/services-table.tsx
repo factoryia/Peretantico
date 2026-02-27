@@ -31,6 +31,7 @@ export const ServiceTable = ({
           <TableRow>
             <TableHead>Nombre</TableHead>
             <TableHead>Descripción</TableHead>
+            <TableHead>Precio</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Fecha Creación</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
@@ -62,6 +63,13 @@ export const ServiceTable = ({
                 <TableCell>{service.name}</TableCell>
                 <TableCell className="max-w-[400px] text-wrap line-clamp-4 truncate overflow-hidden">
                   {service.description || "-"}
+                </TableCell>
+                <TableCell className="font-medium">
+                  {new Intl.NumberFormat("es-CO", {
+                    style: "currency",
+                    currency: "COP",
+                    maximumFractionDigits: 0,
+                  }).format(service.price)}
                 </TableCell>
                 <TableCell>
                   <Badge

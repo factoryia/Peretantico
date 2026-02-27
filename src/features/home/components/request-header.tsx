@@ -13,7 +13,7 @@ interface RequestHeaderProps {
   requestId: string;
   createdDate: string;
   status: string;
-  statusVariant?: "nuevo" | "en-proceso" | "completado" | "cancelado";
+  statusVariant?: "nuevo" | "en-proceso" | "completado" | "cancelado" | "sin-estado";
   type: ServiceType;
 }
 
@@ -29,6 +29,7 @@ export function RequestHeader({
     "en-proceso": "bg-yellow-100 text-yellow-900",
     completado: "bg-gray-200 text-gray-800",
     cancelado: "bg-red-100 text-red-900",
+    "sin-estado": "bg-gray-100 text-gray-500 border border-gray-200",
   };
 
   const renderTitle = () => {

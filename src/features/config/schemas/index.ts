@@ -27,6 +27,7 @@ export const serviceSchema = z.object({
     .min(1, "El nombre es obligatorio")
     .max(100, "Máximo 100 caracteres"),
   description: z.string().max(500, "Máximo 500 caracteres").optional(),
+  price: z.coerce.number().int().min(0, "El precio debe ser mayor o igual a 0"),
   status: z.enum(["activo", "inactivo"], {
     required_error: "Debe seleccionar un estado",
   }),
@@ -64,9 +65,9 @@ export const specialDateSchema = z.object({
     .string()
     .min(1, "El nombre es obligatorio")
     .max(200, "Máximo 200 caracteres"),
-  field_description: z.string().max(250, "Máximo 250 caracteres").optional(),
-  field_date: z.string().min(1, "La fecha es obligatoria"),
-  field_is_annual: z.enum(["si", "no"], {
+  description: z.string().max(250, "Máximo 250 caracteres").optional(),
+  date: z.string().min(1, "La fecha es obligatoria"),
+  repeat: z.enum(["si", "no"], {
     required_error: "Debe seleccionar una opción",
   }),
   status: z.enum(["activo", "inactivo"], {
