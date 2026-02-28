@@ -664,6 +664,7 @@ export const createBackendRequest = async (
     isPrioritized: dto.isPrioritized ?? false,
     requestStatus: dto.requestStatus ?? "EnProceso",
     attachment: dto.attachment ?? null,
+    serviceValue: dto.serviceValue,
   };
 
   const response = await api.post("/requests", payload);

@@ -175,6 +175,7 @@ export interface UpdateRequestPayload {
   isPrioritized?: boolean;
   requestStatus?: RequestStatusEnum;
   attachment?: string | null;
+  serviceValue?: number;
 }
 
 export interface CreateRequestPayload {
@@ -397,6 +398,7 @@ export interface CreateRequestDto {
   isPrioritized?: boolean;
   requestStatus?: RequestStatusEnum;
   attachment?: string | null;
+  serviceValue?: number;
 }
 
 export interface UpdateRequestMetaDto {

@@ -12,7 +12,7 @@ interface CompleteRequestsApiResponse {
     page?: number;
     limit?: number;
     totalPages?: number;
-}
+  }
 }
 
 export interface PaymentDTO {
@@ -139,10 +139,7 @@ export interface CompleteRequestFilters {
 
 // --- Main Service Logic ---
 
-export const fetchCompleteRequests = async (
-  filters: CompleteRequestFilters = {},
-): Promise<CompleteRequestsApiResponse> => {
-  try {
+export const buildRequestParams = (filters: CompleteRequestFilters, includePagination = true) => {
     const {
       page = 1,
       limit = 50,
@@ -161,8 +158,10 @@ export const fetchCompleteRequests = async (
     const params: Record<string, any> = {};
 
     // Pagination
-    params.page = page;
-    params.limit = limit;
+    if (includePagination) {
+        params.page = page;
+        params.limit = limit;
+    }
 
     // Status mapping: backend expects boolean true/false or string "true"/"false"
     if (status) {
@@ -204,9 +203,18 @@ export const fetchCompleteRequests = async (
     if (search) {
         params.search = search;
     }
+    return params;
+}
 
-    const response = await api.get<any[]>("/requests", { params });
-    const requests = Array.isArray(response.data) ? response.data : [];
+export const fetchCompleteRequests = async (
+  filters: CompleteRequestFilters = {},
+): Promise<CompleteRequestsApiResponse> => {
+  try {
+    const params = buildRequestParams(filters);
+    const { page = 1, limit = 50 } = filters;
+
+    const { data } = await api.get<any[]>("/requests", { params });
+    const requests = Array.isArray(data) ? data : [];
 
     // Transform Data
     const transformedData: CompleteRequest[] = requests.map((req: any) => {
@@ -226,11 +234,12 @@ export const fetchCompleteRequests = async (
             field_application_score: req.applicationScore || 0,
             field_estimated_application_hour: req.estimatedApplicationHour || 0,
             field_estimated_prioritized_hour: req.estimatedPrioritizedHour || 0,
+            field_priority_estimated_hours: req.priorityEstimatedHours || 0,
+            field_is_recurring: req.isRecurring || false,
             field_logistics_costs: Number(req.logisticsCosts) || 0,
             field_service_value: Number(req.serviceValue) || 0,
             field_prioritized_value: Number(req.prioritizedValue) || 0,
             field_priority_value: Number(req.prioritizedValue) || 0, // Duplicate mapping
-            field_is_recurring: req.isRecurring || false,
             field_observations: req.observations || "",
             paymentMethod: req.paymentMethod ?? null,
             isPrioritized: req.isPrioritized ?? false,

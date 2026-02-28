@@ -105,6 +105,7 @@ const baseFormSchema = z.object({
   priorityValue: z.boolean().optional(),
   paymentMethod: z.string().optional(),
   isPrioritized: z.boolean().optional(),
+  serviceValue: z.number().optional(),
 });
 
 // Función para crear un schema dinámico basado en los campos del servicio
@@ -197,6 +198,7 @@ export function NewRequestModal({
       priorityValue: false,
       paymentMethod: "",
       isPrioritized: false,
+      serviceValue: 0,
     },
   });
 
@@ -273,6 +275,9 @@ export function NewRequestModal({
     const service = services.find((s) => s.id === serviceId) || null;
     setSelectedService(service);
     form.setValue("serviceId", serviceId);
+    if (service) {
+      form.setValue("serviceValue", service.price || 0);
+    }
     
     // Regenerar ID con el nuevo servicio si es necesario
     const newId = generateRequestId(serviceId);
@@ -310,6 +315,7 @@ export function NewRequestModal({
         paymentMethod: values.paymentMethod || null,
         isPrioritized: values.isPrioritized ?? false,
         requestStatus: "EnProceso",
+        serviceValue: values.serviceValue,
       };
 
       await createRequestMutation.mutateAsync(payload);
@@ -733,6 +739,32 @@ export function NewRequestModal({
                     </div>
                 </div>
             )}
+
+            {/* Valor del Servicio */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="serviceValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor del servicio</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0"
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {/* Gestión de Solicitud */}
             <div className="space-y-4 border rounded-md p-4 bg-gray-50/50">

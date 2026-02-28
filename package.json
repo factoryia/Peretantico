@@ -51,11 +51,11 @@
     "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.69",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
-    "@esbuild/win32-x64": "0.25.4",
     "@eslint/js": "^9.25.0",
     "@types/node": "^22.15.21",
     "@types/react": "^19.1.2",

@@ -17,7 +17,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useDistributorsQuery } from "../hooks/use-distributors";
+import { useDistributorsQuery, fetchDistributors } from "../hooks/use-distributors";
 import { usePaymentsQuery } from "@/features/costs/hooks/use-payments";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,7 +43,6 @@ import { useCoverageAreasQuery } from "@/features/distributors/hooks/taxonomies"
 import { type TaxonomyTerm } from "@/types/global";
 import { useStatsQuery } from "../hooks/use-stats";
 import { Skeleton } from "@/components/ui/skeleton";
-import { API_BASE_URL } from "@/features/auth/constants";
 import { Paginator } from "@/components/common/paginator";
 import { RequestDetailViewModal } from "@/features/home/components/request-detail-view";
 import { EditRequestModal } from "@/features/home/components/edit-request-modal";
@@ -52,6 +51,7 @@ import {
   type CompleteRequest,
   useCompleteRequests
 } from "@/features/home/utils/complete-request";
+import { exportToExcel } from "@/utils/excel";
 import { 
   assignDistributorToRequest, 
   updateRequest 
@@ -332,6 +332,65 @@ export function Reports() {
     return (parts[0][0] + (parts[parts.length - 1][0] || "")).toUpperCase();
   };
 
+  const handleExportRequests = async () => {
+    try {
+      toast.loading("Generando reporte de solicitudes...", { id: "export-requests" });
+      const { data } = await fetchCompleteRequests({
+        ...reportFilters,
+        limit: 10000, // Fetch all (or a large enough number)
+        page: 1,
+      });
+
+      const exportData = data.map((req) => ({
+        "ID Solicitud": req.field_application_number,
+        "Fecha Creación": new Date(req.created).toLocaleDateString("es-CO"),
+        "Título": req.title,
+        "Servicio": req.subservice?.name || "N/A",
+        "Estado": req.requestStatus,
+        "Solicitante": req.applicant?.name || "N/A",
+        "Documento Solicitante": req.applicant?.documentNumber || "N/A",
+        "Repartidor Asignado": req.distributor?.name || "Sin asignar",
+        "Valor Servicio": req.field_service_value,
+        "Valor Prioridad": req.field_prioritized_value,
+        "Costo Logístico": req.field_logistics_costs,
+        "Prioritaria": req.isPrioritized ? "Sí" : "No",
+        "Observaciones": req.field_observations,
+      }));
+
+      exportToExcel(exportData, `Reporte_Solicitudes_${new Date().toISOString().split("T")[0]}`);
+      toast.success("Reporte descargado correctamente", { id: "export-requests" });
+    } catch (error) {
+      console.error("Error exporting requests:", error);
+      toast.error("Error al exportar el reporte", { id: "export-requests" });
+    }
+  };
+
+  const handleExportDistributors = async () => {
+    try {
+      toast.loading("Generando reporte de repartidores...", { id: "export-distributors" });
+      const { data } = await fetchDistributors({
+        ...distFiltersMemo,
+        limit: 10000, // Fetch all
+        page: 0,
+      });
+
+      const exportData = data.map((dist) => ({
+        "Nombre": dist.distributorName || dist.title || dist.name || "N/A",
+        "Tipo Transporte": dist.deliveryType || dist.transportationType?.name || "N/A",
+        "Estado Pago": dist.paymentStatus || "Pendiente",
+        "Solicitudes Entregadas": distributorDeliveryStats[dist.id] || 0,
+        "Email": dist.email || "N/A",
+        "Teléfono": dist.phone || "N/A",
+      }));
+
+      exportToExcel(exportData, `Reporte_Repartidores_${new Date().toISOString().split("T")[0]}`);
+      toast.success("Reporte descargado correctamente", { id: "export-distributors" });
+    } catch (error) {
+      console.error("Error exporting distributors:", error);
+      toast.error("Error al exportar el reporte", { id: "export-distributors" });
+    }
+  };
+
   return (
     <div className="overflow-y-auto h-full bg-slate-50/50 pb-10">
       <SidebarHeader title="Panel de Control" />
@@ -412,15 +471,7 @@ export function Reports() {
               <Button
                 variant="outline"
                 className="h-10 border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold transition-all cursor-pointer min-w-[180px]"
-                onClick={() => {
-                  if (reportsData?.meta && "export_url" in reportsData.meta) {
-                    const exportUrl = (reportsData.meta as any).export_url;
-                    const url = exportUrl.startsWith("http")
-                      ? exportUrl
-                      : `${API_BASE_URL}${exportUrl}`;
-                    window.open(url, "_blank");
-                  }
-                }}
+                onClick={handleExportRequests}
               >
                 <Download className="mr-2 h-4 w-4" /> Exportar a Excel
               </Button>
@@ -697,18 +748,7 @@ export function Reports() {
               <Button
                 variant="outline"
                 className="h-10 border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold transition-all cursor-pointer min-w-[180px]"
-                onClick={() => {
-                  if (
-                    distributorsData?.meta &&
-                    "export_url" in distributorsData.meta
-                  ) {
-                    const exportUrl = (distributorsData.meta as any).export_url;
-                    const url = exportUrl.startsWith("http")
-                      ? exportUrl
-                      : `${API_BASE_URL}${exportUrl}`;
-                    window.open(url, "_blank");
-                  }
-                }}
+                onClick={handleExportDistributors}
               >
                 <Download className="mr-2 h-4 w-4" /> Exportar a Excel
               </Button>
