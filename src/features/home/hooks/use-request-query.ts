@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery as useTanstackQuery } from "@tanstack/react-query"
+import { useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { 
   fetchRequests, 
   fetchSubservices, 
@@ -31,7 +33,7 @@ export const useRequestsQuery = (filters: RequestFilters = {}) => {
     return acc
   }, {} as Record<string, string>)
 
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [REQUESTS_QUERY_KEY, validFilters],
     queryFn: () => fetchRequests(validFilters),
     staleTime: 10000, // 10 segundos - datos considerados frescos por 10 segundos
@@ -43,7 +45,7 @@ export const useRequestsQuery = (filters: RequestFilters = {}) => {
 }
 
 export const useSubservicesQuery = () => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [SUBSERVICES_QUERY_KEY],
     queryFn: fetchSubservices,
     staleTime: 300000, // 5 minutos
@@ -52,16 +54,23 @@ export const useSubservicesQuery = () => {
 }
 
 export const useDistributorsQuery = () => {
-  return useQuery({
-    queryKey: [DISTRIBUTORS_QUERY_KEY],
-    queryFn: fetchDistributors,
-    staleTime: 300000, // 5 minutos
-    refetchOnWindowFocus: false,
-  })
+  const distributors = useQuery(api.distributors.listAll, {});
+  
+  // Transform to match expected format (array with id and title)
+  const data = distributors?.map(d => ({
+    id: d._id,
+    title: d.title,
+    // Add other fields if necessary
+  })) || [];
+
+  return {
+    data,
+    isLoading: distributors === undefined
+  };
 }
 
 export const useCategoriesQuery = () => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [CATEGORIES_QUERY_KEY],
     queryFn: fetchAllActiveCategories,
     staleTime: 300000, // 5 minutos
@@ -70,7 +79,7 @@ export const useCategoriesQuery = () => {
 }
 
 export const usePaymentStatusesQuery = () => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [PAYMENT_STATUSES_QUERY_KEY],
     queryFn: fetchPaymentStatuses,
     staleTime: 300000, // 5 minutos
@@ -79,7 +88,7 @@ export const usePaymentStatusesQuery = () => {
 }
 
 export const useUsedChannelsQuery = () => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [USED_CHANNELS_QUERY_KEY],
     queryFn: fetchUsedChannels,
     staleTime: 300000, // 5 minutos
@@ -88,7 +97,7 @@ export const useUsedChannelsQuery = () => {
 }
 
 export const useApplicationStatusesQuery = () => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [APPLICATION_STATUSES_QUERY_KEY],
     queryFn: fetchApplicationStatuses,
     staleTime: 300000, // 5 minutos
@@ -97,7 +106,7 @@ export const useApplicationStatusesQuery = () => {
 }
 
 export const useServicesByCategoryQuery = (categoryId: string) => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [SERVICES_QUERY_KEY, categoryId],
     queryFn: () => fetchServicesByCategory(categoryId),
     enabled: !!categoryId,
@@ -107,7 +116,7 @@ export const useServicesByCategoryQuery = (categoryId: string) => {
 }
 
 export const useSubservicesByServiceQuery = (serviceId: string) => {
-  return useQuery({
+  return useTanstackQuery({
     queryKey: [SUBSERVICES_QUERY_KEY, serviceId],
     queryFn: () => fetchSubservicesByService(serviceId),
     enabled: !!serviceId,
@@ -117,10 +126,19 @@ export const useSubservicesByServiceQuery = (serviceId: string) => {
 }
 
 export const useServicesQuery = () => {
-  return useQuery({
-    queryKey: [SERVICES_QUERY_KEY],
-    queryFn: () => fetchServices("", 1, 100),
-    staleTime: 300000,
-    refetchOnWindowFocus: false,
-  })
+  const services = useQuery(api.services.listAll, {});
+
+  // Transform to match expected format { services: [{ id, name }] }
+  const data = {
+    services: services?.map(s => ({
+      id: s._id,
+      name: s.name,
+      // Add other fields if necessary
+    })) || []
+  };
+
+  return {
+    data,
+    isLoading: services === undefined
+  };
 }

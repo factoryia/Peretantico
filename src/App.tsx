@@ -5,13 +5,18 @@ import { Home } from "@/features/home/pages/home";
 import { Reports } from "@/features/reports/pages/reports";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Distributors } from "@/features/distributors/pages/distributors";
-import { AuthRoutes } from "@/features/auth/routes/auth-routes";
+import { PublicGuard } from "@/features/auth/routes/auth-routes";
 import { PrivateRoutes } from "@/features/auth/components/private-routes";
 import { RoleGuard } from "@/features/auth/components/role-guard";
 import { Configuration } from "./features/config/pages/configuration";
 import { UsersPage } from "./features/users/pages/users";
 import CostPage from "@/features/costs/pages/page";
 import Client from "./features/client/pages/client";
+
+import { AuthLayout } from "@/features/auth/components/auth-layout";
+import { Login } from "@/features/auth/pages/login";
+import { ResetPassword } from "@/features/auth/pages/reset-password";
+import { NewPassword } from "@/features/auth/pages/new-password";
 
 export default function App() {
   const queryClient = new QueryClient({
@@ -28,8 +33,14 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <div className="size-full overflow-y-hidden">
         <Routes>
-          {/* Rutas de autenticación */}
-          <Route path="/*" element={<AuthRoutes />} />
+          {/* Rutas de autenticación (Públicas) */}
+          <Route element={<PublicGuard />}>
+            <Route element={<AuthLayout />}>
+              <Route path="/iniciar-sesion" element={<Login />} />
+              <Route path="/restablecer-contraseña" element={<ResetPassword />} />
+              <Route path="/nueva-contraseña" element={<NewPassword />} />
+            </Route>
+          </Route>
 
           {/* Rutas protegidas - Rutas del dashboard */}
           <Route element={<PrivateRoutes />}>

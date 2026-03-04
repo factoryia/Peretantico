@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
 import {
   Card,
   CardHeader,
@@ -20,9 +22,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CompleteRequest } from "../utils/complete-request";
-import { uploadEvidence, completeRequestWithEvidence } from "../utils/evidence";
-import { API_BASE_URL } from "@/features/auth/constants";
 import { ImageModal } from "./image-modal";
+import type { Id } from "@convex/_generated/dataModel";
 
 interface DistributorRequestCardProps {
   request: CompleteRequest;
@@ -43,14 +44,19 @@ export function DistributorRequestCard({
     caption: string;
   }>({ url: "", caption: "" });
 
+  // Convex mutations
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const updateRequest = useMutation(api.requests.update);
+  const addAttachment = useMutation(api.profiles.addAttachment); // We might want a generic attachment mutation or use requests update directly
+
   const mapRequestStatusToLabel = (status?: string | null) => {
     switch (status) {
-      case "Atendida":
-        return "Atendida";
-      case "EnProceso":
-        return "En proceso";
       case "Finalizada":
         return "Finalizada";
+      case "Atendida":
+        return "Finalizada"; // Mapear Atendida a Finalizada visualmente si es necesario
+      case "EnProceso":
+        return "En proceso";
       case "Incompleta":
         return "Incompleta";
       default:
@@ -112,8 +118,31 @@ export function DistributorRequestCard({
 
     setIsSubmitting(true);
     try {
-      const fileUuid = await uploadEvidence(file);
-      await completeRequestWithEvidence(request.id, fileUuid);
+      // 1. Get upload URL
+      const postUrl = await generateUploadUrl();
+      
+      // 2. Upload file
+      const result = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+
+      if (!result.ok) {
+        throw new Error(`Upload failed: ${result.statusText}`);
+      }
+
+      const { storageId } = await result.json();
+
+      // 3. Update request with storageId
+      await updateRequest({
+         id: request.id as Id<"requests">,
+         evidenceStorageId: storageId,
+         requestStatus: "Finalizada",
+         status: true,
+         observations: "Actualizada desde evidencia",
+      });
+
       toast.success("¡Solicitud completada con éxito!");
       setFile(null);
       if (onSuccess) onSuccess();
@@ -244,13 +273,13 @@ export function DistributorRequestCard({
               className="relative rounded-lg overflow-hidden border border-gray-100 shadow-sm bg-gray-50 aspect-video cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all group"
               onClick={() =>
                 openImageModal(
-                  API_BASE_URL + request.evidenceImage!.uri,
+                  request.evidenceImage!.uri,
                   "Evidencia de entrega"
                 )
               }
             >
               <img
-                src={API_BASE_URL + request.evidenceImage.uri}
+                src={request.evidenceImage.uri}
                 alt="Evidencia de entrega"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 onError={(e) => {

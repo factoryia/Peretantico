@@ -3,6 +3,7 @@ export interface AuthUser {
   name: string;
   email: string;
   image?: string;
+  role?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -12,6 +13,7 @@ export interface CreateUserDto {
   email: string;
   password?: string;
   image?: string;
+  role?: string;
 }
 
 export interface UpdateUserDto {
@@ -19,6 +21,7 @@ export interface UpdateUserDto {
   email?: string;
   password?: string;
   image?: string;
+  role?: string;
 }
 
 export interface FetchUsersResponse {

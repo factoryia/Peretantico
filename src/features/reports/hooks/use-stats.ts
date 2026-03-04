@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import api from "@/api";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
 
 export interface DashboardStats {
   totalRequests: number;
@@ -15,14 +15,10 @@ export interface DashboardStats {
   totalPaymentsAmount: string;
 }
 
-export const fetchDashboardStats = async (): Promise<DashboardStats> => {
-  const { data } = await api.get<DashboardStats>("/dashboard/stats");
-  return data;
-};
-
 export const useStatsQuery = () => {
-  return useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: fetchDashboardStats,
-  });
+  const stats = useQuery(api.dashboard.stats);
+  return {
+    data: stats,
+    isLoading: stats === undefined,
+  };
 };

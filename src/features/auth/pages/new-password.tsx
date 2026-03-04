@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { toast } from "sonner";
 import { useState } from "react";
-import { isAxiosError } from "axios";
 import { useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ArrowLeft,
   Eye,
@@ -23,7 +23,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import api from "@/api";
 import { cn } from "@/lib/utils";
 import { FormWrapper } from "@/features/auth/components/form-wrapper";
 import { Button } from "@/components/ui/button";
@@ -47,6 +46,7 @@ type FormValues = z.infer<typeof newPasswordSchema>;
 
 export function NewPassword() {
   const navigate = useNavigate();
+  const { signIn } = useAuthActions();
   const [showTempPassword, setShowTempPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
@@ -66,25 +66,17 @@ export function NewPassword() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      const res = await api.post(
-        "/user/lost-password-reset?_format=json",
-        values
-      );
-
-      if (res.status === 200) {
-        navigate("/iniciar-sesion");
-        toast.success(res.data.message);
-      }
+      await signIn("password", { 
+        email: values.name, 
+        code: values.temp_pass, 
+        newPassword: values.new_pass, 
+        flow: "reset-verification" 
+      });
+      toast.success("Contraseña actualizada con éxito.");
+      navigate("/iniciar-sesion");
     } catch (error) {
-      if (isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.message ||
-          "Algo salió mal. Por favor intentalo otra vez.";
-
-        toast.error(errorMessage);
-      } else {
-        toast.error("Un error inesperado ha ocurrido.");
-      }
+      console.log(error);
+      toast.error("Código inválido o error al actualizar.");
     }
   };
   return (

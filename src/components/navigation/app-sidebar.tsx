@@ -1,5 +1,7 @@
 import { ChevronsUpDown, LogOut, Users } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
+import { useEffect } from "react";
+import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 import {
   Sidebar,
   SidebarContent,
@@ -16,7 +18,6 @@ import {
 import { data } from "@/constants";
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,10 +27,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 export function AppSidebar() {
   const { pathname } = useLocation();
-  const { logout, authUser } = useAuthStore();
+  const { signOut } = useAuthActions();
+  const user = useQuery(api.profiles.getMe);
+  const { authUser: localAuthUser, setAuthUser, logout } = useAuthStore();
+
+  const authUser = user
+    ? {
+        name: user.fullName || "Usuario",
+        roles: user.roles?.map((r: any) => r.name) || [],
+      }
+    : localAuthUser;
+  
+  // Sync remote user to local store if available
+  useEffect(() => {
+    if (user) {
+       const newUid = user.userId || user._id || "";
+       // Update if not set or if different (to fix legacy stored userIds)
+       if (!localAuthUser || localAuthUser.uid !== newUid) {
+         setAuthUser({
+          uid: newUid,
+          name: user.fullName || "Usuario",
+          roles: user.roles?.map((r: any) => r.name) || [],
+         });
+       }
+    }
+  }, [user, localAuthUser, setAuthUser]);
 
   return (
     <Sidebar collapsible="icon">
@@ -61,9 +89,12 @@ export function AppSidebar() {
               {data.navMain
                 .filter((item) => {
                   const isDistributor = authUser?.roles?.some((role) =>
-                    ["distributor", "Repartidor"].includes(role)
+                    ["distributor", "repartidor"].includes(role.toLowerCase())
                   );
-                  if (isDistributor) {
+                  const isAdmin = authUser?.roles?.some((role) =>
+                    ["admin", "administrador", "superadmin"].includes(role.toLowerCase())
+                  );
+                  if (isDistributor && !isAdmin) {
                     // Mostrar solo "Solicitudes" para distribuidores
                     return item.url === "/";
                   }
@@ -172,7 +203,10 @@ export function AppSidebar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={logout}
+                  onClick={() => {
+                    void signOut();
+                    logout();
+                  }}
                   className="text-red-600 focus:text-red-600 cursor-pointer"
                 >
                   <LogOut className="mr-2 h-4 w-4 text-red-600" />

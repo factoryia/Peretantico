@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation as useConvexMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import {
   updateRequest,
-  deleteRequest,
+  // deleteRequest,
   createBackendRequest,
 } from "../utils/request";
 import { REQUESTS_QUERY_KEY } from "./use-request-query";
@@ -52,16 +55,30 @@ export const useCreateRequestMutation = () => {
 };
 
 export const useDeleteRequestMutation = () => {
-  const queryClient = useQueryClient();
+  const deleteConvexRequest = useConvexMutation(api.requests.remove);
 
-  return useMutation({
-    mutationFn: deleteRequest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [REQUESTS_QUERY_KEY] });
-      toast.success("Solicitud eliminada correctamente");
+  return {
+    mutateAsync: async (id: string) => {
+      try {
+        await deleteConvexRequest({ id: id as Id<"requests"> });
+        toast.success("Solicitud eliminada correctamente");
+      } catch (error) {
+        console.error("Error deleting request", error);
+        toast.error("Error al eliminar la solicitud");
+        throw error;
+      }
     },
-    onError: (error) => {
-      console.error("Error deleting request", error);
+    mutate: (id: string) => {
+      deleteConvexRequest({ id: id as Id<"requests"> })
+        .then(() => toast.success("Solicitud eliminada correctamente"))
+        .catch((error) => {
+          console.error("Error deleting request", error);
+          toast.error("Error al eliminar la solicitud");
+        });
     },
-  });
+    isPending: false,
+    isError: false,
+    error: null,
+    reset: () => {},
+  };
 };

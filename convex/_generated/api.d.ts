@@ -1,0 +1,83 @@
+/* eslint-disable */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type * as auth from "../auth.js";
+import type * as coverageAreas from "../coverageAreas.js";
+import type * as dashboard from "../dashboard.js";
+import type * as debug from "../debug.js";
+import type * as distributors from "../distributors.js";
+import type * as emails from "../emails.js";
+import type * as files from "../files.js";
+import type * as findAccount from "../findAccount.js";
+import type * as fixAdmin from "../fixAdmin.js";
+import type * as http from "../http.js";
+import type * as payments from "../payments.js";
+import type * as profiles from "../profiles.js";
+import type * as requests from "../requests.js";
+import type * as seed from "../seed.js";
+import type * as services from "../services.js";
+import type * as specialDates from "../specialDates.js";
+import type * as transportationTypes from "../transportationTypes.js";
+import type * as users from "../users.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
+  coverageAreas: typeof coverageAreas;
+  dashboard: typeof dashboard;
+  debug: typeof debug;
+  distributors: typeof distributors;
+  emails: typeof emails;
+  files: typeof files;
+  findAccount: typeof findAccount;
+  fixAdmin: typeof fixAdmin;
+  http: typeof http;
+  payments: typeof payments;
+  profiles: typeof profiles;
+  requests: typeof requests;
+  seed: typeof seed;
+  services: typeof services;
+  specialDates: typeof specialDates;
+  transportationTypes: typeof transportationTypes;
+  users: typeof users;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {};

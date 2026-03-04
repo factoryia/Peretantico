@@ -1,11 +1,7 @@
 import api from "@/api";
-import type { Customer, CustomerFormValues, Attachment } from "../types";
-import { fetchTaxonomyTerms } from "@/utils/global";
+import type { Customer, Attachment } from "../types";
+// import type { CustomerFormValues } from "../types";
 
-export const fetchGenderTaxonomy = () =>
-  fetchTaxonomyTerms("/taxonomies/genders");
-export const fetchParentTypeTaxonomy = () =>
-  fetchTaxonomyTerms("/taxonomies/parent-types");
 export const fetchDocumentTypeTaxonomy = async () =>
   Promise.resolve([
     { id: "CC", name: "Cédula de ciudadanía" },
@@ -219,53 +215,25 @@ export const fetchProfiles = async (
   }
 };
 
-export async function createProfile(data: CustomerFormValues) {
-  const payload = {
-    fullName: data.fullName,
-    documentType: data.documentType,
-    documentNumber: data.documentNumber,
-    phoneNumber: data.phoneNumber,
-    email: data.email,
-    department: data.department,
-    municipality: data.municipality,
-    address: data.address,
-  };
+export const fetchProfileById = async (
+  id: string
+): Promise<Customer | null> => {
+  try {
+    const response = await api.get<unknown>(`/profiles/${id}`);
+    const raw = response.data;
 
-  return api.post("/profiles", payload);
-}
+    if (isRecord(raw)) {
+      // Handle wrapped response { data: ... }
+      if (isRecord(raw.data) && !Array.isArray(raw.data)) {
+        return mapToCustomer(raw.data);
+      }
+      // Handle direct response
+      return mapToCustomer(raw);
+    }
+    return null;
+  } catch (error) {
+    console.error(`Error fetching profile with id ${id}:`, error);
+    return null;
+  }
+};
 
-export async function updateProfile(id: string, data: CustomerFormValues) {
-  const payload = {
-    fullName: data.fullName,
-    documentType: data.documentType,
-    documentNumber: data.documentNumber,
-    phoneNumber: data.phoneNumber,
-    email: data.email ?? null,
-    department: data.department,
-    municipality: data.municipality,
-    address: data.address,
-  };
-
-  return api.put(`/profiles/${id}`, payload);
-}
-
-export async function uploadIdentityDocument(profileId: string, file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  return api.post(`/profiles/${profileId}/identity-document`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-}
-
-export async function fetchProfileById(id: string) {
-  const response = await api.get(`/profiles/${id}`);
-  return response.data;
-}
-
-export async function deleteAttachment(profileId: string, attachmentId: string) {
-  const response = await api.delete(
-    `/profiles/${profileId}/attachments/${attachmentId}`
-  );
-  return response.data;
-}

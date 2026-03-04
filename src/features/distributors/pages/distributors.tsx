@@ -17,9 +17,12 @@ import { DistributorDialog } from "../components/distributor-dialog";
 import { AlertModal } from "@/components/common/alert-modal";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { deleteDistributor } from "../utils/distributors";
+// import { deleteDistributor } from "../utils/distributors";
 import { DISTRIBUTORS_QUERY_KEY } from "../constants/query-keys";
 import type { AxiosError } from "axios";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { DistributorCardSkeleton } from "../components/distributor-card-skeleton";
 import {
   Select,
@@ -50,6 +53,7 @@ const STATUS_OPTIONS = [
 export function Distributors() {
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
+  const deleteDistributorMutation = useMutation(api.distributors.remove);
 
   const [distributorId, setDistributorId] = useState("");
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -122,7 +126,7 @@ export function Distributors() {
   const handleDelete = () => {
     startTransition(async () => {
       try {
-        await deleteDistributor(distributorId);
+        await deleteDistributorMutation({ id: distributorId as Id<"distributors"> });
         toast.success("Distribuidor eliminado");
         await queryClient.invalidateQueries({
           queryKey: [DISTRIBUTORS_QUERY_KEY],

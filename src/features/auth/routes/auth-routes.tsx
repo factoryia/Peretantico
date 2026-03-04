@@ -1,26 +1,16 @@
-import { Navigate, Route, Routes } from "react-router";
-
-import { Login } from "@/features/auth/pages/login";
+import { Navigate, Outlet } from "react-router";
 import { useAuthStore } from "@/features/auth/stores/use-auth-store";
-import { AuthLayout } from "@/features/auth/components/auth-layout";
-import { ResetPassword } from "@/features/auth/pages/reset-password";
-import { NewPassword } from "@/features/auth/pages/new-password";
+import { useConvexAuth } from "convex/react";
 
-export function AuthRoutes() {
+export function PublicGuard() {
   const { isAuthorized } = useAuthStore();
+  const { isAuthenticated, isLoading } = useConvexAuth();
 
-  // Si está autorizado, redirigir al dashboard
-  if (isAuthorized) {
+  // Si está autorizado o autenticado en Convex, redirigir al dashboard
+  // Añadimos isLoading para evitar redirecciones prematuras
+  if (!isLoading && (isAuthorized || isAuthenticated)) {
     return <Navigate to="/" replace />;
   }
 
-  return (
-    <Routes>
-      <Route element={<AuthLayout />}>
-        <Route path="iniciar-sesion" element={<Login />} />
-        <Route path="restablecer-contraseña" element={<ResetPassword />} />
-        <Route path="nueva-contraseña" element={<NewPassword />} />
-      </Route>
-    </Routes>
-  );
+  return <Outlet />;
 }

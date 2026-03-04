@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import {
   User,
@@ -16,6 +17,9 @@ import {
   X,
   CheckCircle2,
 } from "lucide-react";
+
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,17 +43,11 @@ import {
 import { type Customer, type FormMode, type Attachment } from "../types";
 import { customerSchema } from "../schema";
 import {
-  createProfile,
-  updateProfile,
   fetchDocumentTypeTaxonomy,
-  uploadIdentityDocument,
-  fetchProfileById,
-  deleteAttachment,
 } from "../utils/customer";
 import { DOCUMENT_TYPE_TAXONOMY_KEY, PROFILE_QUERY_KEY } from "../constants";
 import { RequiredDot } from "@/components/common/required-dot";
 import { departamento } from "../constants/colombia";
-import { API_BASE_URL } from "@/features/auth/constants";
 
 // --- Normalización de datos opcionales ---
 function normalizeCustomerData(customer?: Customer) {
@@ -73,6 +71,41 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
   const [attachments, setAttachments] = useState<Attachment[]>(
     customer?.attachments ?? []
   );
+
+  const createCustomer = useMutation(api.profiles.createCustomer);
+  const updateCustomer = useMutation(api.profiles.updateCustomer);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const addAttachment = useMutation(api.profiles.addAttachment);
+  const removeAttachment = useMutation(api.profiles.removeAttachment);
+
+  const handleUpload = async (profileId: string, file: File) => {
+    const postUrl = await generateUploadUrl();
+    const result = await fetch(postUrl, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    
+    if (!result.ok) throw new Error("Upload failed");
+    
+    const { storageId } = await result.json();
+    
+    const attachmentId = await addAttachment({
+      profileId: profileId as Id<"profiles">,
+      fileName: file.name,
+      storageId: storageId,
+      mimeType: file.type,
+      size: file.size,
+    });
+
+    return {
+      id: attachmentId,
+      fileName: file.name,
+      url: "", // URL is not returned immediately, but we can refetch or just ignore for now
+      mimeType: file.type,
+      size: file.size,
+    };
+  };
 
   const form = useForm<z.infer<typeof customerSchema>>({
     resolver: zodResolver(customerSchema),
@@ -125,26 +158,50 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
       let profileId = customer?.id ?? "";
 
       if (mode === "create") {
-        const response = await createProfile(cleanValues);
-        profileId =
-          (response?.data as { id?: string } | undefined)?.id ?? profileId;
+        const newId = await createCustomer({
+          fullName: cleanValues.fullName,
+          documentType: cleanValues.documentType,
+          documentNumber: cleanValues.documentNumber,
+          phoneNumber: cleanValues.phoneNumber,
+          email: cleanValues.email,
+          department: cleanValues.department,
+          municipality: cleanValues.municipality,
+          address: cleanValues.address,
+        });
+        profileId = newId;
         toast.success("Cliente creado correctamente");
       } else if (mode === "edit" && customer?.id) {
-        await updateProfile(customer.id, cleanValues);
+        await updateCustomer({
+          id: customer.id as Id<"profiles">,
+          fullName: cleanValues.fullName,
+          documentType: cleanValues.documentType,
+          documentNumber: cleanValues.documentNumber,
+          phoneNumber: cleanValues.phoneNumber,
+          email: cleanValues.email,
+          department: cleanValues.department,
+          municipality: cleanValues.municipality,
+          address: cleanValues.address,
+        });
         profileId = customer.id;
         toast.success("Cliente actualizado correctamente");
       }
 
       if (mode === "create" && profileId && files.length > 0) {
-        await uploadIdentityDocument(profileId, files[0] as File);
+        await handleUpload(profileId, files[0] as File);
         toast.success("Documento de identidad cargado");
       }
 
       queryClient.invalidateQueries({ queryKey: [PROFILE_QUERY_KEY] });
       onCancel();
       form.reset();
-    } catch {
-      toast.error("Ocurrió un error al enviar el formulario");
+    } catch (error) {
+      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      if (errorMessage.includes("Ya existe un cliente")) {
+        toast.error("Ya existe un cliente con este número de documento");
+      } else {
+        toast.error("Ocurrió un error al enviar el formulario");
+      }
     }
   };
 
@@ -463,15 +520,17 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
                               const first = files[0] as File;
                               if (mode !== "create" && customer?.id) {
                                 try {
-                                  await uploadIdentityDocument(customer.id, first);
+                                  const attachment = await handleUpload(customer.id, first);
                                   toast.success("Documento de identidad cargado");
-                                  try {
-                                    const refreshed = await fetchProfileById(customer.id);
-                                    if (Array.isArray(refreshed?.attachments)) {
-                                      setAttachments(refreshed.attachments);
-                                    }
-                                  } catch {}
-                                } catch {
+                                  setAttachments((prev) => [...prev, {
+                                    id: attachment.id,
+                                    url: attachment.url,
+                                    fileName: attachment.fileName,
+                                    mimeType: attachment.mimeType,
+                                    size: attachment.size
+                                  }]);
+                                } catch (err) {
+                                  console.error(err);
                                   toast.error("Error al subir el documento");
                                 }
                               } else {
@@ -532,10 +591,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
             {attachments.length > 0 && (
               <div className="space-y-2">
                 {attachments.map((att) => {
-                  const url =
-                    att.url.startsWith("http")
-                      ? att.url
-                      : `${API_BASE_URL}${att.url}`;
+                  const url = att.url;
                   return (
                     <div
                       key={att.id}
@@ -568,12 +624,13 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
                           onClick={async () => {
                             if (!customer?.id) return;
                             try {
-                              await deleteAttachment(customer.id, att.id);
+                              await removeAttachment({ attachmentId: att.id as Id<"attachments"> });
                               setAttachments((prev) =>
                                 prev.filter((a) => a.id !== att.id)
                               );
                               toast.success("Adjunto eliminado");
-                            } catch {
+                            } catch (err) {
+                              console.error(err);
                               toast.error("Error al eliminar el adjunto");
                             }
                           }}

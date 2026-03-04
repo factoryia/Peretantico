@@ -392,12 +392,16 @@ export interface CreateRequestDto {
   applicantId: string;
   serviceId: string;
   title?: string | null;
-  entryDate: string;
+  entryDate: number; // Changed to number for Convex (timestamp)
   data: RequestDataDto[];
   paymentMethod?: string | null;
   isPrioritized?: boolean;
   requestStatus?: RequestStatusEnum;
-  attachment?: string | null;
+  attachments: {
+    fileName: string;
+    url: string;
+    storageId?: string;
+  }[];
   serviceValue?: number;
 }
 

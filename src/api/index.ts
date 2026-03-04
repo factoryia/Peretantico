@@ -2,12 +2,12 @@ import axios from "axios";
 
 import {
   ACCESS_TOKEN,
-  API_BASE_URL,
   CSRF_TOKEN,
 } from "@/features/auth/constants";
 
+// @deprecated: This client is being replaced by Convex
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  // baseURL: API_BASE_URL,
 });
 
 api.interceptors.request.use(

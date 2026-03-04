@@ -14,6 +14,7 @@ export interface Distributor {
   documentType: TaxonomyTerm;
   coverageArea: TaxonomyTerm;
   transportationType: TaxonomyTerm;
+  paymentStatus?: string;
 }
 
 export interface FetchDistributorsParams {

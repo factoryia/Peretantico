@@ -17,7 +17,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useDistributorsQuery, fetchDistributors } from "../hooks/use-distributors";
+import { useDistributorsQuery } from "@/features/distributors/hooks/distributors";
 import { usePaymentsQuery } from "@/features/costs/hooks/use-payments";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +58,8 @@ import {
 } from "@/features/home/utils/request";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useConvex } from "convex/react";
+import { api } from "@convex/_generated/api";
 
 const statusStyles: Record<string, string> = {
   "En análisis": "bg-orange-50 text-orange-600 border-orange-100",
@@ -97,6 +99,7 @@ export function Reports() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
 
+  const convex = useConvex();
   const queryClient = useQueryClient();
   const { data: statsData, isLoading: isLoadingStats } = useStatsQuery();
 
@@ -168,7 +171,7 @@ export function Reports() {
 
   const distFiltersMemo = useMemo(
     () => ({
-      page: distFilters.page,
+      page: distFilters.page + 1,
       limit: distFilters.limit,
       search: distFilters.search,
       paymentStatus:
@@ -228,10 +231,6 @@ export function Reports() {
     }
     return 0;
   }, [distributorsData, distFilters.limit]);
-
-  const paidDistributorIds = useMemo(() => {
-    return new Set(paymentsList.map((p: any) => p.distributorId).filter(Boolean));
-  }, [paymentsList]);
 
   const distributorDeliveryStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -335,26 +334,39 @@ export function Reports() {
   const handleExportRequests = async () => {
     try {
       toast.loading("Generando reporte de solicitudes...", { id: "export-requests" });
-      const { data } = await fetchCompleteRequests({
-        ...reportFilters,
-        limit: 10000, // Fetch all (or a large enough number)
-        page: 1,
-      });
+      
+      const args: any = {};
+      if (reportFilters.periodo) args.periodo = reportFilters.periodo;
+      if (reportFilters.zonaId) args.zonaId = reportFilters.zonaId as any;
+      if (reportFilters.isPrioritized !== undefined) args.isPrioritized = reportFilters.isPrioritized;
+      if (reportFilters.paymentStatus) args.paymentStatus = reportFilters.paymentStatus;
+      if (reportFilters.search) args.search = reportFilters.search;
 
-      const exportData = data.map((req) => ({
-        "ID Solicitud": req.field_application_number,
-        "Fecha Creación": new Date(req.created).toLocaleDateString("es-CO"),
-        "Título": req.title,
-        "Servicio": req.subservice?.name || "N/A",
+      let data = await convex.query(api.requests.list, args);
+
+      // Client-side filtering for search (matches what is done in hook)
+      if (args.search) {
+        // convex query already handles search for applicationNumber
+        // we might need additional filtering if hook does more?
+        // convex/requests.ts list query handles applicationNumber search
+      }
+
+      // Map to CompleteRequest structure (simplified for export)
+      const exportData = data.map((req: any) => ({
+        "ID Solicitud": req.applicationNumber || "",
+        "Fecha Creación": new Date(req._creationTime).toLocaleDateString("es-CO"),
+        "Título": req.title || "",
+        "Servicio": req.service?.name || "N/A",
         "Estado": req.requestStatus,
-        "Solicitante": req.applicant?.name || "N/A",
+        "Solicitante": req.applicant?.fullName || "N/A",
         "Documento Solicitante": req.applicant?.documentNumber || "N/A",
-        "Repartidor Asignado": req.distributor?.name || "Sin asignar",
-        "Valor Servicio": req.field_service_value,
-        "Valor Prioridad": req.field_prioritized_value,
-        "Costo Logístico": req.field_logistics_costs,
+        "Repartidor Asignado": req.distributor?.title || "Sin asignar",
+        "Valor Servicio": Number(req.serviceValue) || 0,
+        "Valor Prioridad": Number(req.prioritizedValue) || 0,
+        "Costo Logístico": Number(req.logisticsCosts) || 0,
         "Prioritaria": req.isPrioritized ? "Sí" : "No",
-        "Observaciones": req.field_observations,
+        "Estado Pago": req.paymentStatus || "Pendiente",
+        "Observaciones": req.observations || "",
       }));
 
       exportToExcel(exportData, `Reporte_Solicitudes_${new Date().toISOString().split("T")[0]}`);
@@ -368,19 +380,32 @@ export function Reports() {
   const handleExportDistributors = async () => {
     try {
       toast.loading("Generando reporte de repartidores...", { id: "export-distributors" });
-      const { data } = await fetchDistributors({
-        ...distFiltersMemo,
-        limit: 10000, // Fetch all
-        page: 0,
+      
+      // Fetch all distributors
+      let data = await convex.query(api.distributors.listAll, {
+        search: distFilters.search, // This only filters by documentNumber in backend
       });
 
-      const exportData = data.map((dist) => ({
-        "Nombre": dist.distributorName || dist.title || dist.name || "N/A",
-        "Tipo Transporte": dist.deliveryType || dist.transportationType?.name || "N/A",
+      // Apply client-side filters (matching useDistributorsQuery)
+      if (distFilters.search) {
+        const searchLower = distFilters.search.toLowerCase();
+        data = data.filter((d: any) => 
+          (d.title?.toLowerCase().includes(searchLower) || false) ||
+          (d.documentNumber?.toLowerCase().includes(searchLower) || false)
+        );
+      }
+
+      if (distFilters.payment_status && distFilters.payment_status !== "all") {
+        data = data.filter((d: any) => d.paymentStatus === distFilters.payment_status);
+      }
+
+      const exportData = data.map((dist: any) => ({
+        "Nombre": dist.title || "N/A",
+        "Tipo Transporte": dist.transportationType?.name || "N/A",
         "Estado Pago": dist.paymentStatus || "Pendiente",
-        "Solicitudes Entregadas": distributorDeliveryStats[dist.id] || 0,
+        "Solicitudes Entregadas": distributorDeliveryStats[dist._id] || 0,
         "Email": dist.email || "N/A",
-        "Teléfono": dist.phone || "N/A",
+        "Teléfono": dist.phoneNumber || "N/A",
       }));
 
       exportToExcel(exportData, `Reporte_Repartidores_${new Date().toISOString().split("T")[0]}`);
@@ -563,8 +588,8 @@ export function Reports() {
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
                       <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="pendiente">Pendiente</SelectItem>
-                      <SelectItem value="pagado">Pagado</SelectItem>
+                      <SelectItem value="Pendiente">Pendiente</SelectItem>
+                      <SelectItem value="Pagado">Pagado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -607,7 +632,10 @@ export function Reports() {
                       Facturación
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-500 uppercase text-xs text-center">
-                      Estado
+                      Estado Pago
+                    </TableHead>
+                    <TableHead className="py-4 font-bold text-slate-500 uppercase text-xs text-center">
+                     Estado
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-500 uppercase text-xs text-center">
                       Acciones
@@ -626,6 +654,9 @@ export function Reports() {
                           </TableCell>
                           <TableCell>
                             <Skeleton className="h-4 w-32" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-4 w-20" />
                           </TableCell>
                           <TableCell>
                             <Skeleton className="h-4 w-20" />
@@ -651,6 +682,19 @@ export function Reports() {
                           </TableCell>
                           <TableCell className="text-slate-900 font-bold">
                             {formatCurrency((request.field_service_value || 0) + (request.field_prioritized_value || 0))}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {request.paymentStatus?.name === "Pagado" ? (
+                              <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-bold text-xs uppercase">
+                                <Check className="h-3.5 w-3.5" />
+                                Pagado
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1.5 text-rose-500 font-bold text-xs uppercase">
+                                <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                                Pendiente
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             <Badge
@@ -775,9 +819,8 @@ export function Reports() {
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="paid">Pagado</SelectItem>
+                    <SelectItem value="Pagado">Pagado</SelectItem>
                     <SelectItem value="Pendiente">Pendiente</SelectItem>
-                    <SelectItem value="Recibido">Recibido</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -878,9 +921,7 @@ export function Reports() {
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-2">
                               {item.paymentStatus?.toLowerCase() === "pagado" ||
-                              item.paymentStatus?.toLowerCase() === "paid" ||
-                              item.status === "Pagado" ||
-                              paidDistributorIds.has(item.id) ? (
+                              item.paymentStatus?.toLowerCase() === "paid" ? (
                                 <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs uppercase">
                                   <Check className="h-3.5 w-3.5" />
                                   Pagado
@@ -1031,7 +1072,7 @@ export function Reports() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center text-slate-400 text-xs font-medium">
-                            {payment.createdAt ? new Date(payment.createdAt).toLocaleDateString('es-CO', {
+                            {payment._creationTime ? new Date(payment._creationTime).toLocaleDateString('es-CO', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric'

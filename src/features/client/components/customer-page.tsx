@@ -1,19 +1,20 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X, Plus, Search, Filter, Users } from "lucide-react";
 import { type Customer, type FormMode } from "../types";
-import { fetchProfiles } from "../utils/customer";
+// import { fetchProfiles } from "../utils/customer";
 import { CustomerCard } from "./customer-card";
 import { CustomerFormDialog } from "./customer-dialog";
 import { Paginator } from "@/components/common/paginator";
 import { CustomerCardSkeleton } from "./skeletons/customer-card-skeleton";
 // import { fetchTaxonomyTerms } from "@/utils/global";
-import { PROFILE_QUERY_KEY } from "../constants";
+// import { PROFILE_QUERY_KEY } from "../constants";
 
 export default function CustomerManagementPage() {
   // --- Estados locales ---
@@ -30,15 +31,38 @@ export default function CustomerManagementPage() {
   // Eliminado: traducción del tipo de documento por nombre para evitar inconsistencias de valor
 
   // --- Carga de clientes desde el backend ---
-  const { data, isLoading: isLoadingCustomers } = useQuery({
-    queryKey: [PROFILE_QUERY_KEY, filterName, currentPage, pageSize],
-    queryFn: () => fetchProfiles(filterName, "", "", currentPage, pageSize),
-    staleTime: 0,
-  });
+  const profiles = useQuery(api.profiles.list);
+  const isLoadingCustomers = profiles === undefined;
 
-  const customers = useMemo(() => data?.customers ?? [], [data]);
+  // Filtrado y paginación en el cliente
+  const filteredCustomers = useMemo(() => {
+    if (!profiles) return [];
+    return profiles.filter((profile) =>
+      profile.fullName.toLowerCase().includes(filterName.toLowerCase())
+    );
+  }, [profiles, filterName]);
 
-  const totalPages = data?.totalPages ?? 1;
+  const totalCount = filteredCustomers.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const customers: Customer[] = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCustomers
+      .slice(start, start + pageSize)
+      .map((profile) => ({
+        id: profile._id,
+        fullName: profile.fullName,
+        documentType: profile.documentType,
+        documentNumber: profile.documentNumber,
+        phoneNumber: profile.phoneNumber,
+        email: profile.email || "",
+        department: profile.department || "",
+        municipality: profile.municipality || "",
+        address: profile.address || "",
+        photo_document: null,
+        attachments: [], // No attachments in list view for now
+      }));
+  }, [filteredCustomers, currentPage, pageSize]);
 
   console.log("CLIENTS: ", customers);
 
@@ -80,7 +104,7 @@ export default function CustomerManagementPage() {
               <p className="text-sm text-gray-500 font-medium">
                 {isLoadingCustomers
                   ? "Cargando..."
-                  : `${data?.totalCount ?? 0} cliente(s) gestionados`}
+                  : `${totalCount} cliente(s) gestionados`}
               </p>
             </div>
           </div>

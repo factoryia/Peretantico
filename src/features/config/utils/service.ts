@@ -165,7 +165,7 @@ export const fetchServices = async (
     const mapped: Service[] = allServices.map((s: any) => {
       const rawFields = Array.isArray(s.fields) ? s.fields : [];
       const fields: ServiceField[] = rawFields.map((f: any) => ({
-        id: f.id,
+        id: f._id || f.id,
         name: f.name,
         code: f.code ?? null,
         description: f.description ?? null,
@@ -179,7 +179,7 @@ export const fetchServices = async (
       }));
 
       return {
-        id: s.id,
+        id: s._id || s.id,
         categoryId: "",
         categoryName: "",
         name: s.name,

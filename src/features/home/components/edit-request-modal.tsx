@@ -7,6 +7,7 @@ import {
   Package,
   CreditCard,
   MessageSquare,
+  Image,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -41,20 +42,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 
-import { updateRequest, fetchApplicants } from "@/features/home/utils/request";
 import { uploadServiceFieldFile } from "@/features/home/utils/evidence";
-import { API_BASE_URL } from "@/features/auth/constants";
-import {
-  useDistributorsQuery,
-  useServicesQuery,
-} from "@/features/home/hooks/use-request-query";
+import { useServicesQuery } from "@/features/home/hooks/use-request-query";
 import type {
   EditRequestFormData,
   Applicant,
   Distributor,
 } from "@/features/home/types/request";
 import type { CompleteRequest } from "../utils/complete-request";
+import { useRequestDetail } from "../hooks/use-request-detail";
 
 interface EditRequestModalProps {
   isOpen: boolean;
@@ -83,67 +83,117 @@ function formatDateToString(date: Date): string {
 export function EditRequestModal({
   isOpen,
   onOpenChange,
-  request,
+  request: initialRequest,
 }: EditRequestModalProps) {
   const queryClient = useQueryClient();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
 
+  // Fetch complete request details when modal is open and we have an ID
+  const { data: detailedRequest } = useRequestDetail(
+    isOpen && initialRequest?.id ? initialRequest.id : null
+  );
+
+  // Use detailed request if available, otherwise fallback to initial
+  const request = detailedRequest || initialRequest;
+
   // Obtener datos para las opciones del formulario
-  const { data: distributorsData } = useDistributorsQuery();
-  const { data: servicesData } = useServicesQuery();
+  const distributorsData = useQuery(api.distributors.listAll, {});
+  const applicantsData = useQuery(api.profiles.list, {});
+  const servicesData = useQuery(api.services.listAll, {});
+  
+  const updateRequest = useMutation(api.requests.update);
 
   // Transform data to match our interface with safety checks
   const distributors: Distributor[] = Array.isArray(distributorsData)
     ? (distributorsData as any[]).map((item: any) => ({
-        id: item.id as string,
+        id: item._id as string,
         title: (item.title as string) || "",
         documentNumber: (item.documentNumber as string) || "",
-        documentType: item.documentType?.name || "",
+        documentType: item.documentType || "",
         phone: (item.phoneNumber as string) || "",
         email: (item.email as string) || "",
         status: item.currentAvailability ? "Disponible" : "No disponible",
       }))
     : [];
 
-  const services = Array.isArray(servicesData?.services)
-    ? servicesData.services
+  const applicants: Applicant[] = Array.isArray(applicantsData)
+    ? applicantsData.map((item: any) => ({
+        id: item._id as string,
+        fullName: (item.fullName as string) || "",
+        documentNumber: (item.documentNumber as string) || "",
+        documentType: item.documentType || "",
+        birthDate: item.birthDate || "",
+        gender: item.gender || "",
+        phone: item.phoneNumber || "",
+        email: item.email || "",
+      }))
     : [];
 
-  const loadApplicants = useCallback(async () => {
-    try {
-      const response = await fetchApplicants();
-      if (response?.data) {
-        const applicantsData = response.data.map(
-          (item: Record<string, unknown>) => {
-            const attributes = item.attributes as Record<string, unknown>;
-            return {
-              id: item.id as string,
-              fullName: (attributes?.field_full_name as string) || "",
-              documentNumber:
-                (attributes?.field_document_number as string) || "",
-              documentType: "",
-              birthDate: "",
-              gender: "",
-              phone: "",
-              email: "",
-            };
-          }
-        );
-        setApplicants(applicantsData as Applicant[]);
-      }
-    } catch {
-      // Manejar error silenciosamente - los solicitantes permanecerán vacíos
-    }
-  }, []);
+  // Add current distributor if not in list
+  if (
+    request?.distributor?.id &&
+    !distributors.find((d) => d.id === request.distributor?.id)
+  ) {
+    distributors.push({
+      id: request.distributor.id,
+      title:
+        (request.distributor as any).title ||
+        (request.distributor as any).name ||
+        "Repartidor Actual",
+      documentNumber: "",
+      documentType: "",
+      phone: "",
+      email: "",
+      status: "Asignado",
+    });
+  }
 
-  // Cargar solicitantes cuando se abre el modal
-  useEffect(() => {
-    if (isOpen) {
-      loadApplicants();
-    }
-  }, [isOpen, loadApplicants]);
+  // Add current applicant if not in list
+  if (
+    request?.applicant?.id &&
+    !applicants.find((a) => a.id === request.applicant?.id)
+  ) {
+    applicants.push({
+      id: request.applicant.id,
+      fullName:
+        request.applicant.fullName ||
+        request.applicant.name ||
+        "Cliente Actual",
+      documentNumber: request.applicant.documentNumber || "",
+      documentType: request.applicant.documentType?.name || "",
+      phone: request.applicant.phoneNumber || "",
+      email: request.applicant.email || "",
+    });
+  }
+
+  const rawServices = Array.isArray(servicesData)
+    ? servicesData.map((s: any) => ({
+        ...s,
+        id: s._id,
+        fields: Array.isArray(s.fields)
+          ? s.fields.map((f: any) => ({ ...f, id: f._id }))
+          : [],
+      }))
+    : [];
+
+  const services = [...rawServices];
+  // Ensure the current service from the request is included in the list
+  // This is crucial for displaying fields when editing a request where the service might not be in the initial page of services
+  if (
+    request?.subservice?.id &&
+    !services.find((s: any) => s.id === request.subservice?.id)
+  ) {
+    services.push({
+      id: request.subservice.id,
+      name: request.subservice.name,
+      // Reconstruct fields from the request data values which contain field definitions
+      fields: Array.isArray(request.data)
+        ? request.data.map((d: any) => d.field).filter((f: any) => f != null)
+        : [],
+    });
+  }
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Efecto de limpieza
   useEffect(() => {
@@ -198,7 +248,7 @@ export function EditRequestModal({
   });
 
   const currentServiceId =
-    form.watch("serviceId") || request?.subservice?.id || "";
+    form.watch("serviceId") || request?.subservice?.id || request?.serviceId || "";
   const currentService =
     services.find((service: any) => service.id === currentServiceId) || null;
   const serviceFields: any[] = Array.isArray((currentService as any)?.fields)
@@ -216,9 +266,9 @@ export function EditRequestModal({
           title: request.title || "",
           applicationNumber: request.field_application_number || "",
           applicationScore: request.field_application_score || 4,
-          entryDate: request.field_entry_date || "",
+          entryDate: request.field_entry_date ? formatDateToString(new Date(request.field_entry_date)) : "",
           categoryId: "",
-          serviceId: request.subservice?.id || "",
+          serviceId: request.subservice?.id || request.serviceId || "",
           subserviceId: "",
           serviceCode: "", // TODO: Implementar cuando esté disponible en la API
           serviceValue: request.field_service_value || 0,
@@ -274,52 +324,42 @@ export function EditRequestModal({
 
     setIsSubmitting(true);
     try {
-      const relationships: Record<
-        string,
-        { data: { type: string; id: string } }
-      > = {};
-
-      if (data.applicantId) {
-        relationships.field_applicant = {
-          data: { type: "node--profile", id: data.applicantId },
-        };
-      }
-
-      if (data.distributorId && data.distributorId !== "none") {
-        relationships.field_distributor_data = {
-          data: { type: "node--distributor", id: data.distributorId },
-        };
-      }
-
-      const requestData = {
-        data: {
-          type: "node--request" as const,
-          id: request.id,
-          attributes: {
-            title: data.title,
-            field_application_number: data.applicationNumber,
-            field_application_score: data.applicationScore,
-            field_entry_date: data.entryDate,
-            field_estimated_application_hour: data.estimatedHours,
-            field_logistics_costs: data.logisticsCosts,
-            field_service_value: data.serviceValue,
-            field_is_recurring: data.isRecurring,
-            field_observations: data.observations || null,
-            serviceId: data.serviceId || undefined,
-            status: data.status,
-            promote: data.promote,
-            sticky: data.sticky,
-          },
-          relationships: relationships,
-        },
-        serviceData: Object.entries(data.dataValues || {}).map(
-          ([fieldId, value]) => ({ fieldId, value })
-        ),
-        paymentMethod: data.paymentMethod || null,
+      const payload = {
+        id: request.id as Id<"requests">,
+        applicationNumber: data.applicationNumber,
+        title: data.title,
+        applicantId: data.applicantId as Id<"profiles">,
+        serviceId: data.serviceId as Id<"services">,
+        distributorId: data.distributorId && data.distributorId !== "none" ? data.distributorId as Id<"distributors"> : undefined,
+        entryDate: data.entryDate ? new Date(data.entryDate).getTime() : undefined,
+        
+        // Financials
+        logisticsCosts: data.logisticsCosts,
+        serviceValue: data.serviceValue,
+        paymentMethod: data.paymentMethod || undefined,
+        
+        // Timings
+        estimatedApplicationHour: data.estimatedHours,
+        estimatedPrioritizedHour: data.priorityEstimatedHours,
+        applicationScore: data.applicationScore,
+        
+        // Flags
         isPrioritized: data.isPrioritized ?? false,
+        isRecurring: data.isRecurring,
+        status: data.status,
+        promote: data.promote,
+        sticky: data.sticky,
+        requestStatus: data.requestStatus,
+        observations: data.observations,
+        
+        // Dynamic Data
+        data: Object.entries(data.dataValues || {}).map(([fieldId, value]) => ({
+          fieldId: fieldId as Id<"serviceFields">,
+          value,
+        })),
       };
 
-      await updateRequest(request.id, requestData);
+      await updateRequest(payload);
 
       onOpenChange(false);
 
@@ -327,7 +367,8 @@ export function EditRequestModal({
         toast.success("Solicitud actualizada correctamente");
         queryClient.invalidateQueries({ queryKey: ["complete-requests"] });
       });
-    } catch {
+    } catch (error) {
+      console.error(error);
       toast.error("Error al actualizar la solicitud");
     } finally {
       setIsSubmitting(false);
@@ -459,9 +500,8 @@ export function EditRequestModal({
                     <FormItem>
                       <FormLabel>Servicio *</FormLabel>
                       <Select
-                        key={`service-${isOpen}`}
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger className="max-w-[260px]">
@@ -494,9 +534,8 @@ export function EditRequestModal({
                     <FormItem>
                       <FormLabel>Cliente *</FormLabel>
                       <Select
-                        key={`applicant-${isOpen}`}
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -525,9 +564,8 @@ export function EditRequestModal({
                     <FormItem>
                       <FormLabel>Repartidor</FormLabel>
                       <Select
-                        key={`distributor-${isOpen}`}
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -535,6 +573,7 @@ export function EditRequestModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="none">Sin asignar</SelectItem>
                           {distributors.map((distributor) => (
                             <SelectItem
                               key={distributor.id}
@@ -592,7 +631,12 @@ export function EditRequestModal({
                                       }
                                     >
                                       <SelectTrigger>
-                                        <SelectValue placeholder="Seleccionar" />
+                                        <SelectValue
+                                          placeholder={
+                                            (field.value as string) ||
+                                            "Seleccionar"
+                                          }
+                                        />
                                       </SelectTrigger>
                                       <SelectContent>
                                         {items.map((opt) => (
@@ -620,12 +664,7 @@ export function EditRequestModal({
                               name={name as any}
                               render={({ field }) => {
                                 const rawUrl = field.value as string | undefined;
-                                const href =
-                                  rawUrl && rawUrl.startsWith("http")
-                                    ? rawUrl
-                                    : rawUrl
-                                    ? `${API_BASE_URL}${rawUrl}`
-                                    : "";
+                                const href = rawUrl;
                                 const isUploading =
                                   uploadingFieldId === fieldMeta.id;
                                 return (
@@ -923,7 +962,11 @@ export function EditRequestModal({
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Seleccione un método" />
+                              <SelectValue
+                                placeholder={
+                                  field.value || "Seleccione un método"
+                                }
+                              />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -992,6 +1035,30 @@ export function EditRequestModal({
                 )}
               />
             </div>
+
+            {/* Evidencia de Entrega */}
+            {request?.evidenceUrl && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2 border-b pb-2">
+                  <Image className="h-5 w-5" />
+                  Evidencia de Entrega
+                </h3>
+                <div className="rounded-lg border p-4 bg-gray-50 flex flex-col items-center gap-4">
+                  <img
+                    src={request.evidenceUrl}
+                    alt="Evidencia de entrega"
+                    className="max-w-full h-auto rounded-md object-contain max-h-[400px]"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => window.open(request.evidenceUrl, "_blank")}
+                  >
+                    Ver en tamaño completo
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Configuración */}
             <div className="space-y-4">

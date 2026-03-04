@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { Id } from "@convex/_generated/dataModel";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,13 +14,7 @@ import { PaymentSummaryModal } from "./payment-summary-modal";
 import { PaymentHistoryTable } from "./payment-history-table";
 import { useDistributorId } from "@/features/home/hooks/use-distributor-id";
 import { useAuthStore } from "@/features/auth/stores/use-auth-store";
-import {
-  fetchDistributors,
-  fetchFinishedRequestsByDistributorBackend as fetchFinishedRequestsByDistributor,
-  fetchPaymentHistory,
-} from "../utils/costs";
 import type { Request } from "../types";
-import { useEffect } from "react";
 import {
   Calculator,
   Loader2,
@@ -33,7 +29,6 @@ import {
  */
 export default function CostManagementPage() {
   // --- Estados locales ---
-  const queryClient = useQueryClient();
   const { authUser } = useAuthStore();
   const { data: currentDistributorId } = useDistributorId();
   const isDistributor = authUser?.roles?.some((role) =>
@@ -42,7 +37,7 @@ export default function CostManagementPage() {
 
   const [selectedDistributorId, setSelectedDistributorId] =
     useState<string>("");
-  const [selectedrequests, setSelectedrequests] = useState<string[]>([]);
+  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   // Efecto para auto-seleccionar si es repartidor
@@ -53,70 +48,107 @@ export default function CostManagementPage() {
   }, [isDistributor, currentDistributorId]);
 
   // --- Query de distribuidores ---
-  const { data: distributors = [], isLoading: isLoadingDistributors } =
-    useQuery({
-      queryKey: ["distributors-list"],
-      queryFn: fetchDistributors,
-      staleTime: 5 * 60 * 1000,
-    });
+  const distributors = useQuery(api.distributors.listAll, {}) || [];
+  const isLoadingDistributors = distributors === undefined;
 
   // --- Query de solicitudes finalizadas ---
-  const {
-    data: finishedRequests = [] as Request[],
-    isLoading: isLoadingRequests,
-    isFetching: isFetchingRequests,
-  } = useQuery({
-    queryKey: ["finished-requests", selectedDistributorId],
-    queryFn: () =>
-      fetchFinishedRequestsByDistributor(selectedDistributorId) as Promise<
-        Request[]
-      >,
-    enabled: !!selectedDistributorId,
-    staleTime: 0,
-  });
+  const rawFinishedRequests = useQuery(
+    api.payments.getPendingRequestsByDistributor,
+    selectedDistributorId
+      ? { distributorId: selectedDistributorId as Id<"distributors"> }
+      : "skip"
+  );
+
+  const selectedDistributorName = useMemo(() => {
+    return (
+      distributors.find((d) => d._id === selectedDistributorId)?.title || ""
+    );
+  }, [distributors, selectedDistributorId]);
+  
+  const finishedRequests: Request[] = useMemo(() => {
+    if (!rawFinishedRequests) return [];
+
+    return rawFinishedRequests.map((r) => ({
+      id: r._id,
+      title: r.title || "Sin título",
+      created: new Date(r._creationTime).toISOString(),
+      applicationNumber: r.applicationNumber,
+      status: r.requestStatus,
+      entryDate: new Date(r.entryDate).toISOString(),
+      logisticsCosts: r.logisticsCosts || 0,
+      serviceValue: r.serviceValue || 0,
+      prioritizedValue: r.prioritizedValue || 0,
+      applicant: {
+        id: r.applicant?._id || "",
+        fullName: r.applicant?.fullName || "Desconocido",
+        documentNumber: r.applicant?.documentNumber,
+        phoneNumber: r.applicant?.phoneNumber,
+        email: r.applicant?.email,
+      },
+      category: { id: "", name: "" }, // Not used in table
+      service: { id: r.service?._id || "", name: r.service?.name || "" },
+      subservice: { id: "", name: "" }, // Not used in table
+      distributor: { id: selectedDistributorId, title: selectedDistributorName }, // Populated from distributors list
+      infoServiceType: r.service?.name, // Use service name as type for now
+      serviceStatus: { id: r.requestStatus, name: r.requestStatus },
+    }));
+  }, [rawFinishedRequests, selectedDistributorId, selectedDistributorName]);
+
+  const isLoadingRequests = rawFinishedRequests === undefined;
 
   // --- Query de historial de pagos ---
-  const { data: paymentHistory = [], isLoading: isLoadingHistory } = useQuery({
-    queryKey: ["payment-history", selectedDistributorId],
-    queryFn: () => fetchPaymentHistory(selectedDistributorId),
-    enabled: !!selectedDistributorId,
-  });
+  const rawPaymentHistory = useQuery(
+    api.payments.getPaymentsByDistributor,
+    selectedDistributorId
+      ? { distributorId: selectedDistributorId as Id<"distributors"> }
+      : "skip"
+  );
+
+  const paymentHistory = useMemo(() => {
+     if (!rawPaymentHistory) return [];
+     return rawPaymentHistory.map((p) => ({
+       id: p._id,
+       createdAt: new Date(p._creationTime).toISOString(),
+       updatedAt: new Date(p._creationTime).toISOString(), // Fallback since Convex doesn't track updates automatically in metadata
+       title: p.title,
+       observations: p.observations || null,
+       totalAmount: p.totalAmount || 0,
+       status: p.status || "Completed",
+       baseValue: p.baseValue || 0,
+       additionalAmount: p.additionalAmount || 0,
+       discountAmount: p.discountAmount || 0,
+       distributorId: p.distributorId,
+     }));
+   }, [rawPaymentHistory]);
+
+  const isLoadingHistory = rawPaymentHistory === undefined;
+
+  const createPaymentMutation = useMutation(api.payments.create);
 
   // --- Opciones para el select de repartidores ---
   const distributorOptions = useMemo(() => {
     return distributors.map((d) => ({
-      id: d.id,
+      id: d._id,
       name: d.title,
     }));
   }, [distributors]);
 
   const handleDistributorChange = (id: string) => {
     setSelectedDistributorId(id);
-    setSelectedrequests([]);
+    setSelectedRequests([]);
   };
 
-  const selectedDistributorName = useMemo(() => {
-    return (
-      distributors.find((d) => d.id === selectedDistributorId)?.title || ""
-    );
-  }, [distributors, selectedDistributorId]);
-
   const selectedRequestsData = useMemo(() => {
-    return finishedRequests.filter((r) => selectedrequests.includes(r.id));
-  }, [finishedRequests, selectedrequests]);
+    return finishedRequests.filter((r) => selectedRequests.includes(r.id));
+  }, [finishedRequests, selectedRequests]);
 
   const handleCalculatePayment = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const handlePaymentSuccess = () => {
-    setSelectedrequests([]);
-    queryClient.invalidateQueries({
-      queryKey: ["finished-requests", selectedDistributorId],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["payment-history", selectedDistributorId],
-    });
+  const handlePaymentSuccess = async () => {
+    setSelectedRequests([]);
+    // Convex automatically updates queries
   };
 
   return (
@@ -207,13 +239,13 @@ export default function CostManagementPage() {
               <div className="p-6 space-y-6">
                 <FinishedRequestsTable
                   requests={finishedRequests}
-                  selectedIds={selectedrequests}
-                  onSelectionChange={setSelectedrequests}
+                  selectedIds={selectedRequests}
+                  onSelectionChange={setSelectedRequests}
                   disabled={isDistributor}
                 />
 
                 {/* --- Acciones de Pago --- */}
-                {selectedrequests.length > 0 && !isDistributor && (
+                {selectedRequests.length > 0 && !isDistributor && (
                   <div className="flex items-center justify-between p-5 bg-blue-600 rounded-2xl shadow-xl shadow-blue-200 animate-in zoom-in-95 duration-300">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-white/20 rounded-lg text-white">
@@ -224,8 +256,8 @@ export default function CostManagementPage() {
                           Resumen de Selección
                         </span>
                         <span className="text-white/90 text-[13px] font-bold">
-                          {selectedrequests.length}{" "}
-                          {selectedrequests.length === 1
+                          {selectedRequests.length}{" "}
+                          {selectedRequests.length === 1
                             ? "solicitud seleccionada"
                             : "solicitudes seleccionadas"}
                         </span>
@@ -234,13 +266,8 @@ export default function CostManagementPage() {
                     <Button
                       onClick={handleCalculatePayment}
                       className="bg-white hover:bg-slate-50 text-blue-700 font-black flex items-center gap-2 shadow-lg px-8 py-6 h-auto transition-all hover:scale-[1.05] rounded-xl uppercase text-xs tracking-wider active:scale-95"
-                      disabled={isFetchingRequests}
                     >
-                      {isFetchingRequests ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4" />
-                      )}
+                      <CheckCircle2 className="h-4 w-4" />
                       Liquidar Servicios
                     </Button>
                   </div>

@@ -34,12 +34,11 @@ import { serviceSchema, type ServiceFormValues } from "../../schemas";
 import { Loader, Plus, Trash2 } from "lucide-react";
 import { RequiredDot } from "@/components/common/required-dot";
 import { toast } from "sonner";
-import { isAxiosError, type AxiosError } from "axios";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { createService, updateService } from "../../utils/service";
-import { SERVICE_QUERY_KEY } from "../../constants/query-keys";
 import { RequiredFormMessage } from "@/components/common/form-message";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 
 interface Props {
   open: boolean;
@@ -56,7 +55,8 @@ export const ServiceDialog = ({
   setIsDialogOpen,
   setEditingService,
 }: Props) => {
-  const queryClient = useQueryClient();
+  const createServiceMutation = useMutation(api.services.create);
+  const updateServiceMutation = useMutation(api.services.update);
 
   const form = useForm({
     resolver: zodResolver(serviceSchema),
@@ -123,39 +123,57 @@ export const ServiceDialog = ({
 
   const onSubmit = async (data: ServiceFormValues) => {
     try {
+      const payloadFields = (data.fields ?? []).map((field, index) => ({
+        id: field.id ? (field.id as Id<"serviceFields">) : undefined,
+        name: field.name,
+        code: field.code && field.code.length > 0 ? field.code : undefined,
+        description: field.description ?? undefined,
+        type: field.type,
+        required: field.required ?? false,
+        multiple: field.multiple ?? false,
+        order:
+          typeof field.order === "number" && !Number.isNaN(field.order)
+            ? field.order
+            : index,
+        options: undefined,
+        status: field.status ?? true,
+        settings: undefined,
+      }));
+
       if (editingService) {
-        await updateService(editingService.id, data);
+        await updateServiceMutation({
+          id: editingService.id as Id<"services">,
+          name: data.name,
+          description: data.description ?? undefined,
+          price: data.price,
+          status: data.status === "activo",
+          fields: payloadFields,
+        });
 
         toast.success("Servicio actualizado", {
           description: `El servicio "${data.name}" fue actualizado correctamente.`,
         });
         setEditingService(null);
       } else {
-        await createService(data);
+        await createServiceMutation({
+          name: data.name,
+          description: data.description ?? undefined,
+          price: data.price,
+          status: data.status === "activo",
+          fields: payloadFields,
+        });
         toast.success("Servicio creado", {
           description: `El servicio "${data.name}" fue creado exitosamente.`,
         });
       }
 
       setIsDialogOpen(false);
-      await queryClient.invalidateQueries({
-        queryKey: [SERVICE_QUERY_KEY],
-        exact: false,
-      });
       form.reset();
     } catch (error) {
-      const err = error as AxiosError;
-
-      if (err instanceof isAxiosError) {
-        toast.error("Error al crear el servicio", {
-          description: err.message,
-        });
-      } else {
-        toast.error("Error al crear el servicio", {
-          description:
-            "Ocurrió un error inesperado al intentar crear el servicio.",
-        });
-      }
+      console.error(error);
+      toast.error("Error al guardar el servicio", {
+        description: "Ocurrió un error inesperado.",
+      });
     }
   };
 

@@ -11,6 +11,8 @@ import {
   Calendar,
   Key,
   User as UserIcon,
+  ShieldCheck,
+  Truck,
 } from "lucide-react";
 import type { AuthUser } from "../types";
 
@@ -47,6 +49,31 @@ export function UserCard({
     });
   };
 
+  const getRoleBadge = (role?: string) => {
+    if (role === "Administrador") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+          <ShieldCheck className="w-3 h-3" />
+          Admin
+        </span>
+      );
+    }
+    if (role === "Repartidor") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+          <Truck className="w-3 h-3" />
+          Repartidor
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+        <UserIcon className="w-3 h-3" />
+        Usuario
+      </span>
+    );
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -80,8 +107,8 @@ export function UserCard({
                   {user.name}
                 </h3>
                 <div className="flex items-center gap-2 mt-0.5">
+                  {getRoleBadge(user.role)}
                   <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                    <UserIcon className="h-3 w-3" />
                     ID: {user.id.slice(0, 8)}...
                   </span>
                 </div>

@@ -68,6 +68,6 @@ export async function completeRequestWithEvidence(
     status: true,
     observations: "Actualizada desde evidencia",
     attachment: fileUuid,
-    requestStatus: "Atendida",
+    requestStatus: "Finalizada",
   });
 }

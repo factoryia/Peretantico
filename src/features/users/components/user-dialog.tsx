@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { userSchema, type UserFormValues } from "../schemas";
 import { useUserMutations } from "../hooks/use-users";
 import {
@@ -27,6 +34,7 @@ import {
   Mail,
   Lock,
   Image as ImageIcon,
+  Shield,
 } from "lucide-react";
 import { RequiredDot } from "@/components/common/required-dot";
 import { RequiredFormMessage } from "@/components/common/form-message";
@@ -52,6 +60,8 @@ export function UserDialog({
       name: "",
       email: "",
       image: "",
+      role: "Solicitante",
+      password: "",
     },
   });
 
@@ -63,12 +73,15 @@ export function UserDialog({
         name: user.name,
         email: user.email,
         image: user.image || "",
+        role: user.role || "Solicitante",
       });
     } else {
       form.reset({
         name: "",
         email: "",
         image: "",
+        role: "Solicitante",
+        password: "",
       });
     }
   }, [isEditing, user, form, open]);
@@ -221,6 +234,38 @@ export function UserDialog({
                           />
                         </FormControl>
                       </div>
+                      <FormMessage className="text-[10px] font-bold" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {sectionHeader(Shield, "Rol y Permisos")}
+              <div className="space-y-5">
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem className="space-y-1.5">
+                      <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Rol de Usuario <RequiredDot />
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm">
+                            <SelectValue placeholder="Seleccione un rol" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Solicitante">Usuario (Solicitante)</SelectItem>
+                          <SelectItem value="Repartidor">Repartidor</SelectItem>
+                          <SelectItem value="Administrador">Administrador</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage className="text-[10px] font-bold" />
                     </FormItem>
                   )}

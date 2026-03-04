@@ -663,7 +663,7 @@ export const createBackendRequest = async (
     paymentMethod: dto.paymentMethod ?? null,
     isPrioritized: dto.isPrioritized ?? false,
     requestStatus: dto.requestStatus ?? "EnProceso",
-    attachment: dto.attachment ?? null,
+    attachment: dto.attachments?.[0]?.url ?? null,
     serviceValue: dto.serviceValue,
   };
 

@@ -1,3 +1,6 @@
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,17 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import type { Distributor } from "@/features/distributors/types/distributors";
 import type { TaxonomyTerm } from "@/types/global";
 import { distributorSchema, type DistributorFormValues } from "../schemas";
-import { createDistributor, updateDistributor } from "../utils/distributors";
-import {
-  fetchCoverageAreas,
-  fetchTransportationTypes,
-  createCoverageArea,
-  createTransportationType,
-  deleteCoverageArea,
-  deleteTransportationType,
-  updateCoverageArea,
-  updateTransportationType,
-} from "../utils/taxonomies";
+// import { createDistributor, updateDistributor } from "../utils/distributors";
 import { toast } from "sonner";
 import {
   Loader,
@@ -77,12 +70,17 @@ export function DistributorDialog({
 
   const queryClient = useQueryClient();
 
-  const [localCoverageAreas, setLocalCoverageAreas] = useState<TaxonomyTerm[]>(
-    coverageAreas
-  );
-  const [localTransportationTypes, setLocalTransportationTypes] = useState<
-    TaxonomyTerm[]
-  >(transportationTypes);
+  // Convex Mutations
+  const createDistributorMutation = useMutation(api.distributors.create);
+  const updateDistributorMutation = useMutation(api.distributors.update);
+  const createTransportationTypeMutation = useMutation(api.transportationTypes.create);
+  const updateTransportationTypeMutation = useMutation(api.transportationTypes.update);
+  const deleteTransportationTypeMutation = useMutation(api.transportationTypes.remove);
+
+  const createCoverageAreaMutation = useMutation(api.coverageAreas.create);
+  const updateCoverageAreaMutation = useMutation(api.coverageAreas.update);
+  const deleteCoverageAreaMutation = useMutation(api.coverageAreas.remove);
+
   const [creatingCoverageArea, setCreatingCoverageArea] = useState(false);
   const [creatingTransportationType, setCreatingTransportationType] =
     useState(false);
@@ -91,12 +89,10 @@ export function DistributorDialog({
   const [manageTransportationOpen, setManageTransportationOpen] =
     useState(false);
   const [manageCoverageOpen, setManageCoverageOpen] = useState(false);
-  const [transportationManagerItems, setTransportationManagerItems] = useState<
-    TaxonomyTerm[]
-  >([]);
-  const [coverageManagerItems, setCoverageManagerItems] = useState<
-    TaxonomyTerm[]
-  >([]);
+  
+  // Use props directly for manager items to reflect Convex updates
+  const transportationManagerItems = transportationTypes;
+  const coverageManagerItems = coverageAreas;
 
   const form = useForm<DistributorFormValues>({
     resolver: zodResolver(distributorSchema),
@@ -134,8 +130,6 @@ export function DistributorDialog({
         transportationTypeId: distributor.transportationType.id,
         status: distributor.status,
       });
-      setLocalCoverageAreas(coverageAreas);
-      setLocalTransportationTypes(transportationTypes);
     } else {
       form.reset({
         title: "",
@@ -151,35 +145,30 @@ export function DistributorDialog({
         coverageAreaId: "",
         transportationTypeId: "",
       });
-      setLocalCoverageAreas(coverageAreas);
-      setLocalTransportationTypes(transportationTypes);
     }
-  }, [isEditing, distributor, form, open, coverageAreas, transportationTypes]);
-
-  useEffect(() => {
-    if (manageTransportationOpen) {
-      (async () => {
-        const items = await fetchTransportationTypes();
-        setTransportationManagerItems(items);
-      })();
-    }
-  }, [manageTransportationOpen]);
-
-  useEffect(() => {
-    if (manageCoverageOpen) {
-      (async () => {
-        const items = await fetchCoverageAreas();
-        setCoverageManagerItems(items);
-      })();
-    }
-  }, [manageCoverageOpen]);
+  }, [isEditing, distributor, form, open]);
 
   const handleSubmit = async (values: DistributorFormValues) => {
     try {
+      const { documentTypeId, ...restValues } = values;
+      
+      const payload = {
+        ...restValues,
+        documentType: documentTypeId,
+        email: values.email || undefined,
+        vehicleId: values.vehicleId || undefined,
+        observations: values.observations || undefined,
+        coverageAreaId: values.coverageAreaId as Id<"coverageAreas">,
+        transportationTypeId: values.transportationTypeId as Id<"transportationTypes">,
+      };
+
       if (distributor) {
-        await updateDistributor(distributor.id, values);
+        await updateDistributorMutation({
+          id: distributor.id as Id<"distributors">,
+          ...payload,
+        });
       } else {
-        await createDistributor(values);
+        await createDistributorMutation(payload);
       }
 
       queryClient.invalidateQueries({
@@ -364,12 +353,12 @@ export function DistributorDialog({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                              {localTransportationTypes.length === 0 ? (
+                              {transportationTypes.length === 0 ? (
                                 <div className="px-3 py-2 text-xs text-slate-500">
                                   No hay tipos de transporte disponibles.
                                 </div>
                               ) : (
-                                localTransportationTypes.map((type) => (
+                                transportationTypes.map((type) => (
                                   <SelectItem key={type.id} value={type.id}>
                                     {type.name}
                                   </SelectItem>
@@ -433,12 +422,12 @@ export function DistributorDialog({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="rounded-xl border-slate-100 shadow-xl">
-                            {localCoverageAreas.length === 0 ? (
+                            {coverageAreas.length === 0 ? (
                               <div className="px-3 py-2 text-xs text-slate-500">
                                 No hay zonas de cobertura disponibles.
                               </div>
                             ) : (
-                              localCoverageAreas.map((area) => (
+                              coverageAreas.map((area) => (
                                 <SelectItem key={area.id} value={area.id}>
                                   {area.name}
                                 </SelectItem>
@@ -669,20 +658,12 @@ export function DistributorDialog({
                   if (!name) return;
                   try {
                     setCreatingTransportationType(true);
-                    const created = await createTransportationType(name);
-                    const next: TaxonomyTerm = {
-                      id: created.id,
-                      name: created.name,
-                    };
-                    setTransportationManagerItems((prev) => [...prev, next]);
-                    setLocalTransportationTypes((prev) => [...prev, next]);
-                    form.setValue("transportationTypeId", next.id, {
+                    const createdId = await createTransportationTypeMutation({ name });
+                    
+                    form.setValue("transportationTypeId", createdId, {
                       shouldValidate: true,
                     });
                     setNewTransportationName("");
-                    queryClient.invalidateQueries({
-                      queryKey: ["transportationTypes"],
-                    });
                     toast.success("Tipo de transporte creado correctamente");
                   } catch {
                     toast.error("Error al crear el tipo de transporte");
@@ -712,17 +693,9 @@ export function DistributorDialog({
                         const name = e.target.value.trim();
                         if (!name || name === item.name) return;
                         try {
-                          await updateTransportationType(item.id, { name });
-                          const updated = transportationManagerItems.map(
-                            (current) =>
-                              current.id === item.id
-                                ? { ...current, name }
-                                : current
-                          );
-                          setTransportationManagerItems(updated);
-                          setLocalTransportationTypes(updated);
-                          queryClient.invalidateQueries({
-                            queryKey: ["transportationTypes"],
+                          await updateTransportationTypeMutation({
+                            id: item.id as Id<"transportationTypes">,
+                            name,
                           });
                           toast.success("Tipo de transporte actualizado");
                         } catch {
@@ -737,20 +710,15 @@ export function DistributorDialog({
                       className="text-red-500"
                       onClick={async () => {
                         try {
-                          await deleteTransportationType(item.id);
-                          const remaining = transportationManagerItems.filter(
-                            (current) => current.id !== item.id
-                          );
-                          setTransportationManagerItems(remaining);
-                          setLocalTransportationTypes(remaining);
+                          await deleteTransportationTypeMutation({
+                            id: item.id as Id<"transportationTypes">,
+                          });
+                          
                           if (form.getValues("transportationTypeId") === item.id) {
                             form.setValue("transportationTypeId", "", {
                               shouldValidate: true,
                             });
                           }
-                          queryClient.invalidateQueries({
-                            queryKey: ["transportationTypes"],
-                          });
                           toast.success("Tipo de transporte eliminado");
                         } catch {
                           toast.error("Error al eliminar el tipo");
@@ -791,20 +759,12 @@ export function DistributorDialog({
                   if (!name) return;
                   try {
                     setCreatingCoverageArea(true);
-                    const created = await createCoverageArea(name);
-                    const next: TaxonomyTerm = {
-                      id: created.id,
-                      name: created.name,
-                    };
-                    setCoverageManagerItems((prev) => [...prev, next]);
-                    setLocalCoverageAreas((prev) => [...prev, next]);
-                    form.setValue("coverageAreaId", next.id, {
+                    const createdId = await createCoverageAreaMutation({ name });
+                    
+                    form.setValue("coverageAreaId", createdId, {
                       shouldValidate: true,
                     });
                     setNewCoverageName("");
-                    queryClient.invalidateQueries({
-                      queryKey: ["coverageAreas"],
-                    });
                     toast.success("Zona de cobertura creada correctamente");
                   } catch {
                     toast.error("Error al crear la zona de cobertura");
@@ -834,16 +794,9 @@ export function DistributorDialog({
                         const name = e.target.value.trim();
                         if (!name || name === item.name) return;
                         try {
-                          await updateCoverageArea(item.id, { name });
-                          const updated = coverageManagerItems.map((current) =>
-                            current.id === item.id
-                              ? { ...current, name }
-                              : current
-                          );
-                          setCoverageManagerItems(updated);
-                          setLocalCoverageAreas(updated);
-                          queryClient.invalidateQueries({
-                            queryKey: ["coverageAreas"],
+                          await updateCoverageAreaMutation({
+                            id: item.id as Id<"coverageAreas">,
+                            name,
                           });
                           toast.success("Zona de cobertura actualizada");
                         } catch {
@@ -858,20 +811,15 @@ export function DistributorDialog({
                       className="text-red-500"
                       onClick={async () => {
                         try {
-                          await deleteCoverageArea(item.id);
-                          const remaining = coverageManagerItems.filter(
-                            (current) => current.id !== item.id
-                          );
-                          setCoverageManagerItems(remaining);
-                          setLocalCoverageAreas(remaining);
+                          await deleteCoverageAreaMutation({
+                            id: item.id as Id<"coverageAreas">,
+                          });
+                          
                           if (form.getValues("coverageAreaId") === item.id) {
                             form.setValue("coverageAreaId", "", {
                               shouldValidate: true,
                             });
                           }
-                          queryClient.invalidateQueries({
-                            queryKey: ["coverageAreas"],
-                          });
                           toast.success("Zona de cobertura eliminada");
                         } catch {
                           toast.error("Error al eliminar la zona");

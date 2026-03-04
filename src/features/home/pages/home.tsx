@@ -11,8 +11,13 @@ import { DistributorDashboard } from "../components/distributor-dashboard";
 
 export function Home() {
   const { authUser } = useAuthStore();
+
+  const isAdmin = authUser?.roles?.some((role) =>
+    ["admin", "administrador", "superadmin"].includes(role.toLowerCase())
+  );
+
   const isDistributor = authUser?.roles?.some((role) =>
-    ["distributor", "Repartidor"].includes(role)
+    ["distributor", "repartidor"].includes(role.toLowerCase())
   );
 
   const [filters, setFilters] = useState<RequestFilters>({});
@@ -39,7 +44,8 @@ export function Home() {
     setRefreshKey((prev) => prev + 1);
   }, []);
 
-  if (isDistributor) {
+  // Priorizar vista de admin si tiene ambos roles
+  if (isDistributor && !isAdmin) {
     return <DistributorDashboard />;
   }
 

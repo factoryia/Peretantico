@@ -14,7 +14,6 @@ import {
 import { DOCUMENT_TYPE_TAXONOMY_KEY } from "../constants";
 import { DataPoint } from "@/features/home/components/data-point";
 import { FaWhatsapp } from "react-icons/fa";
-import { API_BASE_URL } from "@/features/auth/constants";
 
 interface CustomerDetailViewProps {
   customer: Customer;
@@ -162,10 +161,7 @@ export function CustomerDetailView({
             <div className="space-y-2">
               {(profileData?.attachments ?? customer.attachments ?? []).map(
                 (att: any) => {
-                  const url =
-                    typeof att.url === "string" && att.url.startsWith("http")
-                      ? att.url
-                      : `${API_BASE_URL}${att.url ?? ""}`;
+                  const url = att.url;
                   return (
                     <div
                       key={att.id}

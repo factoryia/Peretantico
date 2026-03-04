@@ -74,8 +74,6 @@ export function RequestsTable({
     limit: pageSize,
   });
 
-  console.log(completeRequestsData);
-
   const deleteRequestMutation = useDeleteRequestMutation();
 
   // Función para limpiar todos los estados de modales
@@ -232,7 +230,7 @@ export function RequestsTable({
         <CardContent>
           <div className="flex items-center gap-2 text-red-600">
             <AlertCircle className="h-5 w-5" />
-            <span>Error: {error.message}</span>
+            <span>Error: {(error as any).message}</span>
           </div>
           <Button onClick={() => refetch()} className="mt-4" variant="outline">
             Reintentar

@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { toast } from "sonner";
-import axios, { isAxiosError } from "axios";
 import { Eye, EyeOff, FileText, Loader, Mail } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "react-router";
 import { useState } from "react";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 import {
   Form,
@@ -20,8 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormWrapper } from "@/features/auth/components/form-wrapper";
 import { useAuthStore } from "@/features/auth/stores/use-auth-store";
-import { ACCESS_TOKEN, API_BASE_URL } from "@/features/auth/constants";
-import type { CurrentUser } from "@/features/auth/types";
 
 const loginSchema = z.object({
   name: z.string().min(1, { message: "El usuario es obligatorio." }),
@@ -30,93 +28,10 @@ const loginSchema = z.object({
 
 type LoginSchema = z.infer<typeof loginSchema>;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function extractToken(data: unknown): string | null {
-  if (typeof data === "string") {
-    return data;
-  }
-
-  if (isRecord(data)) {
-    const tokenKeys = ["token", "access_token", "accessToken"];
-
-    for (const key of tokenKeys) {
-      const value = data[key];
-      if (typeof value === "string") {
-        return value;
-      }
-    }
-  }
-
-  return null;
-}
-
-function mapToCurrentUser(data: unknown): CurrentUser {
-  let source = data;
-
-  if (isRecord(data) && "user" in data) {
-    const userContainer = data as { user: unknown };
-    source = userContainer.user;
-  }
-
-  const record = isRecord(source) ? source : {};
-
-  const uidKeys = ["uid", "id", "userId", "sub"];
-  let uidValue: string | number | undefined;
-  for (const key of uidKeys) {
-    const value = record[key];
-    if (typeof value === "string" || typeof value === "number") {
-      uidValue = value;
-      break;
-    }
-  }
-
-  const nameKeys = ["name", "email", "username", "mail"];
-  let nameValue: string | undefined;
-  for (const key of nameKeys) {
-    const value = record[key];
-    if (typeof value === "string") {
-      nameValue = value;
-      break;
-    }
-  }
-
-  const rolesSource =
-    (record.roles as unknown) ?? (record.permissions as unknown);
-
-  let roles: string[] = [];
-
-  if (Array.isArray(rolesSource)) {
-    roles = rolesSource
-      .map((role: any) => {
-        if (typeof role === "string") return role;
-        if (typeof role === "object" && role !== null) {
-          // Estructura: { role: { name: "Repartidor" } }
-          if (role.role && typeof role.role.name === "string") {
-            return role.role.name;
-          }
-          // Estructura: { name: "Repartidor" }
-          if (typeof role.name === "string") {
-            return role.name;
-          }
-        }
-        return null;
-      })
-      .filter((r): r is string => typeof r === "string");
-  }
-
-  return {
-    uid: String(uidValue ?? ""),
-    name: String(nameValue ?? ""),
-    roles,
-  };
-}
-
 export function Login() {
   const navigate = useNavigate();
-  const { setAuthUser, setIsAuthorized } = useAuthStore();
+  const { setIsAuthorized } = useAuthStore();
+  const { signIn } = useAuthActions();
 
   const [showPassword, setShowPassword] = useState(false);
 
@@ -132,43 +47,28 @@ export function Login() {
 
   const onSubmit = async (values: LoginSchema) => {
     try {
-      const loginResponse = await axios.post(`${API_BASE_URL}/auth/login`, {
-        email: values.name,
-        password: values.pass,
-      });
+      console.log("Intentando iniciar sesión...");
+      const result = await signIn("password", { email: values.name.trim(), password: values.pass, flow: "signIn" }) as any;
+      console.log("Resultado del login:", result);
 
-      const token = extractToken(loginResponse.data);
-
-      if (!token) {
-        throw new Error("No se pudo obtener el token de autenticación.");
-      }
-
-      localStorage.setItem(ACCESS_TOKEN, token);
-
-      const meResponse = await axios.get(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const currentUser = mapToCurrentUser(meResponse.data);
-
-      setAuthUser(currentUser);
-      setIsAuthorized(true);
-
-      navigate("/");
-    } catch (error) {
-      if (isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.message ||
-          "Algo salió mal. Por favor intentalo otra vez.";
-
-        toast.error(errorMessage);
-      } else if (error instanceof Error) {
-        toast.error(error.message);
+      // Verificar si hay tokens en localStorage
+      const convexKeys = Object.keys(localStorage).filter(k => k.startsWith("__convexAuth"));
+      console.log("Claves de Convex encontradas:", convexKeys);
+      
+      // Verificamos si la autenticación fue exitosa (tokens devueltos o flag signingIn)
+      if (result?.tokens || result?.signingIn || result?.started) {
+        console.log("Login exitoso. Redirigiendo...");
+        
+        setIsAuthorized(true);
+        navigate("/");
       } else {
-        toast.error("Un error inesperado ha ocurrido.");
+        console.warn("Respuesta inesperada del login:", result);
+        // Intentamos navegar de todas formas si parece exitoso
+        navigate("/");
       }
+    } catch (error) {
+      console.error("Error en login:", error);
+      toast.error("Error al iniciar sesión. Verifica tus credenciales.");
     }
   };
 

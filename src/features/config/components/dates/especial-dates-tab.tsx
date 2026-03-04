@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import {
   Card,
   CardContent,
@@ -12,11 +14,6 @@ import { SearchInput } from "@/components/common/search-input";
 import { Paginator } from "@/components/common/paginator";
 import { TableSkeleton } from "@/components/common/skeletons/table-skeleton";
 import type { SpecialDate } from "../../types";
-import {
-  createSpecialDate,
-  fetchSpecialDates,
-  updateSpecialDate,
-} from "../../utils/special.date";
 import type { SpecialDateFormValues } from "../../schemas";
 import { SpecialDateDialog } from "./special-date-dialog";
 import { SpecialDateDetailDialog } from "./special-date-detail-dialog";
@@ -25,8 +22,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 export function SpecialDatesTab() {
-  const queryClient = useQueryClient();
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [editingDate, setEditingDate] = useState<SpecialDate | null>(null);
@@ -35,14 +30,29 @@ export function SpecialDatesTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["special-dates", searchTerm, currentPage, pageSize],
-    queryFn: () => fetchSpecialDates(searchTerm, currentPage, pageSize),
-    staleTime: 60_000 * 5,
-  });
+  const rawSpecialDates = useQuery(api.specialDates.list, { searchTerm });
+  const createSpecialDate = useMutation(api.specialDates.create);
+  const updateSpecialDate = useMutation(api.specialDates.update);
 
-  const specialDates = data?.specialDates ?? [];
-  const totalPages = data?.totalPages ?? 1;
+  const isLoading = rawSpecialDates === undefined;
+
+  // Map Convex data to SpecialDate type
+  const mappedSpecialDates: SpecialDate[] = (rawSpecialDates || []).map((d) => ({
+    id: d._id,
+    title: d.title,
+    description: d.description,
+    date: d.date,
+    repeat: d.repeat,
+    status: d.status,
+    createdAt: new Date(d._creationTime).toISOString(),
+    updatedAt: new Date(d._creationTime).toISOString(),
+  }));
+
+  const totalItems = mappedSpecialDates.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const specialDates = mappedSpecialDates.slice(startIndex, endIndex);
 
   const handleEdit = (date: SpecialDate) => {
     setEditingDate(date);
@@ -53,18 +63,31 @@ export function SpecialDatesTab() {
     setViewingDate(date);
     setIsDetailDialogOpen(true);
   };
+
   const handleCreateOrUpdate = async (formData: SpecialDateFormValues) => {
     try {
       if (editingDate) {
-        await updateSpecialDate(editingDate.id, formData);
+        await updateSpecialDate({
+          id: editingDate.id as Id<"specialDates">,
+          title: formData.title,
+          description: formData.description,
+          date: formData.date,
+          repeat: formData.repeat === "si",
+          status: formData.status === "activo",
+        });
         toast.success("Fecha especial actualizada");
       } else {
-        await createSpecialDate(formData);
+        await createSpecialDate({
+          title: formData.title,
+          description: formData.description,
+          date: formData.date,
+          repeat: formData.repeat === "si",
+          status: formData.status === "activo",
+        });
         toast.success("Fecha especial creada");
       }
       setIsDialogOpen(false);
       setEditingDate(null);
-      await queryClient.invalidateQueries({ queryKey: ["special-dates"] });
     } catch {
       toast.error("Error al guardar la fecha especial");
     }

@@ -1,8 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import { Id } from "@convex/_generated/dataModel";
 import {
   Dialog,
   DialogContent,
@@ -26,14 +30,15 @@ import {
   FileText,
   Calculator,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import type { Request } from "../types";
-import { createPaymentRecord, type CreatePaymentDto } from "../utils/costs";
-import { usePaymentStatusesQuery } from "../hooks/use-payment-taxonomies";
 import { toast } from "sonner";
 
 const paymentSchema = z.object({
-  valuePerRequest: z.coerce.number().min(0, "El valor debe ser mínimo 0"),
+  baseValue: z.coerce.number().min(0, "El valor debe ser mínimo 0"),
+  additionalAmount: z.coerce.number().min(0, "El valor debe ser mínimo 0"),
+  discountAmount: z.coerce.number().min(0, "El valor debe ser mínimo 0"),
   observations: z.string().optional(),
 });
 
@@ -56,20 +61,47 @@ export function PaymentSummaryModal({
   distributorName,
   onSuccess,
 }: PaymentSummaryModalProps) {
-  const { data: statuses } = usePaymentStatusesQuery();
-  void statuses;
+  const createPayment = useMutation(api.payments.create);
+  
+  const calculatedBaseValue = selectedRequests.reduce((acc, req) => {
+    // Si existe valor priorizado, se toma ese como total. Si no, se toma el valor del servicio.
+    const serviceVal =req.serviceValue ;
+    const priorityVal =req.prioritizedValue  || 0;
+    const requestTotal = priorityVal > 0 ? priorityVal : serviceVal;
+    return requestTotal;
+  }, 0);
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
-      valuePerRequest: 0,
+      baseValue: calculatedBaseValue,
+      additionalAmount: 0,
+      discountAmount: 0,
       observations: "",
     },
   });
 
-  const valuePerRequest = form.watch("valuePerRequest") || 0;
+  const baseValue = Number(form.watch("baseValue") || 0);
+  const isBaseValueModified = baseValue !== calculatedBaseValue;
+  const additionalAmount = Number(form.watch("additionalAmount") || 0);
+  const discountAmount = Number(form.watch("discountAmount") || 0);
   const numRequests = selectedRequests.length;
-  const totalAmount = valuePerRequest * numRequests;
+  
+  // Total is base + additional - discount
+  const totalAmount = Math.max(0, (baseValue + additionalAmount) - discountAmount);
+
+  // Efecto para actualizar el valor base si cambian las solicitudes seleccionadas
+  useEffect(() => {
+    if (isOpen) {
+      const newVal = selectedRequests.reduce((acc, req) => {
+        const serviceVal = Number(req.serviceValue) || Number(req.field_service_value) || 0;
+        const priorityVal = Number(req.prioritizedValue) || Number(req.field_prioritized_value) || 0;
+        const requestTotal = priorityVal > 0 ? priorityVal : serviceVal;
+        return acc + requestTotal;
+      }, 0);
+      form.setValue("baseValue", newVal);
+    }
+  }, [selectedRequests, isOpen, form]);
 
   const { isSubmitting, isValid } = form.formState;
 
@@ -98,18 +130,17 @@ export function PaymentSummaryModal({
 
   const handleConfirm = async (values: PaymentFormValues) => {
     try {
-      const dto: CreatePaymentDto = {
+      await createPayment({
         title: `Pago de ${numRequests} solicitudes - ${distributorName}`,
         observations: values.observations || "",
-        additionalAmount: values.valuePerRequest * numRequests,
-        discountAmount: 0,
-        distributorId,
+        baseValue: values.baseValue,
+        additionalAmount: values.additionalAmount,
+        discountAmount: values.discountAmount,
+        totalAmount: totalAmount,
+        distributorId: distributorId as Id<"distributors">,
+        requestIds: selectedRequests.map((r) => r.id as Id<"requests">),
         status: "Pagado",
-        totalAmount: values.valuePerRequest * numRequests,
-        requests: selectedRequests.map((r) => r.id),
-      };
-
-      await createPaymentRecord(dto);
+      });
 
       toast.success("Pago realizado correctamente");
       onSuccess();
@@ -186,14 +217,14 @@ export function PaymentSummaryModal({
               <div className="space-y-4">
                 {sectionHeader(Calculator, "2. Cálculo del Valor:")}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
-                    name="valuePerRequest"
+                    name="baseValue"
                     render={({ field }) => (
                       <FormItem className="space-y-1.5">
                         <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                          Valor por Solicitud ($)
+                          Valor Base ($)
                         </FormLabel>
                         <FormControl>
                           <Input
@@ -203,12 +234,62 @@ export function PaymentSummaryModal({
                             {...field}
                           />
                         </FormControl>
+                        {isBaseValueModified && (
+                          <div className="flex items-center gap-1.5 mt-1.5 text-amber-600 bg-amber-50 px-2 py-1 rounded text-[10px] font-bold">
+                            <AlertTriangle className="size-3" />
+                            <span>Valor modificado (Orig: ${calculatedBaseValue.toLocaleString()})</span>
+                          </div>
+                        )}
                         <FormMessage className="text-[10px] font-bold" />
                       </FormItem>
                     )}
                   />
 
-                  <div className="space-y-1.5">
+                  <FormField
+                    control={form.control}
+                    name="additionalAmount"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Adicionales ($)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="0.00"
+                            className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm text-green-600"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage className="text-[10px] font-bold" />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="discountAmount"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1.5">
+                        <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Descuentos ($)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="0.00"
+                            className="h-10 bg-slate-50/50 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm text-red-600"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage className="text-[10px] font-bold" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="flex items-center gap-4 py-2">
+                   <div className="space-y-1.5 flex-1">
                     <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       Nº Solicitudes
                     </label>

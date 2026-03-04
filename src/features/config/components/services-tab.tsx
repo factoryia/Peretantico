@@ -1,7 +1,8 @@
 import { toast } from "sonner";
-import type { AxiosError } from "axios";
-import { useState, useTransition } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 
 import {
   Card,
@@ -11,73 +12,98 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AlertModal } from "@/components/common/alert-modal";
-import type { Service } from "@/features/config/types";
+import type { Service, ServiceField } from "@/features/config/types";
 import { ServiceTable } from "@/features/config/components/services/services-table";
 import { ServiceDialog } from "@/features/config/components/services/service-dialog";
-import { deleteService, fetchServices } from "@/features/config/utils/service";
-import { SERVICE_QUERY_KEY } from "../constants/query-keys";
 import { SearchInput } from "@/components/common/search-input";
 import { Paginator } from "@/components/common/paginator";
 
 export const ServicesTab = () => {
-  const queryClient = useQueryClient();
-
-  const [isPending, startTransition] = useTransition();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [serviceId, setServiceId] = useState("");
+  const [serviceId, setServiceId] = useState<string>("");
   const [editingService, setEditingService] = useState<Service | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const { data: servicesData, isLoading: isLoadingServices } = useQuery({
-    queryKey: [SERVICE_QUERY_KEY, searchTerm, currentPage, pageSize],
-    queryFn: () => fetchServices(searchTerm, currentPage, pageSize),
-    staleTime: 5 * 60 * 1000,
+  // Convex Query
+  const rawServices = useQuery(api.services.listAll);
+  const updateServiceMutation = useMutation(api.services.update);
+
+  // Map Convex services to frontend Service type
+  const mappedServices: Service[] = (rawServices || []).map((s: any) => {
+    const fields: ServiceField[] = (s.fields || []).map((f: any) => ({
+      id: f._id,
+      name: f.name,
+      code: f.code ?? null,
+      description: f.description ?? null,
+      type: f.type,
+      required: !!f.required,
+      multiple: !!f.multiple,
+      order: typeof f.order === "number" ? f.order : 0,
+      options: f.options ?? null,
+      status: !!f.status,
+      settings: f.settings ?? null,
+    }));
+
+    return {
+      id: s._id,
+      categoryId: "",
+      categoryName: "",
+      name: s.name,
+      description: s.description ?? undefined,
+      price: s.price ?? 0,
+      status: s.status ? "activo" : "inactivo",
+      creationDate: s._creationTime ? new Date(s._creationTime).toISOString().split('T')[0] : "",
+      fields,
+    };
   });
 
-  const services = servicesData?.services ?? [];
-  const totalPages = servicesData?.totalPages ?? 1;
+  // Client-side filtering and pagination
+  const filteredServices = searchTerm
+    ? mappedServices.filter((svc) =>
+        svc.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : mappedServices;
+
+  const totalPages = Math.max(1, Math.ceil(filteredServices.length / pageSize));
+  const start = (currentPage - 1) * pageSize;
+  const services = filteredServices.slice(start, start + pageSize);
+  const isLoadingServices = rawServices === undefined;
 
   const handleEdit = (service: Service) => {
     setEditingService(service);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = () => {
-    startTransition(async () => {
-      try {
-        await deleteService(serviceId);
+  const handleDelete = async () => {
+    try {
+      await updateServiceMutation({ 
+        id: serviceId as Id<"services">, 
+        status: false 
+      });
 
-        toast.success("Servicio eliminado", {
-          description: "El servicio fue eliminado correctamente.",
-        });
-
-        await queryClient.invalidateQueries({
-          queryKey: [SERVICE_QUERY_KEY, searchTerm, currentPage, pageSize],
-        });
-      } catch (error) {
-        const err = error as AxiosError<{ message: string }>;
-        toast.error("Error al eliminar el servicio", {
-          description:
-            err.response?.data?.message ??
-            "Ocurrió un error inesperado al eliminar el servicio.",
-        });
-      } finally {
-        setServiceId("");
-        setIsAlertOpen(false);
-      }
-    });
+      toast.success("Servicio desactivado", {
+        description: "El servicio fue desactivado correctamente.",
+      });
+    } catch (error) {
+      toast.error("Error al desactivar el servicio", {
+        description: "Ocurrió un error inesperado.",
+      });
+    } finally {
+      setServiceId("");
+      setIsAlertOpen(false);
+    }
   };
 
   return (
     <>
       <AlertModal
-        description="Esta acción no se puede deshacer. Se eliminará permanentemente el servicio seleccionado."
-        isSubmitting={isPending}
+        description="Esta acción cambiará el estado del servicio a inactivo."
+        isSubmitting={false}
         open={isAlertOpen}
         onSubmit={handleDelete}
         onOpenChange={(open) => {
@@ -142,8 +168,8 @@ export const ServicesTab = () => {
             <CardTitle>Lista de Servicios</CardTitle>
             <CardDescription>
               {isLoadingServices
-                ? "Loading services..."
-                : `${services.length} servicio(s) encontrado(s)`}
+                ? "Cargando servicios..."
+                : `${filteredServices.length} servicio(s) encontrado(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent>

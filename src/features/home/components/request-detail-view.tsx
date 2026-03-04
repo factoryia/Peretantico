@@ -4,6 +4,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Image } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { RequestHeader } from "./request-header";
 import { PatientDataCard } from "./patient-data-card";
 import { RequestDetailCard } from "./request-detail-card";
@@ -20,11 +22,11 @@ import type {
   PropertyCertificationInfoService,
   PropertyUnbundlingInfoService,
 } from "../utils/complete-request";
-import { useEffect, useState } from "react";
-import api from "@/api";
 import { toast } from "sonner";
-import { mapToDistributor } from "@/features/distributors/utils/distributors";
-import { API_BASE_URL } from "@/features/auth/constants";
+import { useRequestDetail } from "../hooks/use-request-detail";
+import { useMutation, useQuery } from "convex/react";
+import { api as convexApi } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 
 interface RequestDetailViewModalProps {
   isOpen: boolean;
@@ -38,52 +40,46 @@ interface RequestDetailViewModalProps {
 export function RequestDetailViewModal({
   isOpen,
   onOpenChange,
-  request,
-  onAssignDistributor,
-  onUpdateRequest,
+  request: initialRequest,
+  // onAssignDistributor,
+  // onUpdateRequest,
   isDistributor = false,
 }: RequestDetailViewModalProps) {
-  const [distributorsList, setDistributorsList] = useState<Distributor[]>([]);
+  // Fetch complete request details when modal is open and we have an ID
+  const { data: detailedRequest, isLoading: isDetailLoading } = useRequestDetail(
+    isOpen && initialRequest?.id ? initialRequest.id : null
+  );
 
-  useEffect(() => {
-    const fetchDistributorsForSelect = async () => {
-      try {
-        const response = await api.get("/distributors", {
-          params: {
-            limit: 100,
-          },
-        });
+  const updateRequestMutation = useMutation(convexApi.requests.update);
+  const assignDistributorMutation = useMutation(convexApi.requests.assignDistributor);
+  
+  // Fetch distributors directly from Convex
+  const distributorsData = useQuery(convexApi.distributors.listAll, {});
 
-        const raw = response.data;
+  // Use detailed request if available, otherwise fallback to initial
+  const request = detailedRequest || initialRequest;
 
-        const items =
-          Array.isArray(raw) && raw.length > 0
-            ? raw
-            : raw &&
-              typeof raw === "object" &&
-              Array.isArray((raw as { data?: unknown }).data)
-            ? (raw as { data: unknown[] }).data
-            : [];
+  // Transform data to match our interface with safety checks
+  const distributorsList: Distributor[] = Array.isArray(distributorsData)
+    ? (distributorsData as any[]).map((item: any) => ({
+        id: item._id as string,
+        name: (item.title as string) || (item.name as string) || "Sin nombre",
+      }))
+    : [];
 
-        const distributors = items
-          .filter((item) => item && typeof item === "object")
-          .map((item) => mapToDistributor(item as Record<string, unknown>))
-          .map((dist) => ({
-            id: dist.id,
-            name: dist.title || "Sin nombre",
-          }));
-
-        setDistributorsList(distributors);
-      } catch (error) {
-        console.error("Error fetching distributors:", error);
-        setDistributorsList([]);
-      }
-    };
-
-    if (isOpen) {
-      fetchDistributorsForSelect();
-    }
-  }, [isOpen]);
+  // Add current distributor if not in list
+  if (
+    request?.distributor?.id &&
+    !distributorsList.find((d) => d.id === request.distributor?.id)
+  ) {
+    distributorsList.push({
+      id: request.distributor.id,
+      name:
+        (request.distributor as any).title ||
+        (request.distributor as any).name ||
+        "Repartidor Actual",
+    });
+  }
 
   // Datos de ejemplo para adjuntos (placeholder)
 
@@ -92,24 +88,35 @@ export function RequestDetailViewModal({
     logisticsCost: number;
     distributorId: string;
   }) => {
-    try {
-      await onAssignDistributor(data.distributorId);
+    if (!request) return;
 
-      if (onUpdateRequest && request) {
-        await onUpdateRequest(request.id, {
-          data: {
-            type: "node--request",
-            id: request.id,
-            attributes: {
-              title: request.title,
-              field_prioritized_value: data.serviceValue,
-              field_logistics_costs: data.logisticsCost,
-            },
-          },
+    try {
+      if (data.distributorId) {
+        // Use Convex mutation for assignment if possible, or fallback to prop if logic is complex
+        // The prop onAssignDistributor might handle legacy logic or refetching
+        // Let's try to use the Convex mutation directly for consistency
+        await assignDistributorMutation({ 
+            id: request.id as Id<"requests">, 
+            distributorId: data.distributorId as Id<"distributors"> 
         });
+        
+        // Also call the prop to notify parent if needed (e.g. for table refresh)
+        // But onAssignDistributor expects a promise void.
+        // If we use convex mutation, we might not need to call onAssignDistributor if we invalidate queries via Convex
+        // But let's keep calling it for now to maintain behavior
+        // actually, let's skip onAssignDistributor prop if we are fully convex
       }
 
+      await updateRequestMutation({
+        id: request.id as Id<"requests">,
+        serviceValue: data.serviceValue,
+        logisticsCosts: data.logisticsCost,
+        // We might want to update prioritizedValue too if it's mapped to serviceValue in UI
+        prioritizedValue: data.serviceValue, 
+      });
+
       toast.success("Solicitud actualizada correctamente.");
+      onOpenChange(false);
     } catch (error) {
       console.error("Error al actualizar la solicitud desde el detalle:", error);
       toast.error("Error al actualizar la solicitud");
@@ -166,12 +173,12 @@ export function RequestDetailViewModal({
 
   const mapRequestStatusToLabel = (status?: string | null) => {
     switch (status) {
-      case "Atendida":
-        return "Atendida";
-      case "EnProceso":
-        return "En proceso";
       case "Finalizada":
         return "Finalizada";
+      case "Atendida":
+        return "Finalizada";
+      case "EnProceso":
+        return "En proceso";
       case "Incompleta":
         return "Incompleta";
       default:
@@ -322,16 +329,22 @@ export function RequestDetailViewModal({
             />
 
             {/* Datos del Servicio (solo visualización) */}
-            {Array.isArray(request.data) && request.data.length > 0 && (
+            {(Array.isArray(request.data) && request.data.length > 0) || (isDetailLoading && !request.data) ? (
               <div className="p-4">
                 <h4 className="font-semibold mb-2">
                   {request.subservice?.name ||
                     request.infoService?.type ||
                     "Datos del Servicio"}
                 </h4>
+                {isDetailLoading && (!request.data || request.data.length === 0) ? (
+                    <div className="animate-pulse space-y-3">
+                        <div className="h-10 bg-gray-100 rounded w-full"></div>
+                        <div className="h-10 bg-gray-100 rounded w-full"></div>
+                    </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {request.data
-                    .sort(
+                    ?.sort(
                       (a, b) => (a.field?.order ?? 0) - (b.field?.order ?? 0)
                     )
                     .map((d) => {
@@ -365,12 +378,7 @@ export function RequestDetailViewModal({
 
                       const rawUrl =
                         typeof d.value === "string" ? d.value : undefined;
-                      const href =
-                        rawUrl && rawUrl.startsWith("http")
-                          ? rawUrl
-                          : rawUrl
-                          ? `${API_BASE_URL}${rawUrl}`
-                          : "";
+                      const href = rawUrl;
 
                       const isFileField = field?.type === "File";
 
@@ -401,9 +409,34 @@ export function RequestDetailViewModal({
                       );
                     })}
                 </div>
+                )}
               </div>
-            )}
+            ) : null}
           </div>
+
+          {/* Evidencia de Entrega */}
+          {request.evidenceUrl && (
+            <div className="bg-white overflow-hidden px-6 py-7 border-b">
+              <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold flex items-center gap-2.5 pb-4">
+                <Image className="size-5 text-blue-600" />
+                Evidencia de Entrega
+              </div>
+              <div className="rounded-lg border p-4 bg-gray-50 flex flex-col items-center gap-4">
+                <img
+                  src={request.evidenceUrl}
+                  alt="Evidencia de entrega"
+                  className="max-w-full h-auto rounded-md object-contain max-h-[400px]"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.open(request.evidenceUrl, "_blank")}
+                >
+                  Ver en tamaño completo
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Segunda fila de tarjetas */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))]">

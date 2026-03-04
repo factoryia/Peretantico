@@ -1,9 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchPayments } from "../utils/costs";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
 
 export const usePaymentsQuery = (params: { page?: number; limit?: number } = {}) => {
-  return useQuery({
-    queryKey: ["payments", params],
-    queryFn: () => fetchPayments(params),
+  const data = useQuery(api.payments.listPayments, {
+    page: params.page,
+    limit: params.limit,
   });
+
+  return {
+    data,
+    isLoading: data === undefined,
+  };
 };

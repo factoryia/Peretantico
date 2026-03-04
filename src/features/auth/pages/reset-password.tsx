@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Info, Loader2, User } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 import {
   Form,
@@ -12,12 +13,10 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import api from "@/api";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormWrapper } from "@/features/auth/components/form-wrapper";
-import { isAxiosError } from "axios";
 
 const resetPasswordSchema = z
   .object({
@@ -31,6 +30,7 @@ type FormValues = z.infer<typeof resetPasswordSchema>;
 
 export function ResetPassword() {
   const navigate = useNavigate();
+  const { signIn } = useAuthActions();
 
   const title =
     "Por favor, ingrese su nombre de usuario o correo electrónico asociada a su cuenta para enviarte las indicaciones.";
@@ -46,31 +46,12 @@ export function ResetPassword() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      const existEmailRes = await api.get("/api/user-email-verifications", {
-        params: {
-          email: values.mail,
-        },
-      });
-
-      if (existEmailRes.status === 200) {
-        const res = await api.post("/user/lost-password?_format=json", values);
-
-        if (res.status === 200) {
-          toast.message(res.data.message);
-          navigate("/nueva-contraseña");
-        }
-      }
+      await signIn("password", { email: values.mail, flow: "reset" });
+      toast.success("Código de verificación enviado a tu correo.");
+      navigate("/nueva-contraseña");
     } catch (error) {
-      console.log(error)
-      if (isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.message ||
-          "Algo salió mal. Por favor intentalo otra vez.";
-
-        toast.error(errorMessage);
-      } else {
-        toast.error("Un error inesperado ha ocurrido.");
-      }
+      console.log(error);
+      toast.error("Error al solicitar el restablecimiento. Verifica el correo e intenta nuevamente.");
     }
   };
 
