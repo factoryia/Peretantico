@@ -4,7 +4,6 @@ import { api } from "@convex/_generated/api"
 import { 
   fetchRequests, 
   fetchSubservices, 
-  fetchDistributors,
   fetchPaymentStatuses,
   fetchUsedChannels,
   fetchApplicationStatuses,
@@ -12,7 +11,6 @@ import {
   fetchSubservicesByService
 } from "../utils/request"
 import { fetchAllActiveCategories } from "@/features/config/utils/category"
-import { fetchServices } from "@/features/config/utils/service"
 import type { RequestFilters } from "../types/request"
 
 export const REQUESTS_QUERY_KEY = "requests"

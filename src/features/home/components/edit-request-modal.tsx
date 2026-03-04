@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import {
   Loader,
@@ -47,7 +47,6 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
 import { uploadServiceFieldFile } from "@/features/home/utils/evidence";
-import { useServicesQuery } from "@/features/home/hooks/use-request-query";
 import type {
   EditRequestFormData,
   Applicant,
@@ -156,13 +155,15 @@ export function EditRequestModal({
     applicants.push({
       id: request.applicant.id,
       fullName:
-        request.applicant.fullName ||
-        request.applicant.name ||
+        (request.applicant as any).fullName ||
+        (request.applicant as any).name ||
         "Cliente Actual",
-      documentNumber: request.applicant.documentNumber || "",
-      documentType: request.applicant.documentType?.name || "",
-      phone: request.applicant.phoneNumber || "",
-      email: request.applicant.email || "",
+      documentNumber: (request.applicant as any).documentNumber || "",
+      documentType: (request.applicant as any).documentType?.name || "",
+      birthDate: (request.applicant as any).birthDate || "",
+      gender: (request.applicant as any).gender || "",
+      phone: (request.applicant as any).phoneNumber || "",
+      email: (request.applicant as any).email || "",
     });
   }
 
@@ -455,7 +456,12 @@ export function EditRequestModal({
                     <FormItem>
                       <FormLabel>Fecha de entrada *</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <Input
+                          type="date"
+                          {...field}
+                          value={(field.value as string) ?? ""}
+                          onChange={field.onChange}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -928,7 +934,7 @@ export function EditRequestModal({
                     </div>
                     <FormControl>
                       <Switch
-                        checked={field.value}
+                        checked={Boolean(field.value)}
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>

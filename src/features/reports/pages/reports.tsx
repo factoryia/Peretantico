@@ -352,7 +352,10 @@ export function Reports() {
       }
 
       // Map to CompleteRequest structure (simplified for export)
-      const exportData = data.map((req: any) => ({
+      const items = Array.isArray(data)
+        ? data
+        : (typeof data === "object" ? ((data as any).data || (data as any).page || []) : []);
+      const exportData = items.map((req: any) => ({
         "ID Solicitud": req.applicationNumber || "",
         "Fecha Creación": new Date(req._creationTime).toLocaleDateString("es-CO"),
         "Título": req.title || "",

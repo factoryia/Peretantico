@@ -1,6 +1,5 @@
 import { toast } from "sonner";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 import type { CurrentUser } from "@/features/auth/types";
 

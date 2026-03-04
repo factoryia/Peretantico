@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 
-const sendEmail = async (to: string, subject: string, html: string) => {
+const sendEmail = async (to: string, subject: string, _html: string) => {
   // Placeholder para envío de correos
   // Anteriormente se usaba nodemailer
   console.log(`[Simulación] Enviando correo a ${to}: ${subject}`);

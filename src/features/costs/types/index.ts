@@ -75,6 +75,8 @@ export interface Request {
     id: string;
     name: string;
   };
+  field_service_value?: number;
+  field_prioritized_value?: number;
 }
 
 export interface DistributorWithRequests extends Distributor {

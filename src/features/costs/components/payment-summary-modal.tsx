@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { Id } from "@convex/_generated/dataModel";
+import type { Id } from "@convex/_generated/dataModel";
 import {
   Dialog,
   DialogContent,
@@ -64,15 +64,14 @@ export function PaymentSummaryModal({
   const createPayment = useMutation(api.payments.create);
   
   const calculatedBaseValue = selectedRequests.reduce((acc, req) => {
-    // Si existe valor priorizado, se toma ese como total. Si no, se toma el valor del servicio.
-    const serviceVal =req.serviceValue ;
-    const priorityVal =req.prioritizedValue  || 0;
+    const serviceVal = Number(req.serviceValue) || 0;
+    const priorityVal = Number(req.prioritizedValue) || 0;
     const requestTotal = priorityVal > 0 ? priorityVal : serviceVal;
-    return requestTotal;
+    return acc + requestTotal;
   }, 0);
 
   const form = useForm<PaymentFormValues>({
-    resolver: zodResolver(paymentSchema),
+    resolver: zodResolver(paymentSchema) as any,
     defaultValues: {
       baseValue: calculatedBaseValue,
       additionalAmount: 0,
@@ -94,8 +93,8 @@ export function PaymentSummaryModal({
   useEffect(() => {
     if (isOpen) {
       const newVal = selectedRequests.reduce((acc, req) => {
-        const serviceVal = Number(req.serviceValue) || Number(req.field_service_value) || 0;
-        const priorityVal = Number(req.prioritizedValue) || Number(req.field_prioritized_value) || 0;
+        const serviceVal = Number(req.serviceValue) || 0;
+        const priorityVal = Number(req.prioritizedValue) || 0;
         const requestTotal = priorityVal > 0 ? priorityVal : serviceVal;
         return acc + requestTotal;
       }, 0);
@@ -211,7 +210,7 @@ export function PaymentSummaryModal({
           {/* SECTION 2: CALCULATION FORM */}
           <Form {...form}>
             <form
-              onSubmit={form.handleSubmit(handleConfirm)}
+              onSubmit={form.handleSubmit(handleConfirm) as any}
               className="space-y-6"
             >
               <div className="space-y-4">

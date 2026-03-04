@@ -108,7 +108,7 @@ export function CustomerForm({ customer, mode, onCancel }: CustomerFormProps) {
   };
 
   const form = useForm<z.infer<typeof customerSchema>>({
-    resolver: zodResolver(customerSchema),
+    resolver: zodResolver(customerSchema) as any,
     defaultValues: customer
       ? normalizeCustomerData(customer)
       : {

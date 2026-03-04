@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { Id } from "@convex/_generated/dataModel";
+import type { Id } from "@convex/_generated/dataModel";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import { useAuthStore } from "@/features/auth/stores/use-auth-store";
 import type { Request } from "../types";
 import {
   Calculator,
-  Loader2,
   Wallet,
   Filter,
   CheckCircle2,
@@ -111,7 +110,7 @@ export default function CostManagementPage() {
        createdAt: new Date(p._creationTime).toISOString(),
        updatedAt: new Date(p._creationTime).toISOString(), // Fallback since Convex doesn't track updates automatically in metadata
        title: p.title,
-       observations: p.observations || null,
+       observations: p.observations || undefined,
        totalAmount: p.totalAmount || 0,
        status: p.status || "Completed",
        baseValue: p.baseValue || 0,
@@ -123,7 +122,7 @@ export default function CostManagementPage() {
 
   const isLoadingHistory = rawPaymentHistory === undefined;
 
-  const createPaymentMutation = useMutation(api.payments.create);
+  // const createPaymentMutation = useMutation(api.payments.create);
 
   // --- Opciones para el select de repartidores ---
   const distributorOptions = useMemo(() => {

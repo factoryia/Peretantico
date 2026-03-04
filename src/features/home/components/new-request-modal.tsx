@@ -361,7 +361,12 @@ export function NewRequestModal({
                   <FormItem>
                     <FormLabel>Fecha de Entrada <RequiredDot /></FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input
+                        type="date"
+                        {...field}
+                        value={(field.value as string) ?? ""}
+                        onChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -448,7 +453,7 @@ export function NewRequestModal({
                       <FormLabel>Servicio <RequiredDot /></FormLabel>
                       <Select
                         onValueChange={handleServiceChange}
-                        defaultValue={field.value}
+                        defaultValue={field.value as string | undefined}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -705,7 +710,7 @@ export function NewRequestModal({
                                             : "text"
                                         }
                                         {...formField}
-                                        value={formField.value || ""}
+                                        value={(formField.value as string) ?? ""}
                                       />
                                     </FormControl>
                                     {field.description && (
@@ -738,6 +743,7 @@ export function NewRequestModal({
                         step="0.01"
                         placeholder="0"
                         {...field}
+                        value={field.value as number | string | undefined}
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value) || 0)
                         }
@@ -768,7 +774,7 @@ export function NewRequestModal({
                       <FormControl>
                         <Select
                           onValueChange={field.onChange}
-                          value={field.value || ""}
+                          value={(field.value as string) ?? ""}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -805,7 +811,7 @@ export function NewRequestModal({
                       <FormControl>
                         <div className="flex items-center gap-3">
                           <Switch
-                            checked={field.value}
+                            checked={Boolean(field.value)}
                             onCheckedChange={field.onChange}
                           />
                           <span className="text-xs text-gray-500">

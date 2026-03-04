@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { Doc } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import { action, internalQuery, query, internalMutation } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -292,7 +292,7 @@ export const updatePassword = action({
        if (!targetUserId) throw new Error("Target user ID missing");
        
        // 1. Prepare swap (rename old user)
-       const { tempEmail, originalEmail } = await ctx.runMutation(internal.users.prepareUserForSwap, {
+       const { originalEmail } = await ctx.runMutation(internal.users.prepareUserForSwap, {
          userId: targetUserId
        });
        

@@ -254,7 +254,10 @@ export const ServiceDialog = ({
                       type="number"
                       placeholder="Ingrese el precio del servicio"
                       {...field}
-                      onChange={(e) => field.onChange(e.target.value)}
+                      value={Number(field.value ?? 0)}
+                      onChange={(e) =>
+                        field.onChange(Number(e.target.value) || 0)
+                      }
                     />
                   </FormControl>
                   <FormMessage />
@@ -503,9 +506,9 @@ export const ServiceDialog = ({
                                 <FormControl>
                                   <NumberInput
                                     type="number"
-                                    value={field.value ?? 0}
+                                    value={Number(field.value ?? 0)}
                                     onChange={(e) =>
-                                      field.onChange(e.target.value)
+                                      field.onChange(Number(e.target.value) || 0)
                                     }
                                   />
                                 </FormControl>

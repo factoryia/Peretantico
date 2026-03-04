@@ -47,7 +47,6 @@ export function DistributorRequestCard({
   // Convex mutations
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const updateRequest = useMutation(api.requests.update);
-  const addAttachment = useMutation(api.profiles.addAttachment); // We might want a generic attachment mutation or use requests update directly
 
   const mapRequestStatusToLabel = (status?: string | null) => {
     switch (status) {
