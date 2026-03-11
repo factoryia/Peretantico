@@ -8,14 +8,108 @@ const http = httpRouter();
 
 auth.addHttpRoutes(http);
 
+function parseYCloudSignatureHeader(value: string): { timestamp: string; signature: string } | null {
+  const parts = value
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  let timestamp: string | undefined;
+  let signature: string | undefined;
+
+  for (const part of parts) {
+    const [k, ...rest] = part.split("=");
+    const key = (k ?? "").trim();
+    const val = rest.join("=").trim();
+    if (!key || !val) continue;
+    if (key === "t") timestamp = val;
+    if (key === "s") signature = val;
+  }
+
+  if (!timestamp || !signature) return null;
+  return { timestamp, signature };
+}
+
+function toHex(bytes: ArrayBuffer): string {
+  const view = new Uint8Array(bytes);
+  let hex = "";
+  for (const b of view) hex += b.toString(16).padStart(2, "0");
+  return hex;
+}
+
+async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  return toHex(sig);
+}
+
+function secureEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
+
 const webhookYCloud = httpAction(async (ctx, request) => {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  let rawBody: string;
+  try {
+    rawBody = await request.text();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid request body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const webhookSecret = process.env.WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const ycloudSigHeader = request.headers.get("ycloud-signature")?.trim();
+    let ycloudVerified = false;
+
+    if (ycloudSigHeader) {
+      const parsed = parseYCloudSignatureHeader(ycloudSigHeader);
+      const toleranceSeconds = Number.parseInt(process.env.WEBHOOK_TOLERANCE_SECONDS || "300", 10);
+      if (parsed) {
+        const ts = Number.parseInt(parsed.timestamp, 10);
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        if (Number.isFinite(ts) && Math.abs(nowSeconds - ts) <= toleranceSeconds) {
+          const signedPayload = `${parsed.timestamp}.${rawBody}`;
+          const computed = await hmacSha256Hex(webhookSecret, signedPayload);
+          ycloudVerified = secureEqual(computed, parsed.signature);
+        }
+      }
+    }
+
+    const headerSecret = request.headers.get("x-webhook-secret")?.trim();
+    const authHeader = request.headers.get("authorization")?.trim();
+    const bearerSecret =
+      authHeader && authHeader.toLowerCase().startsWith("bearer ")
+        ? authHeader.slice("bearer ".length).trim()
+        : undefined;
+    const legacyVerified = headerSecret === webhookSecret || bearerSecret === webhookSecret;
+
+    if (!ycloudVerified && !legacyVerified) {
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(rawBody) as unknown;
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -51,6 +145,7 @@ const webhookYCloud = httpAction(async (ctx, request) => {
   let text: string;
   let mediaUrl: string | undefined;
   let mediaType: "image" | "video" | "audio" | "document" | undefined;
+  let mediaFilename: string | undefined;
 
   if (wim) {
     const from = (wim.from ?? "").trim();
@@ -85,6 +180,7 @@ const webhookYCloud = httpAction(async (ctx, request) => {
     } else if (wim.type === "document") {
       mediaUrl = wim.document?.link;
       mediaType = "document";
+      mediaFilename = wim.document?.filename?.trim() || undefined;
       text = wim.document?.caption?.trim() || wim.document?.filename || "Documento";
     } else if (wim.type === "sticker") {
       mediaUrl = wim.sticker?.link;
@@ -128,6 +224,7 @@ const webhookYCloud = httpAction(async (ctx, request) => {
       text,
       mediaUrl,
       mediaType,
+      mediaFilename,
     });
   } catch {
     return new Response(JSON.stringify({ ok: true, received: true, processed: false }), {
@@ -146,6 +243,41 @@ http.route({
   path: "/webhooks/ycloud",
   method: "POST",
   handler: webhookYCloud,
+});
+
+const publicRequest = httpAction(async (ctx, request) => {
+  if (request.method !== "GET") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token")?.trim();
+  if (!token) {
+    return new Response(JSON.stringify({ error: "Missing token" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const requestId = await ctx.runQuery(anyApi.whatsappBotState.getRequestIdByShareToken, { token });
+  if (!requestId) {
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const data = await ctx.runQuery(anyApi.requests.get, { id: requestId });
+  return new Response(JSON.stringify({ ok: true, data }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+});
+
+http.route({
+  path: "/public/request",
+  method: "GET",
+  handler: publicRequest,
 });
 
 export default http;

@@ -1,6 +1,15 @@
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { anyApi } from "convex/server";
+import { internal } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { tanticoAgent } from "./system/ai/agents/tanticoAgent";
+import { searchProfileByNumber } from "./system/ai/tools/searchProfileByNumber";
+import { getSpecialDateToday } from "./system/ai/tools/getSpecialDateToday";
+import { listServices } from "./system/ai/tools/listServices";
+import { getServiceFields } from "./system/ai/tools/getServiceFields";
+import { validateServiceField } from "./system/ai/tools/validateServiceField";
+import { createRequest } from "./system/ai/tools/createRequest";
 
 type MediaType = "image" | "video" | "audio" | "document";
 
@@ -10,71 +19,6 @@ function normalizeWhatsAppContactId(raw: string): string {
   const num = trimmed.replace(/\s/g, "");
   if (!num) return "whatsapp:+unknown";
   return `whatsapp:${num.startsWith("+") ? num : `+${num}`}`;
-}
-
-async function generateBotReply(args: {
-  customerName?: string;
-  text: string;
-  history: { direction: "INBOUND" | "OUTBOUND"; content: string }[];
-}): Promise<string | null> {
-  const prompt = [
-    "Eres un asistente virtual. Responde en texto plano, con saltos de línea cuando ayude. Sé breve y útil.",
-    args.customerName ? `Cliente: ${args.customerName}` : "",
-    args.history.length
-      ? `Historial:\n${args.history
-          .map((m) => `${m.direction === "INBOUND" ? "Cliente" : "Asistente"}: ${m.content}`)
-          .join("\n")}`
-      : "",
-    `Cliente dice:\n${args.text}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
-
-  if (openaiKey) {
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.4,
-      }),
-    });
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-      error?: { message?: string };
-    };
-    if (!res.ok) throw new Error(data.error?.message ?? res.statusText);
-    return data.choices?.[0]?.message?.content?.trim() || null;
-  }
-
-  if (geminiKey) {
-    const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(geminiKey)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      }),
-    });
-    const data = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-      error?: { message?: string };
-    };
-    if (!res.ok) throw new Error(data.error?.message ?? res.statusText);
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    return text.trim() || null;
-  }
-
-  return null;
 }
 
 async function sendWhatsAppText(args: { contactId: string; content: string }): Promise<string | null> {
@@ -117,11 +61,13 @@ export const processInboundMessage = internalAction({
     mediaType: v.optional(
       v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
     ),
+    mediaFilename: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const internalAny = anyApi;
-
     const contactId = normalizeWhatsAppContactId(args.contactId);
+
+    // 1. Dedupe event
     const dedupe = await ctx.runMutation(internalAny.ycloudState.recordProcessedEvent, {
       eventId: args.eventId,
     });
@@ -129,6 +75,7 @@ export const processInboundMessage = internalAction({
 
     await ctx.runMutation(internalAny.ycloudState.markConnected, {});
 
+    // 2. Record Inbound Message
     await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
       contactId,
       customerName: args.customerName,
@@ -137,24 +84,121 @@ export const processInboundMessage = internalAction({
       mediaType: args.mediaType as MediaType | undefined,
     });
 
-    const history = (await ctx.runQuery(internalAny.ycloudState.listRecentMessages, {
-      contactId,
-      limit: 12,
-    })) as { direction: "INBOUND" | "OUTBOUND"; content: string }[];
+    // 3. Check Mute
+    const botMuted = await ctx.runQuery(internalAny.ycloudState.getEffectiveMute, { contactId });
+    if (botMuted) return;
 
-    const reply = await generateBotReply({
+    // 4. Ensure Session & Thread
+    // Ensure applicant exists (user tracking)
+    await ctx.runMutation(internalAny.whatsappBotState.ensureApplicant, {
+      contactId,
+      phoneNumber: contactId.replace(/^whatsapp:/, ""),
       customerName: args.customerName,
-      text: args.text,
-      history,
     });
-    if (!reply) return;
 
-    const providerMessageId = await sendWhatsAppText({ contactId, content: reply });
-    if (!providerMessageId) return;
-    await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+    // Ensure session exists
+    const sessionId = await ctx.runMutation(internalAny.whatsappBotState.ensureSession, {
       contactId,
-      content: reply,
+    });
+    const session = await ctx.runQuery(internalAny.whatsappBotState.getSessionByContact, {
+      contactId,
+    });
+
+    if (!session) return; 
+
+    let threadId = session.threadId as string | undefined;
+    if (!threadId) {
+        const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId}` });
+        threadId = created.threadId;
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          threadId,
+        });
+    }
+
+    // 5. Run Agent
+    const tools = {
+        searchProfileByNumber,
+        getSpecialDateToday,
+        listServices,
+        getServiceFields,
+        validateServiceField,
+        createRequest
+    };
+
+    const contextPrompt = `
+[Contexto técnico]
+contactId: ${contactId}
+phoneNumber: ${contactId.replace(/^whatsapp:/, "")}
+mediaUrl: ${args.mediaUrl || "N/A"}
+[Fin contexto técnico]
+
+${args.text}
+    `.trim();
+
+    try {
+        const response = await tanticoAgent.generateText(ctx, { threadId }, {
+            prompt: contextPrompt,
+            tools: tools as any
+        });
+
+        // The agent response should be the text reply.
+        // If it returns an object, we handle it, but typically it returns a string if just text.
+        // We'll treat it as string.
+        let replyText = typeof response === 'string' ? response : (response as any)?.text;
+        
+        if (!replyText) {
+             // Fallback: list messages if needed, or assume empty response
+             const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 5, cursor: null } });
+             const lastMsg = messages.page.find((m: any) => m.message?.role === 'assistant');
+             if (lastMsg) {
+                 const content = lastMsg.message?.content;
+                 replyText = Array.isArray(content) ? content.map((c: any) => c.text).join("") : content as string;
+             }
+        }
+
+        if (replyText) {
+             const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
+             if (providerMessageId) {
+                 await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+                     contactId,
+                     content: replyText,
+                     providerMessageId
+                 });
+             }
+        }
+    } catch (error) {
+        console.error("Agent error:", error);
+    }
+  },
+});
+
+export const sendManualMessage = action({
+  args: { contactId: v.string(), content: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("No autorizado");
+
+    const contactId = normalizeWhatsAppContactId(args.contactId);
+    const content = args.content.trim();
+    if (!content) throw new Error("Mensaje vacío");
+
+    const providerMessageId = await sendWhatsAppText({ contactId, content });
+    if (!providerMessageId) throw new Error("YCLOUD no está configurado");
+
+    await ctx.runMutation(internal.ycloudState.addOutboundMessage, {
+      contactId,
+      content,
       providerMessageId,
     });
+
+    await ctx.runMutation(internal.ycloudState.setHandoffMutation, {
+      contactId,
+      muted: true,
+      durationMs: 1000 * 60 * 60 * 2,
+      updatedBy: userId,
+    });
+
+    return { providerMessageId };
   },
 });

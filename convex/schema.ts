@@ -36,6 +36,7 @@ export default defineSchema({
     documentStorageId: v.optional(v.id("_storage")),
   })
     .index("by_documentNumber", ["documentNumber"])
+    .index("by_phoneNumber", ["phoneNumber"])
     .index("by_userId", ["userId"]),
 
   // Services and dynamic fields
@@ -228,4 +229,54 @@ export default defineSchema({
   })
     .index("by_contact", ["contactId"])
     .index("by_contact_created", ["contactId", "createdAt"]),
+
+  ycloudHandoffs: defineTable({
+    contactId: v.string(),
+    muted: v.boolean(),
+    mutedUntil: v.optional(v.number()),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.id("users")),
+  }).index("by_contact", ["contactId"]),
+
+  botApplicants: defineTable({
+    contactId: v.string(),
+    phoneNumber: v.string(),
+    profileId: v.optional(v.id("profiles")),
+    fullName: v.optional(v.string()),
+    documentType: v.optional(v.string()),
+    documentNumber: v.optional(v.string()),
+    email: v.optional(v.string()),
+    address: v.optional(v.string()),
+    state: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_contact", ["contactId"])
+    .index("by_phone", ["phoneNumber"])
+    .index("by_profile", ["profileId"]),
+
+  botSessions: defineTable({
+    contactId: v.string(),
+    profileId: v.optional(v.id("profiles")),
+    threadId: v.optional(v.string()),
+    serviceId: v.optional(v.id("services")),
+    fieldIds: v.optional(v.array(v.id("serviceFields"))),
+    currentFieldIndex: v.optional(v.number()),
+    data: v.any(),
+    attachments: v.any(),
+    state: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_contact", ["contactId"])
+    .index("by_profile", ["profileId"]),
+
+  requestShareLinks: defineTable({
+    token: v.string(),
+    requestId: v.id("requests"),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_request", ["requestId"]),
 });

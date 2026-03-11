@@ -14,6 +14,7 @@ export const serviceFieldSchema = z.object({
     .optional()
     .or(z.literal("")),
   description: z.string().max(500, "Máximo 500 caracteres").optional(),
+  options: z.string().optional(),
   type: fieldTypeEnum,
   required: z.boolean().default(false),
   multiple: z.boolean().default(false),

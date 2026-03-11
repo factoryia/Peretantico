@@ -279,6 +279,26 @@ export const addAttachment = mutation({
   },
 });
 
+export const findByPhoneNumber = query({
+  args: { phoneNumber: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("profiles")
+      .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", args.phoneNumber))
+      .first();
+  },
+});
+
+export const findByDocumentNumber = query({
+  args: { documentNumber: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("profiles")
+      .withIndex("by_documentNumber", (q) => q.eq("documentNumber", args.documentNumber))
+      .first();
+  },
+});
+
 export const removeAttachment = mutation({
   args: {
     attachmentId: v.id("attachments"),

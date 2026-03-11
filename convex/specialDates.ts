@@ -1,6 +1,17 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 
+function parseMonthDay(date: string): string | null {
+  const t = date.trim();
+  const isoDateTime = t.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (isoDateTime) return `${isoDateTime[2]}-${isoDateTime[3]}`;
+  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[2]}-${iso[3]}`;
+  const monthDay = t.match(/^(\d{2})-(\d{2})$/);
+  if (monthDay) return `${monthDay[1]}-${monthDay[2]}`;
+  return null;
+}
+
 // List special dates with optional search
 export const list = query({
   args: {
@@ -16,6 +27,24 @@ export const list = query({
         .collect();
     }
     return await ctx.db.query("specialDates").order("desc").collect();
+  },
+});
+
+export const getTodayForGreeting = query({
+  args: {
+    today: v.string(),
+    monthDay: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const active = await ctx.db
+      .query("specialDates")
+      .filter((q) => q.eq(q.field("status"), true))
+      .collect();
+
+    const exact = active.find((d) => (d.date || "").trim().slice(0, 10) === args.today);
+    if (exact) return exact;
+
+    return active.find((d) => d.repeat === true && parseMonthDay(d.date) === args.monthDay) ?? null;
   },
 });
 

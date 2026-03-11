@@ -12,6 +12,7 @@ import { Configuration } from "./features/config/pages/configuration";
 import { UsersPage } from "./features/users/pages/users";
 import CostPage from "@/features/costs/pages/page";
 import Client from "./features/client/pages/client";
+import { InboxPage } from "@/features/inbox/pages/inbox";
 
 import { AuthLayout } from "@/features/auth/components/auth-layout";
 import { Login } from "@/features/auth/pages/login";
@@ -59,6 +60,7 @@ export default function App() {
                 <Route path="/configuraciones" element={<Configuration />} />
                 <Route path="/clientes" element={<Client />} />
                 <Route path="/costos" element={<CostPage />} />
+                <Route path="/inbox" element={<InboxPage />} />
               </Route>
             </Route>
           </Route>

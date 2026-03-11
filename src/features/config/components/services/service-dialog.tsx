@@ -48,6 +48,25 @@ interface Props {
   setIsDialogOpen: (value: boolean) => void;
 }
 
+function optionsToString(options: any): string {
+  if (!options || !options.items || !Array.isArray(options.items)) return "";
+  return options.items.map((item: any) => item.label).join("\n");
+}
+
+function stringToOptions(str: string | undefined): any {
+  if (!str) return undefined;
+  const items = str
+    .split(/\r?\n/)
+    .map((s) => {
+      const trimmed = s.trim();
+      return { label: trimmed, value: trimmed };
+    })
+    .filter((i) => i.label.length > 0);
+
+  if (items.length === 0) return undefined;
+  return { items };
+}
+
 export const ServiceDialog = ({
   open,
   editingService,
@@ -76,6 +95,7 @@ export const ServiceDialog = ({
           multiple: f.multiple,
           order: f.order,
           status: f.status,
+          options: optionsToString(f.options),
         })) ?? [],
     },
   });
@@ -114,6 +134,7 @@ export const ServiceDialog = ({
             multiple: f.multiple,
             order: f.order,
             status: f.status,
+            options: optionsToString(f.options),
           })) ?? [],
       });
     }
@@ -135,7 +156,7 @@ export const ServiceDialog = ({
           typeof field.order === "number" && !Number.isNaN(field.order)
             ? field.order
             : index,
-        options: undefined,
+        options: stringToOptions(field.options),
         status: field.status ?? true,
         settings: undefined,
       }));
@@ -321,6 +342,7 @@ export const ServiceDialog = ({
                       multiple: false,
                       order: fields.length,
                       status: true,
+                      options: "",
                     })
                   }
                 >
@@ -443,6 +465,32 @@ export const ServiceDialog = ({
                             )}
                           />
                         </div>
+
+                        {currentField.type === "Select" && (
+                          <FormField
+                            control={form.control}
+                            name={`fields.${index}.options`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  Opciones <RequiredDot />
+                                </FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Opción 1&#10;Opción 2&#10;Opción 3"
+                                    className="resize-none"
+                                    {...field}
+                                    value={(field.value as string) || ""}
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Escriba una opción por línea.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
 
                         <FormField
                           control={form.control}
