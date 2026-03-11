@@ -2,6 +2,46 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
+function normalizePhoneDigits(input: string): string {
+  return (input ?? "").replace(/[^\d+]/g, "").trim();
+}
+
+function canonicalPhoneNumber(raw: string): string {
+  const t = normalizePhoneDigits(raw);
+  const noPlus = t.replace(/^\+/, "");
+  const digits = noPlus.replace(/\D/g, "");
+  if (!digits) return t;
+  if (digits.length === 10 && digits.startsWith("3")) return `+57${digits}`;
+  if (digits.length === 12 && digits.startsWith("57")) return `+${digits}`;
+  if (t.startsWith("+")) return t;
+  return digits;
+}
+
+function phoneVariants(raw: string): string[] {
+  const t = normalizePhoneDigits(raw);
+  if (!t) return [];
+
+  const noPlus = t.replace(/^\+/, "");
+  const digitsOnly = noPlus.replace(/\D/g, "");
+
+  const variants = new Set<string>();
+  variants.add(t);
+  variants.add(noPlus);
+  if (digitsOnly) variants.add(digitsOnly);
+
+  if (digitsOnly.length === 10 && digitsOnly.startsWith("3")) {
+    variants.add(`+57${digitsOnly}`);
+    variants.add(`57${digitsOnly}`);
+  }
+
+  if (digitsOnly.length === 12 && digitsOnly.startsWith("57")) {
+    variants.add(`+${digitsOnly}`);
+    variants.add(digitsOnly.slice(2));
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -52,6 +92,13 @@ export const getMe = query({
     );
 
     return { ...profile, roles: roles.filter(r => r !== null) };
+  },
+});
+
+export const get = query({
+  args: { id: v.id("profiles") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
   },
 });
 
@@ -202,6 +249,8 @@ export const createCustomer = mutation({
     gender: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const normalizedPhone = canonicalPhoneNumber(args.phoneNumber);
+
     // Check if profile with same document number exists
     const existing = await ctx.db
       .query("profiles")
@@ -212,11 +261,17 @@ export const createCustomer = mutation({
       throw new Error("Ya existe un cliente con este número de documento");
     }
 
+    const existingByPhone = await ctx.db
+      .query("profiles")
+      .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", normalizedPhone))
+      .first();
+    if (existingByPhone) return existingByPhone._id;
+
     const id = await ctx.db.insert("profiles", {
       fullName: args.fullName,
       documentType: args.documentType,
       documentNumber: args.documentNumber,
-      phoneNumber: args.phoneNumber,
+      phoneNumber: normalizedPhone,
       email: args.email,
       address: args.address,
       department: args.department,
@@ -282,10 +337,14 @@ export const addAttachment = mutation({
 export const findByPhoneNumber = query({
   args: { phoneNumber: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query("profiles")
-      .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", args.phoneNumber))
-      .first();
+    for (const variant of phoneVariants(args.phoneNumber)) {
+      const profile = await ctx.db
+        .query("profiles")
+        .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", variant))
+        .first();
+      if (profile) return profile;
+    }
+    return null;
   },
 });
 

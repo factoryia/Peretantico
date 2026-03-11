@@ -44,15 +44,28 @@ export const addInboundMessage = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("ycloudMessages", {
+    const createdAt = Date.now();
+    const messageId = await ctx.db.insert("ycloudMessages", {
       contactId: args.contactId,
       direction: "INBOUND",
       customerName: args.customerName,
       content: args.content,
       mediaUrl: args.mediaUrl,
       mediaType: args.mediaType,
-      createdAt: Date.now(),
+      createdAt,
     });
+    return { messageId, createdAt };
+  },
+});
+
+export const getLastMessageByContact = internalQuery({
+  args: { contactId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("ycloudMessages")
+      .withIndex("by_contact_created", (q) => q.eq("contactId", args.contactId))
+      .order("desc")
+      .first();
   },
 });
 

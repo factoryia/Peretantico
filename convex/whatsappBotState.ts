@@ -1,5 +1,46 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+function normalizePhoneDigits(input: string): string {
+  return (input ?? "").replace(/[^\d+]/g, "").trim();
+}
+
+function canonicalPhoneNumber(raw: string): string {
+  const t = normalizePhoneDigits(raw);
+  const noPlus = t.replace(/^\+/, "");
+  const digits = noPlus.replace(/\D/g, "");
+  if (!digits) return t;
+  if (digits.length === 10 && digits.startsWith("3")) return `+57${digits}`;
+  if (digits.length === 12 && digits.startsWith("57")) return `+${digits}`;
+  if (t.startsWith("+")) return t;
+  return digits;
+}
+
+function phoneVariants(raw: string): string[] {
+  const t = normalizePhoneDigits(raw);
+  if (!t) return [];
+
+  const noPlus = t.replace(/^\+/, "");
+  const digitsOnly = noPlus.replace(/\D/g, "");
+
+  const variants = new Set<string>();
+  variants.add(t);
+  variants.add(noPlus);
+  if (digitsOnly) variants.add(digitsOnly);
+
+  if (digitsOnly.length === 10 && digitsOnly.startsWith("3")) {
+    variants.add(`+57${digitsOnly}`);
+    variants.add(`57${digitsOnly}`);
+  }
+
+  if (digitsOnly.length === 12 && digitsOnly.startsWith("57")) {
+    variants.add(`+${digitsOnly}`);
+    variants.add(digitsOnly.slice(2));
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
 
 export const getApplicantByContact = internalQuery({
   args: { contactId: v.string() },
@@ -29,6 +70,73 @@ export const ensureApplicant = internalMutation({
       if (!existing.fullName && args.customerName?.trim()) {
         updates.fullName = args.customerName.trim();
       }
+      if (!existing.phoneNumber && args.phoneNumber.trim()) {
+        updates.phoneNumber = args.phoneNumber.trim();
+      }
+
+      let profileId = existing.profileId ?? null;
+      if (profileId) {
+        const profile = await ctx.db.get(profileId);
+        if (!profile) profileId = null;
+      }
+
+      if (!profileId) {
+        const normalizedPhone = canonicalPhoneNumber(existing.phoneNumber || args.phoneNumber);
+        let foundProfile: { _id?: Id<"profiles"> } | null = null;
+        for (const v of phoneVariants(normalizedPhone)) {
+          foundProfile = await ctx.db
+            .query("profiles")
+            .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", v))
+            .first();
+          if (foundProfile) break;
+        }
+
+        if (!foundProfile && existing.documentNumber) {
+          foundProfile = await ctx.db
+            .query("profiles")
+            .withIndex("by_documentNumber", (q) => q.eq("documentNumber", existing.documentNumber!))
+            .first();
+        }
+
+        if (!foundProfile && existing.fullName && existing.documentType && existing.documentNumber) {
+          const existingDoc = await ctx.db
+            .query("profiles")
+            .withIndex("by_documentNumber", (q) => q.eq("documentNumber", existing.documentNumber!))
+            .first();
+          if (existingDoc) {
+            foundProfile = existingDoc;
+          } else {
+            const existingPhone = await ctx.db
+              .query("profiles")
+              .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", normalizedPhone))
+              .first();
+            if (existingPhone) {
+              foundProfile = existingPhone;
+            } else {
+              const createdProfileId = await ctx.db.insert("profiles", {
+                fullName: existing.fullName,
+                documentType: existing.documentType,
+                documentNumber: existing.documentNumber,
+                phoneNumber: normalizedPhone,
+                email: existing.email,
+                address: existing.address,
+              });
+              foundProfile = await ctx.db.get(createdProfileId);
+            }
+          }
+        }
+
+        if (foundProfile?._id) {
+          updates.profileId = foundProfile._id;
+          updates.state = "HAS_PROFILE";
+        } else {
+          updates.state = "NEEDS_PROFILE";
+        }
+      } else {
+        updates.profileId = profileId;
+        updates.state = "HAS_PROFILE";
+      }
+
       if (Object.keys(updates).length > 1) {
         await ctx.db.patch(existing._id, updates);
       } else {
@@ -37,11 +145,22 @@ export const ensureApplicant = internalMutation({
       return existing._id;
     }
 
+    const normalizedPhone = canonicalPhoneNumber(args.phoneNumber);
+    let foundProfile: { _id?: Id<"profiles"> } | null = null;
+    for (const v of phoneVariants(normalizedPhone)) {
+      foundProfile = await ctx.db
+        .query("profiles")
+        .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", v))
+        .first();
+      if (foundProfile) break;
+    }
+
     const id = await ctx.db.insert("botApplicants", {
       contactId: args.contactId,
-      phoneNumber: args.phoneNumber,
+      phoneNumber: normalizedPhone,
+      profileId: foundProfile?._id,
       fullName: args.customerName?.trim() || undefined,
-      state: "NEEDS_PROFILE",
+      state: foundProfile ? "HAS_PROFILE" : "NEEDS_PROFILE",
       createdAt: now,
       updatedAt: now,
     });

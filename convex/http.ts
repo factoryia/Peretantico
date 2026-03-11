@@ -23,7 +23,7 @@ function parseYCloudSignatureHeader(value: string): { timestamp: string; signatu
     const val = rest.join("=").trim();
     if (!key || !val) continue;
     if (key === "t") timestamp = val;
-    if (key === "s") signature = val;
+    if (key === "s" || key === "v1") signature = val;
   }
 
   if (!timestamp || !signature) return null;
@@ -35,6 +35,12 @@ function toHex(bytes: ArrayBuffer): string {
   let hex = "";
   for (const b of view) hex += b.toString(16).padStart(2, "0");
   return hex;
+}
+
+async function sha256Hex(payload: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(payload));
+  return toHex(digest);
 }
 
 async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
@@ -214,10 +220,11 @@ const webhookYCloud = httpAction(async (ctx, request) => {
     });
   }
 
-  const eventId = (body as { id?: string })?.id ?? `evt_${Date.now()}_${contactId}`;
+  const providedId = (body as { id?: string })?.id?.trim();
+  const eventId = providedId || `evt_${(await sha256Hex(rawBody)).slice(0, 24)}_${contactId}`;
 
   try {
-    await ctx.runAction(anyApi.ycloudBot.processInboundMessage, {
+    await ctx.scheduler.runAfter(0, anyApi.ycloudBot.processInboundMessage, {
       eventId,
       contactId,
       customerName,
@@ -227,13 +234,13 @@ const webhookYCloud = httpAction(async (ctx, request) => {
       mediaFilename,
     });
   } catch {
-    return new Response(JSON.stringify({ ok: true, received: true, processed: false }), {
+    return new Response(JSON.stringify({ ok: true, received: true, scheduled: false }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  return new Response(JSON.stringify({ ok: true, received: true }), {
+  return new Response(JSON.stringify({ ok: true, received: true, scheduled: true }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

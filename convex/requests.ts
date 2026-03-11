@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 // import { paginationOptsValidator } from "convex/server";
 
 export const list = query({
@@ -123,6 +124,16 @@ export const get = query({
         .collect(),
     ]);
 
+    const attachmentsWithUrls = await Promise.all(
+      attachments.map(async (a) => {
+        if (a.storageId) {
+          const storageUrl = await ctx.storage.getUrl(a.storageId as unknown as Id<"_storage">);
+          if (storageUrl) return { ...a, url: storageUrl };
+        }
+        return a;
+      })
+    );
+
     const dataWithFields = await Promise.all(
       requestData.map(async (data) => {
         const field = await ctx.db.get(data.fieldId);
@@ -134,11 +145,11 @@ export const get = query({
             // Convex storage IDs are alphanumeric strings. 
             // We'll attempt to get a URL, if it returns null, we keep the original value
             try {
-                const url = await ctx.storage.getUrl(value as any);
+                const url = await ctx.storage.getUrl(value as unknown as Id<"_storage">);
                 if (url) {
                     value = url;
                 }
-            } catch (e) {
+            } catch {
                 // Not a valid storage ID, ignore
             }
         }
@@ -158,7 +169,7 @@ export const get = query({
       service,
       distributor,
       data: dataWithFields,
-      attachments,
+      attachments: attachmentsWithUrls,
       evidenceUrl,
     };
   },
