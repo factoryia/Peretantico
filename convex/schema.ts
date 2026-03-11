@@ -210,6 +210,13 @@ export default defineSchema({
     eventId: v.string(),
   }).index("by_event_id", ["eventId"]),
 
+  ycloudProcessingLocks: defineTable({
+    contactId: v.string(),
+    lockedUntil: v.number(),
+    ownerEventId: v.string(),
+    updatedAt: v.number(),
+  }).index("by_contact", ["contactId"]),
+
   ycloudMessages: defineTable({
     contactId: v.string(),
     direction: v.union(v.literal("INBOUND"), v.literal("OUTBOUND")),

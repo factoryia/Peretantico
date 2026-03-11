@@ -56,7 +56,8 @@ FLUJO OBLIGATORIO
    - Cada vez que el usuario responda un dato, valida con validateServiceField.
    - Si el campo es tipo 'File' y el usuario envía un archivo (mediaUrl), pásalo a validateServiceField como mediaUrl.
    - Si el dato es inválido, explica el error y vuelve a pedir el mismo campo.
-   - Para campos tipo 'File', NO guardes la URL de YCloud como definitiva: al crear la solicitud usa createRequest para almacenarla en Convex.
+   - Para campos tipo 'File', NO muestres ni repitas URLs de YCloud. En el resumen usa "Archivo adjunto recibido".
+   - Para campos tipo 'File', guarda el archivo en Convex Storage (vía herramientas) y conserva el storageId.
 
 6) CONFIRMACIÓN FINAL Y CREACIÓN
    - Antes de crear la solicitud, resume los datos capturados y pregunta si todo está correcto.

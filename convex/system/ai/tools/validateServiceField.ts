@@ -3,6 +3,45 @@ import { jsonSchema } from "ai";
 import { anyApi } from "convex/server";
 import type { Id } from "../../../_generated/dataModel";
 
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function looksTruncatedUrl(value: string): boolean {
+  const t = value.trim();
+  return isHttpUrl(t) && t.includes("...");
+}
+
+function inferFileName(url: string): string | undefined {
+  try {
+    const u = new URL(url);
+    const base = u.pathname.split("/").filter(Boolean).pop();
+    return base ? decodeURIComponent(base) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function downloadAndStoreUrl(
+  ctx: { storage: { store: (blob: Blob) => Promise<Id<"_storage">>; getUrl: (id: Id<"_storage">) => Promise<string | null> } },
+  url: string
+): Promise<{ storageId: Id<"_storage">; url: string } | null> {
+  const headers: Record<string, string> = {};
+  const apiKey = process.env.YCLOUD_API_KEY;
+  if (apiKey) headers["X-API-Key"] = apiKey;
+
+  const res = await fetch(url, { headers });
+  if (!res.ok) return null;
+
+  const contentType = res.headers.get("content-type") ?? undefined;
+  const arrayBuffer = await res.arrayBuffer();
+  const blob = new Blob([arrayBuffer], contentType ? { type: contentType } : undefined);
+  const storageId = await ctx.storage.store(blob);
+  const storedUrl = await ctx.storage.getUrl(storageId);
+  if (!storedUrl) return null;
+  return { storageId, url: storedUrl };
+}
+
 function normalizeForMatch(input: string): string {
   return input
     .normalize("NFD")
@@ -69,6 +108,7 @@ export const validateServiceField = createTool({
     const fieldId = args.fieldId.trim();
     const raw = (args.value ?? "").trim();
     const mediaUrl = (args.mediaUrl ?? "").trim();
+    const fileName = (args.fileName ?? "").trim();
     if (!serviceId || !fieldId) return { ok: false, message: "Falta serviceId o fieldId." };
 
     const service = (await ctx.runQuery(anyApi.services.get, {
@@ -89,6 +129,29 @@ export const validateServiceField = createTool({
 
     const type = String(field.type ?? "Text");
     const required = Boolean(field.required);
+
+    if (type === "File") {
+      const sourceUrl = mediaUrl || (isHttpUrl(raw) ? raw : "");
+      if (!sourceUrl) {
+        if (required) return { ok: false, message: `Para "${field.name}", necesito que envíe el archivo.` };
+        return { ok: true, normalizedValue: "" };
+      }
+      if (looksTruncatedUrl(sourceUrl)) {
+        return { ok: false, message: `El enlace del archivo llegó incompleto. Por favor reenvía el archivo.` };
+      }
+
+      const storageCtx = ctx as unknown as {
+        storage: { store: (blob: Blob) => Promise<Id<"_storage">>; getUrl: (id: Id<"_storage">) => Promise<string | null> };
+      };
+      const stored = await downloadAndStoreUrl(storageCtx, sourceUrl);
+      if (!stored) return { ok: false, message: `No pude descargar el archivo. Por favor reenvía el archivo.` };
+
+      return {
+        ok: true,
+        normalizedValue: stored.storageId,
+        file: { storageId: String(stored.storageId), url: stored.url, fileName: fileName || inferFileName(sourceUrl) },
+      };
+    }
 
     if (!raw) {
       if (required) return { ok: false, message: `El campo "${field.name}" es obligatorio.` };
@@ -124,12 +187,6 @@ export const validateServiceField = createTool({
         ok: false,
         message: `Para "${field.name}", elija una opción válida: ${options.join(", ")}.`,
       };
-    }
-
-    if (type === "File") {
-      if (mediaUrl) return { ok: true, normalizedValue: mediaUrl };
-      if (/^https?:\/\//i.test(raw)) return { ok: true, normalizedValue: raw };
-      return { ok: false, message: `Para "${field.name}", necesito que envíe el archivo.` };
     }
 
     return { ok: true, normalizedValue: raw };

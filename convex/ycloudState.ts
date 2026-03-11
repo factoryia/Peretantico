@@ -15,6 +15,57 @@ export const recordProcessedEvent = internalMutation({
   },
 });
 
+export const acquireProcessingLock = internalMutation({
+  args: { contactId: v.string(), ownerEventId: v.string(), ttlMs: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const ttlMs = Math.max(250, Math.min(args.ttlMs ?? 15_000, 60_000));
+    const existing = await ctx.db
+      .query("ycloudProcessingLocks")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+      .first();
+
+    if (existing && existing.lockedUntil > now && existing.ownerEventId !== args.ownerEventId) {
+      return { ok: false, lockedUntil: existing.lockedUntil };
+    }
+
+    const lockedUntil = now + ttlMs;
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        lockedUntil,
+        ownerEventId: args.ownerEventId,
+        updatedAt: now,
+      });
+      return { ok: true, lockId: existing._id, lockedUntil };
+    }
+
+    const id = await ctx.db.insert("ycloudProcessingLocks", {
+      contactId: args.contactId,
+      lockedUntil,
+      ownerEventId: args.ownerEventId,
+      updatedAt: now,
+    });
+    return { ok: true, lockId: id, lockedUntil };
+  },
+});
+
+export const releaseProcessingLock = internalMutation({
+  args: { contactId: v.string(), ownerEventId: v.string() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("ycloudProcessingLocks")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+      .first();
+    if (!existing) return { ok: true };
+    if (existing.ownerEventId !== args.ownerEventId) return { ok: false };
+    await ctx.db.patch(existing._id, {
+      lockedUntil: 0,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
 export const markConnected = internalMutation({
   args: {},
   handler: async (ctx) => {

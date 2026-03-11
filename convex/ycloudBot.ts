@@ -62,21 +62,6 @@ function normalizeForMatch(input: string): string {
     .trim();
 }
 
-function getBogotaDateStrings(now: Date): { iso: string; monthDay: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Bogota",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const year = parts.find((p) => p.type === "year")?.value;
-  const month = parts.find((p) => p.type === "month")?.value;
-  const day = parts.find((p) => p.type === "day")?.value;
-  const iso = `${year}-${month}-${day}`;
-  const monthDay = `${month}-${day}`;
-  return { iso, monthDay };
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -149,143 +134,185 @@ export const processInboundMessage = internalAction({
       v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
     ),
     mediaFilename: v.optional(v.string()),
+    attempt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const internalAny = anyApi;
     const contactId = normalizeWhatsAppContactId(args.contactId);
 
-    // 1. Dedupe event
-    const dedupe = await ctx.runMutation(internalAny.ycloudState.recordProcessedEvent, {
-      eventId: args.eventId,
-    });
-    if (dedupe?.duplicate) return;
+    let hasLock = false;
+    try {
+      const attempt = Math.max(0, Math.min(args.attempt ?? 0, 25));
+      const lock = await ctx.runMutation(internalAny.ycloudState.acquireProcessingLock, {
+        contactId,
+        ownerEventId: args.eventId,
+        ttlMs: 15_000,
+      });
+      if (!lock?.ok) {
+        if (attempt >= 25) return;
+        await ctx.scheduler.runAfter(250, internalAny.ycloudBot.processInboundMessage, {
+          ...args,
+          contactId,
+          attempt: attempt + 1,
+        });
+        return;
+      }
+      hasLock = true;
 
-    await ctx.runMutation(internalAny.ycloudState.markConnected, {});
+      const dedupe = await ctx.runMutation(internalAny.ycloudState.recordProcessedEvent, {
+        eventId: args.eventId,
+      });
+      if (dedupe?.duplicate) return;
 
-    // 2. Record Inbound Message
-    await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
-      contactId,
-      customerName: args.customerName,
-      content: args.text,
-      mediaUrl: args.mediaUrl,
-      mediaType: args.mediaType as MediaType | undefined,
-    });
+      await ctx.runMutation(internalAny.ycloudState.markConnected, {});
 
-    // 3. Check Mute
-    const botMuted = await ctx.runQuery(internalAny.ycloudState.getEffectiveMute, { contactId });
-    if (botMuted) return;
+      await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
+        contactId,
+        customerName: args.customerName,
+        content: args.text,
+        mediaUrl: args.mediaUrl,
+        mediaType: args.mediaType as MediaType | undefined,
+      });
 
-    // 4. Ensure Session & Thread
-    // Ensure applicant exists (user tracking)
-    await ctx.runMutation(internalAny.whatsappBotState.ensureApplicant, {
-      contactId,
-      phoneNumber: contactId.replace(/^whatsapp:/, ""),
-      customerName: args.customerName,
-    });
+      const botMuted = await ctx.runQuery(internalAny.ycloudState.getEffectiveMute, { contactId });
+      if (botMuted) return;
 
-    const applicant = await ctx.runQuery(internalAny.whatsappBotState.getApplicantByContact, { contactId });
-    const applicantProfileId = (applicant as { profileId?: string | null })?.profileId ?? null;
-    const applicantDocumentNumber = (applicant as { documentNumber?: string | null })?.documentNumber ?? null;
+      await ctx.runMutation(internalAny.whatsappBotState.ensureApplicant, {
+        contactId,
+        phoneNumber: contactId.replace(/^whatsapp:/, ""),
+        customerName: args.customerName,
+      });
 
-    // Ensure session exists
-    const sessionId = await ctx.runMutation(internalAny.whatsappBotState.ensureSession, {
-      contactId,
-      profileId: applicantProfileId ? (applicantProfileId as unknown as Id<"profiles">) : undefined,
-    });
-    const session = await ctx.runQuery(internalAny.whatsappBotState.getSessionByContact, {
-      contactId,
-    });
+      const applicant = await ctx.runQuery(internalAny.whatsappBotState.getApplicantByContact, { contactId });
+      const applicantProfileId = (applicant as { profileId?: string | null })?.profileId ?? null;
+      const applicantDocumentNumber = (applicant as { documentNumber?: string | null })?.documentNumber ?? null;
 
-    if (!session) return; 
+      const sessionId = await ctx.runMutation(internalAny.whatsappBotState.ensureSession, {
+        contactId,
+        profileId: applicantProfileId ? (applicantProfileId as unknown as Id<"profiles">) : undefined,
+      });
+      const session = await ctx.runQuery(internalAny.whatsappBotState.getSessionByContact, {
+        contactId,
+      });
 
-    let threadId = session.threadId as string | undefined;
-    if (!threadId) {
+      if (!session) return;
+
+      let threadId = session.threadId as string | undefined;
+      if (!threadId) {
         const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId}` });
         threadId = created.threadId;
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
           threadId,
         });
-    }
-
-    let resolvedProfile: { _id?: unknown; fullName?: unknown } | null = null;
-    if (session.profileId) {
-      resolvedProfile = await ctx.runQuery(internalAny.profiles.get, { id: session.profileId });
-    }
-    if (!resolvedProfile && applicantProfileId) {
-      resolvedProfile = await ctx.runQuery(internalAny.profiles.get, { id: applicantProfileId });
-    }
-    if (!resolvedProfile && applicantDocumentNumber) {
-      resolvedProfile = await ctx.runQuery(internalAny.profiles.findByDocumentNumber, {
-        documentNumber: applicantDocumentNumber,
-      });
-    }
-    if (!resolvedProfile) {
-      const rawPhone = contactId.replace(/^whatsapp:/, "");
-      for (const v of phoneVariants(rawPhone)) {
-        resolvedProfile = await ctx.runQuery(internalAny.profiles.findByPhoneNumber, { phoneNumber: v });
-        if (resolvedProfile) break;
       }
-    }
 
-    const resolvedProfileId = resolvedProfile?._id ? String(resolvedProfile._id) : null;
-    if (resolvedProfileId && (!session.profileId || String(session.profileId) !== resolvedProfileId)) {
-      await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
-        id: sessionId,
-        profileId: resolvedProfileId as unknown as Id<"profiles">,
-      });
-    }
-
-    const rawText = (args.text ?? "").trim();
-    const normalizedCommand = normalizeForMatch(rawText);
-    const isResetCommand =
-      normalizedCommand === "reset" ||
-      normalizedCommand === "/reset" ||
-      normalizedCommand === "reiniciar" ||
-      normalizedCommand === "/reiniciar" ||
-      normalizedCommand === "resetear" ||
-      normalizedCommand === "borrar" ||
-      normalizedCommand === "borrar memoria";
-
-    if (isResetCommand) {
-      const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId} (reset)` });
-      await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
-        id: sessionId,
-        threadId: created.threadId,
-        serviceId: undefined,
-        fieldIds: undefined,
-        currentFieldIndex: undefined,
-        data: {},
-        attachments: [],
-        state: "INIT",
-      });
-
-      const replyText = [
-        "Listo. Reinicié la conversación.",
-        "¿Qué servicio necesitas hoy?",
-      ].join("\n");
-      const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-      if (providerMessageId) {
-        await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-          contactId,
-          content: replyText,
-          providerMessageId,
+      let resolvedProfile: { _id?: unknown; fullName?: unknown } | null = null;
+      if (session.profileId) {
+        resolvedProfile = await ctx.runQuery(internalAny.profiles.get, { id: session.profileId });
+      }
+      if (!resolvedProfile && applicantProfileId) {
+        resolvedProfile = await ctx.runQuery(internalAny.profiles.get, { id: applicantProfileId });
+      }
+      if (!resolvedProfile && applicantDocumentNumber) {
+        resolvedProfile = await ctx.runQuery(internalAny.profiles.findByDocumentNumber, {
+          documentNumber: applicantDocumentNumber,
         });
       }
-      return;
-    }
+      if (!resolvedProfile) {
+        const rawPhone = contactId.replace(/^whatsapp:/, "");
+        for (const v of phoneVariants(rawPhone)) {
+          resolvedProfile = await ctx.runQuery(internalAny.profiles.findByPhoneNumber, { phoneNumber: v });
+          if (resolvedProfile) break;
+        }
+      }
 
-    // 5. Run Agent
-    const tools = {
+      const resolvedProfileId = resolvedProfile?._id ? String(resolvedProfile._id) : null;
+      if (resolvedProfileId && (!session.profileId || String(session.profileId) !== resolvedProfileId)) {
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          profileId: resolvedProfileId as unknown as Id<"profiles">,
+        });
+      }
+
+      const rawText = (args.text ?? "").trim();
+      const normalizedCommand = normalizeForMatch(rawText);
+      const isResetCommand =
+        normalizedCommand === "reset" ||
+        normalizedCommand === "/reset" ||
+        normalizedCommand === "reiniciar" ||
+        normalizedCommand === "/reiniciar" ||
+        normalizedCommand === "resetear" ||
+        normalizedCommand === "borrar" ||
+        normalizedCommand === "borrar memoria";
+
+      if (isResetCommand) {
+        const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId} (reset)` });
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          threadId: created.threadId,
+          serviceId: undefined,
+          fieldIds: undefined,
+          currentFieldIndex: undefined,
+          data: {},
+          attachments: [],
+          state: "INIT",
+        });
+
+        const replyText = ["Listo. Reinicié la conversación.", "¿Qué servicio necesitas hoy?"].join("\n");
+        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
+        if (providerMessageId) {
+          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+            contactId,
+            content: replyText,
+            providerMessageId,
+          });
+        }
+        return;
+      }
+
+      const wantsServices =
+        normalizedCommand === "que servicios tiene" ||
+        normalizedCommand === "que servicios tienen" ||
+        normalizedCommand === "que servicios hay" ||
+        normalizedCommand === "servicios" ||
+        normalizedCommand === "servicios disponibles" ||
+        normalizedCommand.includes("que servicios") ||
+        normalizedCommand.includes("servicios tiene");
+      if (wantsServices) {
+        const all = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{ name?: string; price?: number; status?: boolean }>;
+        const lines = [
+          "Aquí tienes la lista de servicios disponibles:",
+          "",
+          ...(all || [])
+            .filter((s) => s.status !== false)
+            .map((s) => `- ${String(s.name ?? "").trim()}${typeof s.price === "number" ? ` - $${s.price.toLocaleString("es-CO")}` : ""}`)
+            .filter((l) => l !== "- "),
+          "",
+          "¿Cuál de estos servicios necesitas?",
+        ];
+        const replyText = lines.join("\n");
+        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
+        if (providerMessageId) {
+          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+            contactId,
+            content: replyText,
+            providerMessageId,
+          });
+        }
+        return;
+      }
+
+      const tools = {
         searchProfileByNumber,
         getSpecialDateToday,
         listServices,
         getServiceFields,
         validateServiceField,
-        createRequest
-    } satisfies ToolSet;
+        createRequest,
+      } satisfies ToolSet;
 
-    const contextPrompt = `
+      const contextPrompt = `
 [Contexto técnico]
 contactId: ${contactId}
 phoneNumber: ${contactId.replace(/^whatsapp:/, "")}
@@ -303,65 +330,59 @@ capturedDataKeys: ${session.data ? Object.keys(session.data).join(", ") : "N/A"}
 ${args.text}
     `.trim();
 
-    try {
-        const response = await tanticoAgent.generateText(ctx, { threadId }, {
-            prompt: contextPrompt,
-            tools
-        });
+      const response = await tanticoAgent.generateText(ctx, { threadId }, {
+        prompt: contextPrompt,
+        tools,
+      });
 
-        let replyText = response.text ?? "";
-        replyText = replyText.trim();
+      let replyText = response.text ?? "";
+      replyText = replyText.trim();
         
-        if (!replyText) {
-          const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
-          const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
-          if (lastAssistant) {
-            const content = lastAssistant.message?.content;
-            replyText = extractTextFromMessageContent(content).trim();
-          }
+      if (!replyText) {
+        const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
+        const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
+        if (lastAssistant) {
+          const content = lastAssistant.message?.content;
+          replyText = extractTextFromMessageContent(content).trim();
         }
+      }
 
-        if (replyText) {
-          const allServices = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
-            name?: string;
-            status?: boolean;
-          }>;
-          const serviceNames = (allServices || []).filter((s) => s.status !== false).map((s) => String(s.name ?? "").trim()).filter(Boolean);
-          const normalizedReply = normalizeForMatch(replyText);
-          const matchesAnyService = serviceNames.some((name) => normalizedReply.includes(normalizeForMatch(name)));
-          const looksLikeServiceList = normalizedReply.includes("servicios disponibles") || normalizedReply.includes("- servicio") || normalizedReply.includes("servicio de");
-
-          if (looksLikeServiceList && serviceNames.length > 0 && !matchesAnyService) {
-            const today = getBogotaDateStrings(new Date());
-            const special = await ctx.runQuery(internalAny.specialDates.getTodayForGreeting, {
-              today: today.iso,
-              monthDay: today.monthDay,
-            });
-            const specialLine = special?.title ? `Hoy celebramos el *${special.title}*.` : "";
-            const lines = [
-              "¡Hola! Soy Tantico, tu asistente virtual.",
-              specialLine,
-              "Voy a mostrarte los servicios disponibles:",
-              ...serviceNames.map((n) => `- ${n}`),
-              "",
-              "¿Cuál de estos servicios necesitas?",
-            ].filter((l) => l !== "");
-            replyText = lines.join("\n");
-          }
+      if (replyText) {
+        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
+        if (providerMessageId) {
+          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+            contactId,
+            content: replyText,
+            providerMessageId,
+          });
         }
-
-        if (replyText) {
-             const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-             if (providerMessageId) {
-                 await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-                     contactId,
-                     content: replyText,
-                     providerMessageId
-                 });
-             }
-        }
+      }
     } catch (error) {
-        console.error("Agent error:", error);
+      console.error("Bot error:", error);
+      const replyText = "Tuve un problema procesando tu mensaje. Por favor intenta de nuevo en unos segundos.";
+      try {
+        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
+        if (providerMessageId) {
+          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+            contactId,
+            content: replyText,
+            providerMessageId,
+          });
+        }
+      } catch (sendError) {
+        console.error("Bot send error:", sendError);
+      }
+    } finally {
+      if (hasLock) {
+        try {
+          await ctx.runMutation(internalAny.ycloudState.releaseProcessingLock, {
+            contactId,
+            ownerEventId: args.eventId,
+          });
+        } catch (releaseError) {
+          console.error("Lock release error:", releaseError);
+        }
+      }
     }
   },
 });

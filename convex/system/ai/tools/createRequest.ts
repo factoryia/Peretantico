@@ -220,8 +220,10 @@ export const createRequest = createTool({
 
     const requiredFields = (service.fields || []).filter((f) => f.status !== false && f.required === true);
     const fieldTypeById = new Map<string, string>();
+    const fieldNameById = new Map<string, string>();
     for (const f of service.fields || []) {
       fieldTypeById.set(String(f._id), String(f.type ?? "Text"));
+      fieldNameById.set(String(f._id), String(f.name ?? ""));
     }
     const provided = new Map<string, unknown>();
     for (const item of args.data || []) {
@@ -257,6 +259,10 @@ export const createRequest = createTool({
           normalizedData.push({ fieldId, value: stored.storageId });
           continue;
         }
+        return {
+          ok: false,
+          message: `No pude guardar el archivo para "${fieldNameById.get(fieldId) || "Archivo"}". Por favor reenvía el archivo.`,
+        };
       }
 
       normalizedData.push({ fieldId, value });
@@ -276,6 +282,7 @@ export const createRequest = createTool({
           });
           continue;
         }
+        return { ok: false, message: `No pude guardar el adjunto "${fileName || "Adjunto"}". Por favor reenvíalo.` };
       }
       normalizedAttachments.push({ fileName: fileName || "Adjunto", url, storageId: a.storageId });
     }

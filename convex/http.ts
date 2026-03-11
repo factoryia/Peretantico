@@ -232,6 +232,7 @@ const webhookYCloud = httpAction(async (ctx, request) => {
       mediaUrl,
       mediaType,
       mediaFilename,
+      attempt: 0,
     });
   } catch {
     return new Response(JSON.stringify({ ok: true, received: true, scheduled: false }), {
