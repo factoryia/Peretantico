@@ -198,4 +198,34 @@ export default defineSchema({
   })
     .index("by_payment", ["paymentId"])
     .index("by_request", ["requestId"]),
+
+  ycloudStatus: defineTable({
+    connected: v.boolean(),
+    connectedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  }),
+
+  ycloudProcessedEvents: defineTable({
+    eventId: v.string(),
+  }).index("by_event_id", ["eventId"]),
+
+  ycloudMessages: defineTable({
+    contactId: v.string(),
+    direction: v.union(v.literal("INBOUND"), v.literal("OUTBOUND")),
+    customerName: v.optional(v.string()),
+    content: v.string(),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(
+      v.union(
+        v.literal("image"),
+        v.literal("video"),
+        v.literal("audio"),
+        v.literal("document")
+      )
+    ),
+    providerMessageId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_contact", ["contactId"])
+    .index("by_contact_created", ["contactId", "createdAt"]),
 });

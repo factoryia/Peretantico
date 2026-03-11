@@ -26,6 +26,8 @@ import type * as services from "../services.js";
 import type * as specialDates from "../specialDates.js";
 import type * as transportationTypes from "../transportationTypes.js";
 import type * as users from "../users.js";
+import type * as ycloudBot from "../ycloudBot.js";
+import type * as ycloudState from "../ycloudState.js";
 
 import type {
   ApiFromModules,
@@ -52,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   specialDates: typeof specialDates;
   transportationTypes: typeof transportationTypes;
   users: typeof users;
+  ycloudBot: typeof ycloudBot;
+  ycloudState: typeof ycloudState;
 }>;
 
 /**
