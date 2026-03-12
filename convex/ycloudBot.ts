@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { action, internalAction } from "./_generated/server";
 import { anyApi } from "convex/server";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 import type { ToolSet } from "ai";
@@ -146,7 +146,7 @@ export const processInboundMessage = internalAction({
       const lock = await ctx.runMutation(internalAny.ycloudState.acquireProcessingLock, {
         contactId,
         ownerEventId: args.eventId,
-        ttlMs: 15_000,
+        ttlMs: 60_000,
       });
       if (!lock?.ok) {
         if (attempt >= 25) return;
@@ -166,17 +166,6 @@ export const processInboundMessage = internalAction({
 
       await ctx.runMutation(internalAny.ycloudState.markConnected, {});
 
-      await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
-        contactId,
-        customerName: args.customerName,
-        content: args.text,
-        mediaUrl: args.mediaUrl,
-        mediaType: args.mediaType as MediaType | undefined,
-      });
-
-      const botMuted = await ctx.runQuery(internalAny.ycloudState.getEffectiveMute, { contactId });
-      if (botMuted) return;
-
       await ctx.runMutation(internalAny.whatsappBotState.ensureApplicant, {
         contactId,
         phoneNumber: contactId.replace(/^whatsapp:/, ""),
@@ -185,7 +174,6 @@ export const processInboundMessage = internalAction({
 
       const applicant = await ctx.runQuery(internalAny.whatsappBotState.getApplicantByContact, { contactId });
       const applicantProfileId = (applicant as { profileId?: string | null })?.profileId ?? null;
-      const applicantDocumentNumber = (applicant as { documentNumber?: string | null })?.documentNumber ?? null;
 
       const sessionId = await ctx.runMutation(internalAny.whatsappBotState.ensureSession, {
         contactId,
@@ -197,15 +185,76 @@ export const processInboundMessage = internalAction({
 
       if (!session) return;
 
-      let threadId = session.threadId as string | undefined;
+      if (session.state === "INIT" && session.serviceId) {
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          serviceId: undefined,
+          fieldIds: undefined,
+          currentFieldIndex: undefined,
+          data: {},
+          attachments: [],
+          state: "INIT",
+        });
+      }
+
+      const conv = await ctx.runMutation(internalAny.conversationState.ensureConversationForContact, {
+        contactId,
+        customerName: args.customerName,
+        threadId: session.threadId as string | undefined,
+      });
+
+      let threadId = (conv as { threadId?: string | undefined }).threadId as string | undefined;
       if (!threadId) {
-        const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId}` });
+        const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId}`, userId: contactId });
+        await ctx.runMutation(internalAny.conversationState.setThreadIdForContact, {
+          contactId,
+          threadId: created.threadId,
+          customerName: args.customerName,
+        });
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          threadId: created.threadId,
+          serviceId: undefined,
+          fieldIds: undefined,
+          currentFieldIndex: undefined,
+          data: {},
+          attachments: [],
+          state: "INIT",
+        });
         threadId = created.threadId;
+      }
+      if (threadId && session.threadId !== threadId) {
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
           threadId,
+          serviceId: undefined,
+          fieldIds: undefined,
+          currentFieldIndex: undefined,
+          data: {},
+          attachments: [],
+          state: "INIT",
         });
       }
+
+      const inbound = await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
+        contactId,
+        customerName: args.customerName,
+        content: args.text,
+        mediaUrl: args.mediaUrl,
+        mediaType: args.mediaType as MediaType | undefined,
+      });
+
+      await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+        contactId,
+        customerName: args.customerName,
+        direction: "INBOUND",
+        content: args.text,
+        mediaType: args.mediaType as MediaType | undefined,
+        createdAt: (inbound as { createdAt?: number }).createdAt ?? Date.now(),
+      });
+
+      const botMuted = await ctx.runQuery(internalAny.ycloudState.getEffectiveMute, { contactId });
+      if (botMuted) return;
 
       let resolvedProfile: { _id?: unknown; fullName?: unknown } | null = null;
       if (session.profileId) {
@@ -213,11 +262,6 @@ export const processInboundMessage = internalAction({
       }
       if (!resolvedProfile && applicantProfileId) {
         resolvedProfile = await ctx.runQuery(internalAny.profiles.get, { id: applicantProfileId });
-      }
-      if (!resolvedProfile && applicantDocumentNumber) {
-        resolvedProfile = await ctx.runQuery(internalAny.profiles.findByDocumentNumber, {
-          documentNumber: applicantDocumentNumber,
-        });
       }
       if (!resolvedProfile) {
         const rawPhone = contactId.replace(/^whatsapp:/, "");
@@ -247,10 +291,30 @@ export const processInboundMessage = internalAction({
         normalizedCommand === "borrar memoria";
 
       if (isResetCommand) {
-        const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId} (reset)` });
+        if (threadId) {
+          await ctx.runAction(components.agent.threads.deleteAllForThreadIdSync, { threadId }).catch(() => null);
+        }
+
+        for (;;) {
+          const res = await ctx.runMutation(internalAny.ycloudState.deleteMessagesByContactBatch, {
+            contactId,
+            limit: 500,
+          });
+          if (res?.isDone) break;
+        }
+
+        await ctx.runMutation(internalAny.whatsappBotState.clearProfileAssociationForContact, { contactId });
+
+        const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId} (reset)`, userId: contactId });
+        await ctx.runMutation(internalAny.conversationState.resetConversationForContact, {
+          contactId,
+          newThreadId: created.threadId,
+          customerName: args.customerName,
+        });
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
           threadId: created.threadId,
+          profileId: undefined,
           serviceId: undefined,
           fieldIds: undefined,
           currentFieldIndex: undefined,
@@ -262,10 +326,16 @@ export const processInboundMessage = internalAction({
         const replyText = ["Listo. Reinicié la conversación.", "¿Qué servicio necesitas hoy?"].join("\n");
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
-          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
             contactId,
             content: replyText,
             providerMessageId,
+          });
+          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+            contactId,
+            direction: "OUTBOUND",
+            content: replyText,
+            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
           });
         }
         return;
@@ -294,10 +364,16 @@ export const processInboundMessage = internalAction({
         const replyText = lines.join("\n");
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
-          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
             contactId,
             content: replyText,
             providerMessageId,
+          });
+          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+            contactId,
+            direction: "OUTBOUND",
+            content: replyText,
+            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
           });
         }
         return;
@@ -333,6 +409,7 @@ ${args.text}
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
         prompt: contextPrompt,
         tools,
+        
       });
 
       let replyText = response.text ?? "";
@@ -350,10 +427,16 @@ ${args.text}
       if (replyText) {
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
-          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
             contactId,
             content: replyText,
             providerMessageId,
+          });
+          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+            contactId,
+            direction: "OUTBOUND",
+            content: replyText,
+            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
           });
         }
       }
@@ -363,10 +446,16 @@ ${args.text}
       try {
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
-          await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
             contactId,
             content: replyText,
             providerMessageId,
+          });
+          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+            contactId,
+            direction: "OUTBOUND",
+            content: replyText,
+            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
           });
         }
       } catch (sendError) {
@@ -400,10 +489,17 @@ export const sendManualMessage = action({
     const providerMessageId = await sendWhatsAppText({ contactId, content });
     if (!providerMessageId) throw new Error("YCLOUD no está configurado");
 
-    await ctx.runMutation(internal.ycloudState.addOutboundMessage, {
+    const outbound = await ctx.runMutation(internal.ycloudState.addOutboundMessage, {
       contactId,
       content,
       providerMessageId,
+    });
+
+    await ctx.runMutation(internal.conversationState.updateLastMessage, {
+      contactId,
+      direction: "OUTBOUND",
+      content,
+      createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
     });
 
     await ctx.runMutation(internal.ycloudState.setHandoffMutation, {

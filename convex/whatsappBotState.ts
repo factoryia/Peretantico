@@ -70,8 +70,11 @@ export const ensureApplicant = internalMutation({
       if (!existing.fullName && args.customerName?.trim()) {
         updates.fullName = args.customerName.trim();
       }
-      if (!existing.phoneNumber && args.phoneNumber.trim()) {
-        updates.phoneNumber = args.phoneNumber.trim();
+      if (args.phoneNumber.trim()) {
+        const canonicalIncoming = canonicalPhoneNumber(args.phoneNumber);
+        if (!existing.phoneNumber || existing.phoneNumber !== canonicalIncoming) {
+          updates.phoneNumber = canonicalIncoming;
+        }
       }
 
       let profileId = existing.profileId ?? null;
@@ -80,8 +83,24 @@ export const ensureApplicant = internalMutation({
         if (!profile) profileId = null;
       }
 
+      const normalizedPhone = canonicalPhoneNumber(existing.phoneNumber || args.phoneNumber);
+      let matchedProfile: { _id?: Id<"profiles"> } | null = null;
+      for (const v of phoneVariants(normalizedPhone)) {
+        matchedProfile = await ctx.db
+          .query("profiles")
+          .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", v))
+          .first();
+        if (matchedProfile) break;
+      }
+      if (matchedProfile?._id) {
+        if (!profileId || matchedProfile._id !== profileId) {
+          updates.profileId = matchedProfile._id;
+        }
+        updates.state = "HAS_PROFILE";
+        profileId = matchedProfile._id;
+      }
+
       if (!profileId) {
-        const normalizedPhone = canonicalPhoneNumber(existing.phoneNumber || args.phoneNumber);
         let foundProfile: { _id?: Id<"profiles"> } | null = null;
         for (const v of phoneVariants(normalizedPhone)) {
           foundProfile = await ctx.db
@@ -89,13 +108,6 @@ export const ensureApplicant = internalMutation({
             .withIndex("by_phoneNumber", (q) => q.eq("phoneNumber", v))
             .first();
           if (foundProfile) break;
-        }
-
-        if (!foundProfile && existing.documentNumber) {
-          foundProfile = await ctx.db
-            .query("profiles")
-            .withIndex("by_documentNumber", (q) => q.eq("documentNumber", existing.documentNumber!))
-            .first();
         }
 
         if (!foundProfile && existing.fullName && existing.documentType && existing.documentNumber) {
@@ -132,7 +144,7 @@ export const ensureApplicant = internalMutation({
         } else {
           updates.state = "NEEDS_PROFILE";
         }
-      } else {
+      } else if (!("state" in updates)) {
         updates.profileId = profileId;
         updates.state = "HAS_PROFILE";
       }
@@ -244,6 +256,31 @@ export const patchSession = internalMutation({
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     await ctx.db.patch(id, { ...rest, updatedAt: Date.now() });
+  },
+});
+
+export const clearProfileAssociationForContact = internalMutation({
+  args: { contactId: v.string() },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    const applicant = await ctx.db
+      .query("botApplicants")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+      .first();
+    if (applicant) {
+      await ctx.db.patch(applicant._id, { profileId: undefined, state: "NEEDS_PROFILE", updatedAt: now });
+    }
+
+    const session = await ctx.db
+      .query("botSessions")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+      .first();
+    if (session) {
+      await ctx.db.patch(session._id, { profileId: undefined, updatedAt: now });
+    }
+
+    return { ok: true };
   },
 });
 

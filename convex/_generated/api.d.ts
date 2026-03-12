@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as conversationState from "../conversationState.js";
 import type * as coverageAreas from "../coverageAreas.js";
 import type * as dashboard from "../dashboard.js";
 import type * as debug from "../debug.js";
@@ -19,6 +20,7 @@ import type * as findAccount from "../findAccount.js";
 import type * as fixAdmin from "../fixAdmin.js";
 import type * as http from "../http.js";
 import type * as payments from "../payments.js";
+import type * as playground from "../playground.js";
 import type * as profiles from "../profiles.js";
 import type * as requests from "../requests.js";
 import type * as seed from "../seed.js";
@@ -26,6 +28,7 @@ import type * as services from "../services.js";
 import type * as specialDates from "../specialDates.js";
 import type * as system_ai_agents_tanticoAgent from "../system/ai/agents/tanticoAgent.js";
 import type * as system_ai_constants from "../system/ai/constants.js";
+import type * as system_ai_tools_createApplicantProfile from "../system/ai/tools/createApplicantProfile.js";
 import type * as system_ai_tools_createRequest from "../system/ai/tools/createRequest.js";
 import type * as system_ai_tools_getServiceFields from "../system/ai/tools/getServiceFields.js";
 import type * as system_ai_tools_getSpecialDateToday from "../system/ai/tools/getSpecialDateToday.js";
@@ -48,6 +51,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  conversationState: typeof conversationState;
   coverageAreas: typeof coverageAreas;
   dashboard: typeof dashboard;
   debug: typeof debug;
@@ -58,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   fixAdmin: typeof fixAdmin;
   http: typeof http;
   payments: typeof payments;
+  playground: typeof playground;
   profiles: typeof profiles;
   requests: typeof requests;
   seed: typeof seed;
@@ -65,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   specialDates: typeof specialDates;
   "system/ai/agents/tanticoAgent": typeof system_ai_agents_tanticoAgent;
   "system/ai/constants": typeof system_ai_constants;
+  "system/ai/tools/createApplicantProfile": typeof system_ai_tools_createApplicantProfile;
   "system/ai/tools/createRequest": typeof system_ai_tools_createRequest;
   "system/ai/tools/getServiceFields": typeof system_ai_tools_getServiceFields;
   "system/ai/tools/getSpecialDateToday": typeof system_ai_tools_getSpecialDateToday;

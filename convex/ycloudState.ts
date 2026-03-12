@@ -127,13 +127,30 @@ export const addOutboundMessage = internalMutation({
     providerMessageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("ycloudMessages", {
+    const createdAt = Date.now();
+    const messageId = await ctx.db.insert("ycloudMessages", {
       contactId: args.contactId,
       direction: "OUTBOUND",
       content: args.content,
       providerMessageId: args.providerMessageId,
-      createdAt: Date.now(),
+      createdAt,
     });
+    return { messageId, createdAt };
+  },
+});
+
+export const deleteMessagesByContactBatch = internalMutation({
+  args: { contactId: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = Math.max(1, Math.min(args.limit ?? 250, 1000));
+    const rows = await ctx.db
+      .query("ycloudMessages")
+      .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+      .take(limit);
+    for (const r of rows) {
+      await ctx.db.delete(r._id);
+    }
+    return { deleted: rows.length, isDone: rows.length < limit };
   },
 });
 
@@ -147,53 +164,6 @@ export const listRecentMessages = internalQuery({
       .order("desc")
       .take(limit);
     return rows.reverse();
-  },
-});
-
-export const listContacts = query({
-  args: { limit: v.optional(v.number()), search: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const limit = Math.max(1, Math.min(args.limit ?? 25, 100));
-    const search = args.search?.trim().toLowerCase() ?? "";
-
-    const recent = await ctx.db.query("ycloudMessages").order("desc").take(500);
-    const byContact = new Map<
-      string,
-      {
-        contactId: string;
-        customerName?: string;
-        lastMessageAt: number;
-        lastMessage: string;
-        lastDirection: "INBOUND" | "OUTBOUND";
-      }
-    >();
-
-    for (const m of recent) {
-      if (byContact.has(m.contactId)) continue;
-      byContact.set(m.contactId, {
-        contactId: m.contactId,
-        customerName: m.customerName,
-        lastMessageAt: m.createdAt,
-        lastMessage: m.content,
-        lastDirection: m.direction,
-      });
-      if (byContact.size >= limit) break;
-    }
-
-    let list = Array.from(byContact.values());
-    if (search) {
-      list = list.filter((c) => {
-        const name = (c.customerName ?? "").toLowerCase();
-        const id = c.contactId.toLowerCase();
-        return name.includes(search) || id.includes(search);
-      });
-    }
-
-    list.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    return list.slice(0, limit);
   },
 });
 

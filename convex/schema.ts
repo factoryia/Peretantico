@@ -245,6 +245,22 @@ export default defineSchema({
     updatedBy: v.optional(v.id("users")),
   }).index("by_contact", ["contactId"]),
 
+  conversations: defineTable({
+    contactId: v.string(),
+    channel: v.union(v.literal("whatsapp")),
+    customerName: v.optional(v.string()),
+    status: v.union(v.literal("open"), v.literal("pending"), v.literal("closed")),
+    threadId: v.optional(v.string()),
+    lastMessageAt: v.number(),
+    lastMessagePreview: v.optional(v.string()),
+    lastMessageDirection: v.optional(v.union(v.literal("INBOUND"), v.literal("OUTBOUND"))),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_contact", ["contactId"])
+    .index("by_thread", ["threadId"])
+    .index("by_last_message_at", ["lastMessageAt"]),
+
   botApplicants: defineTable({
     contactId: v.string(),
     phoneNumber: v.string(),

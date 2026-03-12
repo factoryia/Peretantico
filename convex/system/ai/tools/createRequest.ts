@@ -40,18 +40,7 @@ export const createRequest = createTool({
     contactId?: string;
     phoneNumber?: string;
     applicantId?: string;
-    applicant?: {
-      fullName: string;
-      documentType: string;
-      documentNumber: string;
-      phoneNumber: string;
-      email?: string;
-      address?: string;
-      department?: string;
-      municipality?: string;
-      birthDate?: string;
-      gender?: string;
-    };
+    applicant?: unknown;
     serviceId: string;
     title?: string;
     data: { fieldId: string; value: unknown }[];
@@ -64,23 +53,7 @@ export const createRequest = createTool({
       contactId: { type: "string", description: "contactId del chat (whatsapp:...)" },
       phoneNumber: { type: "string", description: "Número de teléfono del usuario" },
       applicantId: { type: "string", description: "ID del perfil (profiles) si existe" },
-      applicant: {
-        type: "object",
-        properties: {
-          fullName: { type: "string" },
-          documentType: { type: "string" },
-          documentNumber: { type: "string" },
-          phoneNumber: { type: "string" },
-          email: { type: "string" },
-          address: { type: "string" },
-          department: { type: "string" },
-          municipality: { type: "string" },
-          birthDate: { type: "string" },
-          gender: { type: "string" },
-        },
-        required: ["fullName", "documentType", "documentNumber", "phoneNumber"],
-        additionalProperties: false,
-      },
+      applicant: { description: "No se usa: el perfil debe crearse por separado" },
       serviceId: { type: "string", description: "ID del servicio (services)" },
       title: { type: "string" },
       data: {
@@ -143,52 +116,127 @@ export const createRequest = createTool({
       if (byPhone?._id) applicantId = byPhone._id as Id<"profiles">;
     }
 
-    if (!applicantId && args.applicant) {
-      const applicant = {
-        fullName: args.applicant.fullName.trim(),
-        documentType: args.applicant.documentType.trim(),
-        documentNumber: args.applicant.documentNumber.trim(),
-        phoneNumber: args.applicant.phoneNumber.trim(),
-        email: args.applicant.email?.trim() || undefined,
-        address: args.applicant.address?.trim() || undefined,
-        department: args.applicant.department?.trim() || undefined,
-        municipality: args.applicant.municipality?.trim() || undefined,
-        birthDate: args.applicant.birthDate?.trim() || undefined,
-        gender: args.applicant.gender?.trim() || undefined,
-      };
-      if (applicant.fullName && applicant.documentType && applicant.documentNumber && applicant.phoneNumber) {
+    if (!applicantId) {
+      const applicantArg =
+        typeof args.applicant === "object" && args.applicant !== null ? (args.applicant as Record<string, unknown>) : null;
+      const argFullName = applicantArg?.fullName ? String(applicantArg.fullName).trim() : "";
+      const argDocType = applicantArg?.documentType ? String(applicantArg.documentType).trim() : "";
+      const argDocNumber = applicantArg?.documentNumber ? String(applicantArg.documentNumber).trim() : "";
+      const argEmail = applicantArg?.email ? String(applicantArg.email).trim() : undefined;
+      const argAddress = applicantArg?.address ? String(applicantArg.address).trim() : undefined;
+
+      if (phoneNumber && argFullName && argDocType && argDocNumber) {
         const byDoc = await ctx.runQuery(anyApi.profiles.findByDocumentNumber, {
-          documentNumber: applicant.documentNumber,
+          documentNumber: argDocNumber,
         });
         if (byDoc?._id) {
           applicantId = byDoc._id as Id<"profiles">;
         } else {
-          const byPhone = await ctx.runQuery(anyApi.profiles.findByPhoneNumber, {
-            phoneNumber: applicant.phoneNumber,
-          });
+          const byPhone = await ctx.runQuery(anyApi.profiles.findByPhoneNumber, { phoneNumber });
           if (byPhone?._id) {
             applicantId = byPhone._id as Id<"profiles">;
           } else {
-            try {
-              applicantId = (await ctx.runMutation(anyApi.profiles.createCustomer, applicant)) as Id<"profiles">;
-            } catch {
-              const existing = await ctx.runQuery(anyApi.profiles.findByDocumentNumber, {
-                documentNumber: applicant.documentNumber,
-              });
-              if (existing?._id) applicantId = existing._id as Id<"profiles">;
-            }
+            applicantId = (await ctx.runMutation(anyApi.profiles.createCustomer, {
+              fullName: argFullName,
+              documentType: argDocType,
+              documentNumber: argDocNumber,
+              phoneNumber,
+              email: argEmail || undefined,
+              address: argAddress || undefined,
+            })) as Id<"profiles">;
+          }
+        }
+
+        if (applicantId && contactId) {
+          await ctx.runMutation(anyApi.whatsappBotState.ensureApplicant, {
+            contactId,
+            phoneNumber,
+            customerName: argFullName,
+          });
+
+          const existingApplicant = (await ctx.runQuery(anyApi.whatsappBotState.getApplicantByContact, { contactId })) as
+            | { _id: Id<"botApplicants"> }
+            | null;
+          if (existingApplicant?._id) {
+            await ctx.runMutation(anyApi.whatsappBotState.patchApplicant, {
+              id: existingApplicant._id,
+              fullName: argFullName,
+              documentType: argDocType,
+              documentNumber: argDocNumber,
+              email: argEmail || undefined,
+              address: argAddress || undefined,
+              profileId: applicantId,
+              state: "HAS_PROFILE",
+            });
+          }
+          await ctx.runMutation(anyApi.whatsappBotState.ensureSession, { contactId, profileId: applicantId });
+        }
+      }
+
+      const applicant = contactId
+        ? ((await ctx.runQuery(anyApi.whatsappBotState.getApplicantByContact, { contactId })) as
+            | {
+                _id?: Id<"botApplicants">;
+                fullName?: string;
+                documentType?: string;
+                documentNumber?: string;
+                phoneNumber?: string;
+                email?: string;
+                address?: string;
+                profileId?: Id<"profiles"> | null;
+              }
+            | null)
+        : null;
+
+      const candidatePhone = (phoneNumber || applicant?.phoneNumber || "").trim();
+      const candidateFullName = (applicant?.fullName ?? "").trim();
+      const candidateDocType = (applicant?.documentType ?? "").trim();
+      const candidateDocNumber = (applicant?.documentNumber ?? "").trim();
+
+      const canCreateProfile = Boolean(candidatePhone && candidateFullName && candidateDocType && candidateDocNumber);
+
+      if (canCreateProfile) {
+        const byDoc = await ctx.runQuery(anyApi.profiles.findByDocumentNumber, {
+          documentNumber: candidateDocNumber,
+        });
+        if (byDoc?._id) {
+          applicantId = byDoc._id as Id<"profiles">;
+        } else {
+          const byPhone = await ctx.runQuery(anyApi.profiles.findByPhoneNumber, { phoneNumber: candidatePhone });
+          if (byPhone?._id) {
+            applicantId = byPhone._id as Id<"profiles">;
+          } else {
+            applicantId = (await ctx.runMutation(anyApi.profiles.createCustomer, {
+              fullName: candidateFullName,
+              documentType: candidateDocType,
+              documentNumber: candidateDocNumber,
+              phoneNumber: candidatePhone,
+              email: applicant?.email?.trim() || undefined,
+              address: applicant?.address?.trim() || undefined,
+            })) as Id<"profiles">;
+          }
+        }
+
+        if (applicantId && contactId) {
+          await ctx.runMutation(anyApi.whatsappBotState.ensureSession, { contactId, profileId: applicantId });
+          if (applicant?._id) {
+            await ctx.runMutation(anyApi.whatsappBotState.patchApplicant, {
+              id: applicant._id,
+              profileId: applicantId,
+              state: "HAS_PROFILE",
+            });
           }
         }
       }
-    }
 
-    if (!applicantId) {
-      return {
-        ok: false,
-        message:
-          "Antes de crear la solicitud necesito registrarte. Por favor indícame: nombre completo, tipo y número de documento, y confirma tu número de contacto.",
-        missingApplicant: true,
-      };
+      if (!applicantId) {
+        return {
+          ok: false,
+          message:
+            "Antes de crear la solicitud necesito que tu perfil esté registrado. Dime tu nombre completo, tipo y número de documento.",
+          missingApplicant: true,
+        };
+      }
     }
 
     if (contactId) {

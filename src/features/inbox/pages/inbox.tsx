@@ -29,7 +29,7 @@ export function InboxPage() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const contacts = useQuery(api.ycloudState.listContacts, {
+  const contacts = useQuery(api.conversationState.listContacts, {
     limit: 50,
     search: search.trim() ? search : undefined,
   });
