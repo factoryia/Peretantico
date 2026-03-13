@@ -12,6 +12,7 @@ import { listServices } from "./system/ai/tools/listServices";
 import { getServiceFields } from "./system/ai/tools/getServiceFields";
 import { validateServiceField } from "./system/ai/tools/validateServiceField";
 import { createRequest } from "./system/ai/tools/createRequest";
+import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
 
 type MediaType = "image" | "video" | "audio" | "document";
 
@@ -386,6 +387,7 @@ export const processInboundMessage = internalAction({
         getServiceFields,
         validateServiceField,
         createRequest,
+        getRequestStatus,
       } satisfies ToolSet;
 
       const contextPrompt = `

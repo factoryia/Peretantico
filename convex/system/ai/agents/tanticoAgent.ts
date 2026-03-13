@@ -9,6 +9,7 @@ import { getServiceFields } from "../tools/getServiceFields";
 import { validateServiceField } from "../tools/validateServiceField";
 import { createApplicantProfile } from "../tools/createApplicantProfile";
 import { createRequest } from "../tools/createRequest";
+import { getRequestStatus } from "../tools/getRequestStatus";
 
 const agentComponent = components.agent;
 
@@ -25,5 +26,6 @@ export const tanticoAgent = new Agent(agentComponent, {
     validateServiceField,
     createApplicantProfile,
     createRequest,
+    getRequestStatus,
   },
 });

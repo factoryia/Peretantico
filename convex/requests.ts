@@ -175,6 +175,42 @@ export const get = query({
   },
 });
 
+export const getByApplicationNumber = query({
+  args: { applicationNumber: v.string() },
+  handler: async (ctx, args) => {
+    const applicationNumber = args.applicationNumber.trim();
+    if (!applicationNumber) return null;
+
+    const request = await ctx.db
+      .query("requests")
+      .withIndex("by_applicationNumber", (q) =>
+        q.eq("applicationNumber", applicationNumber)
+      )
+      .first();
+    if (!request) return null;
+
+    const [applicant, service, distributor, payment] = await Promise.all([
+      ctx.db.get(request.applicantId),
+      ctx.db.get(request.serviceId),
+      request.distributorId ? ctx.db.get(request.distributorId) : null,
+      ctx.db
+        .query("paymentRequests")
+        .withIndex("by_request", (q) => q.eq("requestId", request._id))
+        .first(),
+    ]);
+
+    const paymentStatus = payment ? "Pagado" : "Pendiente";
+
+    return {
+      ...request,
+      applicant,
+      service,
+      distributor,
+      paymentStatus,
+    };
+  },
+});
+
 export const create = mutation({
   args: {
     applicantId: v.id("profiles"),

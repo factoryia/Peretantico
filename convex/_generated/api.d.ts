@@ -30,6 +30,7 @@ import type * as system_ai_agents_tanticoAgent from "../system/ai/agents/tantico
 import type * as system_ai_constants from "../system/ai/constants.js";
 import type * as system_ai_tools_createApplicantProfile from "../system/ai/tools/createApplicantProfile.js";
 import type * as system_ai_tools_createRequest from "../system/ai/tools/createRequest.js";
+import type * as system_ai_tools_getRequestStatus from "../system/ai/tools/getRequestStatus.js";
 import type * as system_ai_tools_getServiceFields from "../system/ai/tools/getServiceFields.js";
 import type * as system_ai_tools_getSpecialDateToday from "../system/ai/tools/getSpecialDateToday.js";
 import type * as system_ai_tools_listServices from "../system/ai/tools/listServices.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   "system/ai/constants": typeof system_ai_constants;
   "system/ai/tools/createApplicantProfile": typeof system_ai_tools_createApplicantProfile;
   "system/ai/tools/createRequest": typeof system_ai_tools_createRequest;
+  "system/ai/tools/getRequestStatus": typeof system_ai_tools_getRequestStatus;
   "system/ai/tools/getServiceFields": typeof system_ai_tools_getServiceFields;
   "system/ai/tools/getSpecialDateToday": typeof system_ai_tools_getSpecialDateToday;
   "system/ai/tools/listServices": typeof system_ai_tools_listServices;
