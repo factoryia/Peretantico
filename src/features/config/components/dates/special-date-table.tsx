@@ -1,17 +1,18 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Eye } from "lucide-react";
+import { Edit, Eye, Trash2 } from "lucide-react";
 import type { SpecialDate } from "../../types";
 
 interface Props {
     specialDates: SpecialDate[];
     onEdit: (date: SpecialDate) => void;
     onView: (date: SpecialDate) => void;
+    onDelete: (date: SpecialDate) => void;
     isLoading?: boolean;
 }
 
-export const SpecialDateTable = ({ specialDates, onEdit, onView }: Props) => (
+export const SpecialDateTable = ({ specialDates, onEdit, onView, onDelete }: Props) => (
     <Table>
         <TableHeader>
             <TableRow>
@@ -44,6 +45,9 @@ export const SpecialDateTable = ({ specialDates, onEdit, onView }: Props) => (
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => onEdit(fecha)}>
                                 <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => onDelete(fecha)}>
+                                <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
                     </TableCell>

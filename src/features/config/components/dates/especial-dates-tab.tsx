@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -20,12 +20,16 @@ import { SpecialDateDetailDialog } from "./special-date-detail-dialog";
 import { SpecialDateTable } from "./special-date-table";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { AlertModal } from "@/components/common/alert-modal";
 
 export function SpecialDatesTab() {
+  const [isPending, startTransition] = useTransition();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [editingDate, setEditingDate] = useState<SpecialDate | null>(null);
   const [viewingDate, setViewingDate] = useState<SpecialDate | null>(null);
+  const [dateToDelete, setDateToDelete] = useState<SpecialDate | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -33,6 +37,7 @@ export function SpecialDatesTab() {
   const rawSpecialDates = useQuery(api.specialDates.list, { searchTerm });
   const createSpecialDate = useMutation(api.specialDates.create);
   const updateSpecialDate = useMutation(api.specialDates.update);
+  const removeSpecialDate = useMutation(api.specialDates.remove);
 
   const isLoading = rawSpecialDates === undefined;
 
@@ -62,6 +67,23 @@ export function SpecialDatesTab() {
   const handleView = (date: SpecialDate) => {
     setViewingDate(date);
     setIsDetailDialogOpen(true);
+  };
+
+  const handleDelete = () => {
+    if (!dateToDelete) return;
+    startTransition(async () => {
+      try {
+        await removeSpecialDate({
+          id: dateToDelete.id as Id<"specialDates">,
+        });
+        toast.success("Fecha especial eliminada");
+      } catch {
+        toast.error("Error al eliminar la fecha especial");
+      } finally {
+        setIsAlertOpen(false);
+        setDateToDelete(null);
+      }
+    });
   };
 
   const handleCreateOrUpdate = async (formData: SpecialDateFormValues) => {
@@ -95,6 +117,20 @@ export function SpecialDatesTab() {
 
   return (
     <>
+      <AlertModal
+        description={
+          dateToDelete
+            ? `Esta acción no se puede deshacer. Se eliminará permanentemente la fecha especial "${dateToDelete.title}".`
+            : "Esta acción no se puede deshacer. Se eliminará permanentemente la fecha especial seleccionada."
+        }
+        isSubmitting={isPending}
+        open={isAlertOpen}
+        onSubmit={handleDelete}
+        onOpenChange={(open) => {
+          if (!open) setDateToDelete(null);
+          setIsAlertOpen(open);
+        }}
+      />
       <SpecialDateDialog
         key={editingDate ? editingDate.id : "new"}
         open={isDialogOpen}
@@ -153,6 +189,10 @@ export function SpecialDatesTab() {
                   specialDates={specialDates}
                   onEdit={handleEdit}
                   onView={handleView}
+                  onDelete={(date) => {
+                    setDateToDelete(date);
+                    setIsAlertOpen(true);
+                  }}
                 />
                 <Paginator
                   currentPage={currentPage}

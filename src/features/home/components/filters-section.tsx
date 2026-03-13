@@ -115,8 +115,10 @@ export function FiltersSection({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="active">Activo</SelectItem>
-                <SelectItem value="inactive">Inactivo</SelectItem>
+                <SelectItem value="EnProceso">En proceso</SelectItem>
+                <SelectItem value="Atendida">Atendida</SelectItem>
+                <SelectItem value="Finalizada">Finalizada</SelectItem>
+                <SelectItem value="Incompleta">Incompleta</SelectItem>
               </SelectContent>
             </Select>
           </div>

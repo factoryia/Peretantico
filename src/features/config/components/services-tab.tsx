@@ -21,6 +21,7 @@ import { Paginator } from "@/components/common/paginator";
 export const ServicesTab = () => {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [serviceId, setServiceId] = useState<string>("");
@@ -31,7 +32,7 @@ export const ServicesTab = () => {
 
   // Convex Query
   const rawServices = useQuery(api.services.listAll);
-  const updateServiceMutation = useMutation(api.services.update);
+  const removeServiceMutation = useMutation(api.services.remove);
 
   // Map Convex services to frontend Service type
   const mappedServices: Service[] = (rawServices || []).map((s: any) => {
@@ -81,19 +82,20 @@ export const ServicesTab = () => {
 
   const handleDelete = async () => {
     try {
-      await updateServiceMutation({ 
-        id: serviceId as Id<"services">, 
-        status: false 
+      setIsDeleting(true);
+      await removeServiceMutation({
+        id: serviceId as Id<"services">,
       });
 
-      toast.success("Servicio desactivado", {
-        description: "El servicio fue desactivado correctamente.",
+      toast.success("Servicio eliminado", {
+        description: "El servicio fue eliminado correctamente.",
       });
-    } catch (error) {
-      toast.error("Error al desactivar el servicio", {
-        description: "Ocurrió un error inesperado.",
+    } catch (error: any) {
+      toast.error("Error al eliminar el servicio", {
+        description: error?.message ?? "Ocurrió un error inesperado.",
       });
     } finally {
+      setIsDeleting(false);
       setServiceId("");
       setIsAlertOpen(false);
     }
@@ -102,8 +104,8 @@ export const ServicesTab = () => {
   return (
     <>
       <AlertModal
-        description="Esta acción cambiará el estado del servicio a inactivo."
-        isSubmitting={false}
+        description="Esta acción eliminará permanentemente el servicio y sus campos. No se puede deshacer."
+        isSubmitting={isDeleting}
         open={isAlertOpen}
         onSubmit={handleDelete}
         onOpenChange={(open) => {

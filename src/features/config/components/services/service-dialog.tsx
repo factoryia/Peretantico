@@ -34,11 +34,12 @@ import { serviceSchema, type ServiceFormValues } from "../../schemas";
 import { Loader, Plus, Trash2 } from "lucide-react";
 import { RequiredDot } from "@/components/common/required-dot";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RequiredFormMessage } from "@/components/common/form-message";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { AlertModal } from "@/components/common/alert-modal";
 
 interface Props {
   open: boolean;
@@ -76,6 +77,10 @@ export const ServiceDialog = ({
 }: Props) => {
   const createServiceMutation = useMutation(api.services.create);
   const updateServiceMutation = useMutation(api.services.update);
+  const removeServiceMutation = useMutation(api.services.remove);
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(serviceSchema),
@@ -198,6 +203,32 @@ export const ServiceDialog = ({
     }
   };
 
+  const handleDelete = async () => {
+    if (!editingService) return;
+
+    try {
+      setIsDeleting(true);
+      await removeServiceMutation({
+        id: editingService.id as Id<"services">,
+      });
+
+      toast.success("Servicio eliminado", {
+        description: `El servicio "${editingService.name}" fue eliminado correctamente.`,
+      });
+
+      setEditingService(null);
+      setIsDialogOpen(false);
+      setIsDeleteOpen(false);
+      form.reset();
+    } catch (error: any) {
+      toast.error("No se pudo eliminar el servicio", {
+        description: error?.message ?? "Ocurrió un error inesperado.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -207,6 +238,13 @@ export const ServiceDialog = ({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] max-h-[80vh] overflow-y-auto">
+        <AlertModal
+          description="Esta acción eliminará permanentemente el servicio y sus campos. No se puede deshacer."
+          isSubmitting={isDeleting}
+          open={isDeleteOpen}
+          onSubmit={handleDelete}
+          onOpenChange={setIsDeleteOpen}
+        />
         <DialogHeader>
           <DialogTitle>
             {editingService ? "Editar Servicio" : "Nuevo Servicio"}
@@ -591,18 +629,31 @@ export const ServiceDialog = ({
 
             <RequiredFormMessage />
 
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancelar
-              </Button>
-              <Button disabled={!isValid || isSubmitting}>
-                {isSubmitting && <Loader className="animate-spin" />}
-                {editingService ? "Actualizar" : "Crear"}
-              </Button>
+            <div className="flex items-center justify-between gap-2">
+              {editingService && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setIsDeleteOpen(true)}
+                  disabled={isSubmitting || isDeleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar
+                </Button>
+              )}
+              <div className="flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button disabled={!isValid || isSubmitting || isDeleting}>
+                  {isSubmitting && <Loader className="animate-spin" />}
+                  {editingService ? "Actualizar" : "Crear"}
+                </Button>
+              </div>
             </div>
           </form>
         </Form>

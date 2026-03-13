@@ -204,3 +204,41 @@ export const update = mutation({
   },
   handler: updateHandler,
 });
+
+export const remove = mutation({
+  args: {
+    id: v.id("services"),
+  },
+  handler: async (ctx, args) => {
+    const existingRequest = await ctx.db
+      .query("requests")
+      .withIndex("by_service", (q: any) => q.eq("serviceId", args.id))
+      .first();
+
+    if (existingRequest) {
+      throw new Error(
+        "No se puede eliminar el servicio porque tiene solicitudes asociadas. Primero elimina todas las solicitudes de este servicio y vuelve a intentarlo."
+      );
+    }
+
+    const serviceFields = await ctx.db
+      .query("serviceFields")
+      .withIndex("by_service", (q: any) => q.eq("serviceId", args.id))
+      .collect();
+
+    for (const field of serviceFields) {
+      const requestDataRows = await ctx.db
+        .query("requestData")
+        .withIndex("by_field", (q: any) => q.eq("fieldId", field._id))
+        .collect();
+
+      for (const row of requestDataRows) {
+        await ctx.db.delete(row._id);
+      }
+
+      await ctx.db.delete(field._id);
+    }
+
+    await ctx.db.delete(args.id);
+  },
+});

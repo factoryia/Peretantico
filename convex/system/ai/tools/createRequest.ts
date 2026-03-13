@@ -335,6 +335,9 @@ export const createRequest = createTool({
       normalizedAttachments.push({ fileName: fileName || "Adjunto", url, storageId: a.storageId });
     }
 
+    const baseServicePrice =
+      typeof (service as any)?.price === "number" ? (service as any).price : 0;
+
     const requestId = await ctx.runMutation(anyApi.requests.create, {
       applicantId,
       serviceId: args.serviceId as Id<"services">,
@@ -344,6 +347,7 @@ export const createRequest = createTool({
       attachments: normalizedAttachments,
       paymentMethod: args.paymentMethod,
       isPrioritized: args.isPrioritized,
+      serviceValue: baseServicePrice,
     });
 
     const request = await ctx.runQuery(anyApi.requests.get, { id: requestId as Id<"requests"> });

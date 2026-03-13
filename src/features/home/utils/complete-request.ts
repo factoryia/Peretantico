@@ -164,13 +164,13 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
     // but we might need it if we revert to pagination
   };
 
-  if (status) {
-    if (status === "true" || status === "1" || status === "active") {
-      convexArgs.status = true;
-    } else if (status === "false" || status === "0" || status === "inactive") {
-      convexArgs.status = false;
-    }
-  }
+  const shouldFilterByRequestStatus =
+    status &&
+    status !== "all" &&
+    (status === "EnProceso" ||
+      status === "Atendida" ||
+      status === "Finalizada" ||
+      status === "Incompleta");
 
   if (subservice && subservice !== "all") {
     convexArgs.serviceId = subservice as Id<"services">;
@@ -300,6 +300,12 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
           } : undefined
         })) : [],
     }));
+  }
+
+  if (shouldFilterByRequestStatus) {
+    transformedData = transformedData.filter(
+      (req) => req.requestStatus === status,
+    );
   }
 
   // Client-side pagination
