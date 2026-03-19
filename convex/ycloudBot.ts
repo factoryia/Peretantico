@@ -64,6 +64,83 @@ function normalizeForMatch(input: string): string {
     .trim();
 }
 
+const OFF_TOPIC_REPLY = [
+  "En este chat solo puedo ayudarte a crear solicitudes de servicios de Pere Tantico Tequend o consultar el estado de una solicitud (REQ-XXXXXX).",
+  "",
+  "¿Qué servicio necesitas hoy?",
+].join("\n");
+
+function isStronglyOffTopic(normalized: string, raw: string): boolean {
+  if (/[0-9]\s*[+\-*/]\s*[0-9]/.test(raw)) return true;
+
+  const patterns: RegExp[] = [
+    /\b(algebra|algebraico|ecuacion|ecuaciones|derivada|derivadas|integral|integrales|trigonometria|logaritmo|logaritmos|matematic|calculo|polinomio|factoriza|simplifica|fraccion|fracciones|raiz|raices)\b/,
+    /\b(programacion|programar|codigo|code|python|javascript|typescript|react|node|sql)\b/,
+    /\b(chiste|cuentame un chiste|cuento|poema|cancion|letra|horoscopo)\b/,
+  ];
+
+  return patterns.some((r) => r.test(normalized));
+}
+
+function isOnTopicMessage(normalized: string, raw: string): boolean {
+  if (!normalized) return false;
+
+  if (/\breq\s*\d{3,}\b/.test(normalized)) return true;
+
+  if (
+    /\b(servicio|servicios|solicitud|solicitudes|pedido|pedidos|estado|seguimiento|consultar|consulta|precio|costo|valor|pago|pagar|prioridad|prioritario|radicacion|autorizacion|cita|citas|medicamento|medicamentos|domicilio|entrega)\b/.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  if (/\b(documento|cedula|cc|ti|pasaporte|nombre|direccion|correo|email)\b/.test(normalized)) return true;
+
+  if (/\b(ayuda|me ayudas|necesito ayuda)\b/.test(normalized)) return true;
+
+  if (
+    normalized === "si" ||
+    normalized === "no" ||
+    normalized === "ok" ||
+    normalized === "listo" ||
+    normalized === "correcto" ||
+    normalized === "confirmo" ||
+    normalized === "de acuerdo"
+  ) {
+    return true;
+  }
+
+  if (/^\s*(hola|buenas|buenos dias|buenas tardes|buenas noches|buen dia)\b/.test(normalized)) return true;
+
+  if (/\S+@\S+\.\S+/.test(raw)) return true;
+
+  if (/\b(calle|carrera|cra|cll|avenida|av|apto|apartamento|barrio|km|transversal|diagonal)\b/.test(normalized)) return true;
+
+  const digitCount = raw.replace(/\D/g, "").length;
+  if (digitCount >= 6) return true;
+
+  return false;
+}
+
+function shouldBlockMessage(args: {
+  rawText: string;
+  normalized: string;
+  hasMedia: boolean;
+  hasActiveFlow: boolean;
+  applicantNeedsProfile: boolean;
+}): boolean {
+  const text = args.rawText.trim();
+  if (!text && !args.hasMedia) return false;
+  if (args.hasMedia) return false;
+
+  if (isStronglyOffTopic(args.normalized, args.rawText)) return true;
+
+  if (args.hasActiveFlow || args.applicantNeedsProfile) return false;
+
+  return !isOnTopicMessage(args.normalized, args.rawText);
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -364,6 +441,40 @@ export const processInboundMessage = internalAction({
           "¿Cuál de estos servicios necesitas?",
         ];
         const replyText = lines.join("\n");
+        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
+        if (providerMessageId) {
+          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
+            contactId,
+            content: replyText,
+            providerMessageId,
+          });
+          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+            contactId,
+            direction: "OUTBOUND",
+            content: replyText,
+            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
+          });
+        }
+        return;
+      }
+
+      const hasMedia = Boolean(args.mediaUrl || args.mediaType);
+      const applicantNeedsProfile = (applicant as { state?: string } | null)?.state === "NEEDS_PROFILE";
+      const hasActiveFlow =
+        Boolean(session.serviceId) ||
+        (Array.isArray((session as { fieldIds?: unknown }).fieldIds) && ((session as { fieldIds?: unknown[] }).fieldIds?.length ?? 0) > 0) ||
+        typeof (session as { currentFieldIndex?: unknown }).currentFieldIndex === "number";
+
+      if (
+        shouldBlockMessage({
+          rawText,
+          normalized: normalizedCommand,
+          hasMedia,
+          hasActiveFlow,
+          applicantNeedsProfile,
+        })
+      ) {
+        const replyText = OFF_TOPIC_REPLY;
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
           const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {

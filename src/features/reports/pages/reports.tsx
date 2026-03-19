@@ -783,7 +783,7 @@ export function Reports() {
         <Card className="border-none shadow-sm overflow-hidden bg-white mt-8">
           <CardContent className="p-0">
             {/* Header */}
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-indigo-50 rounded-lg">
                   <Bike className="h-5 w-5 text-indigo-600" />

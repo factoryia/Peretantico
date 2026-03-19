@@ -96,9 +96,8 @@ export function PatientDataCard({
           }
         />
 
-        {type !== "node--property_unbundling_request" && (
+        {type !== "node--property_unbundling_request" && address && (
           <DataPoint
-            // label="Dirección de Entrega"
             label={
               type === "node--marriage_certificate_request"
                 ? "Dirección Indicada"
@@ -106,12 +105,9 @@ export function PatientDataCard({
                 ? "Dirección"
                 : type === "node--civil_registry_request"
                 ? "Dirección de Entrega"
-                : type === "node--medical_bills"
-                ? "Dirección Recolección"
-                : "Dirección de Entrega y Municipio"
+                : "Dirección"
             }
-            value={`${address}`}
-            // value={`${address}, ${municipality}`}
+            value={address}
             noBorder
           />
         )}

@@ -165,7 +165,7 @@ export function Distributors() {
       />
 
       <div className="h-dvh">
-        <SidebarHeader title="Configuración" />
+        <SidebarHeader title="Repartidores" />
         <div className="h-full overflow-y-auto pb-20">
           <div className="space-y-6 font-['Poppins',sans-serif] p-4 md:p-6">
             {/* Header Section */}
