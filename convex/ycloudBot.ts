@@ -11,6 +11,7 @@ import { getSpecialDateToday } from "./system/ai/tools/getSpecialDateToday";
 import { listServices } from "./system/ai/tools/listServices";
 import { getServiceFields } from "./system/ai/tools/getServiceFields";
 import { validateServiceField } from "./system/ai/tools/validateServiceField";
+import { createApplicantProfile } from "./system/ai/tools/createApplicantProfile";
 import { createRequest } from "./system/ai/tools/createRequest";
 import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
 
@@ -386,6 +387,7 @@ export const processInboundMessage = internalAction({
         listServices,
         getServiceFields,
         validateServiceField,
+        createApplicantProfile,
         createRequest,
         getRequestStatus,
       } satisfies ToolSet;

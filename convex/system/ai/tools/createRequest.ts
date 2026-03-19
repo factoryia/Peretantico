@@ -119,7 +119,11 @@ export const createRequest = createTool({
     if (!applicantId) {
       const applicantArg =
         typeof args.applicant === "object" && args.applicant !== null ? (args.applicant as Record<string, unknown>) : null;
-      const argFullName = applicantArg?.fullName ? String(applicantArg.fullName).trim() : "";
+      const argFullName = applicantArg?.fullName
+        ? String(applicantArg.fullName).trim()
+        : applicantArg?.name
+          ? String(applicantArg.name).trim()
+          : "";
       const argDocType = applicantArg?.documentType ? String(applicantArg.documentType).trim() : "";
       const argDocNumber = applicantArg?.documentNumber ? String(applicantArg.documentNumber).trim() : "";
       const argEmail = applicantArg?.email ? String(applicantArg.email).trim() : undefined;
