@@ -30,6 +30,6 @@ export const listServices = createTool({
         price: s.price ?? undefined,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
-    return { services };
+    return { services: services.map((s, idx) => ({ ...s, index: idx + 1 })) };
   },
 });

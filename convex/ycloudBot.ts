@@ -65,13 +65,24 @@ function normalizeForMatch(input: string): string {
 }
 
 const OFF_TOPIC_REPLY = [
-  "En este chat solo puedo ayudarte a crear solicitudes de servicios de Pere Tantico Tequend o consultar el estado de una solicitud (REQ-XXXXXX).",
+  "En este chat solo puedo ayudarte a crear solicitudes de servicios de Pere Tantico Tequendo o consultar el estado de una solicitud (REQ-XXXXXX).",
+  "",
+  'Si quieres ver la lista, escribe "servicios".',
   "",
   "¿Qué servicio necesitas hoy?",
 ].join("\n");
 
 function isStronglyOffTopic(normalized: string, raw: string): boolean {
-  if (/[0-9]\s*[+\-*/]\s*[0-9]/.test(raw)) return true;
+  const t = raw.trim();
+  if (/[0-9]\s*[+*/]\s*[0-9]/.test(t)) return true;
+  if (/[0-9]\s*-\s*[0-9]/.test(t)) {
+    const normalizedRaw = normalizeForMatch(raw);
+    const looksLikeStreetNumber = /#\s*\d+\s*-\s*\d+/.test(t);
+    const looksLikeAddress =
+      looksLikeStreetNumber ||
+      /\b(calle|carrera|cra|cll|avenida|av|apto|apartamento|barrio|km|transversal|diagonal)\b/.test(normalizedRaw);
+    if (!looksLikeAddress) return true;
+  }
 
   const patterns: RegExp[] = [
     /\b(algebra|algebraico|ecuacion|ecuaciones|derivada|derivadas|integral|integrales|trigonometria|logaritmo|logaritmos|matematic|calculo|polinomio|factoriza|simplifica|fraccion|fracciones|raiz|raices)\b/,
@@ -120,6 +131,37 @@ function isOnTopicMessage(normalized: string, raw: string): boolean {
   const digitCount = raw.replace(/\D/g, "").length;
   if (digitCount >= 6) return true;
 
+  return false;
+}
+
+function wordCount(normalized: string): number {
+  if (!normalized) return 0;
+  return normalized.split(/\s+/g).filter(Boolean).length;
+}
+
+function looksLikeShortFlowAnswer(normalized: string, raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return false;
+  if (/^\d{1,3}$/.test(t)) return true;
+  if (/\S+@\S+\.\S+/.test(t)) return true;
+  if (t.replace(/\D/g, "").length >= 6) return true;
+  const wc = wordCount(normalized);
+  if (wc >= 1 && wc <= 40 && t.length <= 250) return true;
+  return false;
+}
+
+function lastOutboundLooksLikeWeAreAskingForInput(args: { normalizedOutbound: string; rawOutbound: string }): boolean {
+  const normalizedOutbound = args.normalizedOutbound;
+  if (!normalizedOutbound && !args.rawOutbound) return false;
+  if (normalizedOutbound.includes("que servicio necesitas")) return true;
+  if (normalizedOutbound.includes("cual de estos servicios necesitas")) return true;
+  if (normalizedOutbound.includes("lista de servicios disponibles")) return true;
+  if (normalizedOutbound.includes("comenzaremos con el campo")) return true;
+  if (normalizedOutbound.includes("por favor indicame")) return true;
+  if (normalizedOutbound.includes("por favor indiqueme")) return true;
+  if (normalizedOutbound.includes("cual de las siguientes opciones prefieres")) return true;
+  if (normalizedOutbound.includes("empecemos")) return true;
+  if (args.rawOutbound.includes("?")) return true;
   return false;
 }
 
@@ -429,16 +471,27 @@ export const processInboundMessage = internalAction({
         normalizedCommand.includes("que servicios") ||
         normalizedCommand.includes("servicios tiene");
       if (wantsServices) {
-        const all = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{ name?: string; price?: number; status?: boolean }>;
+        const all = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
+          name?: string;
+          price?: number;
+          status?: boolean;
+        }>;
+        const services = (all || [])
+          .filter((s) => s.status !== false)
+          .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), "es"));
         const lines = [
           "Aquí tienes la lista de servicios disponibles:",
           "",
-          ...(all || [])
-            .filter((s) => s.status !== false)
-            .map((s) => `- ${String(s.name ?? "").trim()}${typeof s.price === "number" ? ` - $${s.price.toLocaleString("es-CO")}` : ""}`)
-            .filter((l) => l !== "- "),
+          ...services
+            .map(
+              (s, idx) =>
+                `${idx + 1}) ${String(s.name ?? "").trim()}${
+                  typeof s.price === "number" ? ` - $${s.price.toLocaleString("es-CO")}` : ""
+                }`
+            )
+            .filter((l) => !/^\d+\)\s*$/.test(l)),
           "",
-          "¿Cuál de estos servicios necesitas?",
+          "Responde con el número o el nombre del servicio.",
         ];
         const replyText = lines.join("\n");
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
@@ -460,15 +513,73 @@ export const processInboundMessage = internalAction({
 
       const hasMedia = Boolean(args.mediaUrl || args.mediaType);
       const applicantNeedsProfile = (applicant as { state?: string } | null)?.state === "NEEDS_PROFILE";
+      const recentMessages = (await ctx.runQuery(internalAny.ycloudState.listRecentMessages, {
+        contactId,
+        limit: 8,
+      })) as Array<{ direction?: string; content?: string }>;
+      let lastOutboundContent = "";
+      for (let i = recentMessages.length - 1; i >= 0; i--) {
+        const m = recentMessages[i];
+        if (m?.direction === "OUTBOUND" && typeof m.content === "string") {
+          lastOutboundContent = m.content;
+          break;
+        }
+      }
+      const normalizedLastOutbound = normalizeForMatch(lastOutboundContent);
+
+      let effectiveText = rawText;
+      const numericChoice = rawText.trim().match(/^\d{1,3}$/)?.[0] ?? "";
+      const lastWasServiceList = normalizedLastOutbound.includes("lista de servicios disponibles");
+      if (numericChoice && lastWasServiceList) {
+        const all = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
+          name?: string;
+          status?: boolean;
+        }>;
+        const services = (all || [])
+          .filter((s) => s.status !== false)
+          .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), "es"));
+        const n = Number(numericChoice);
+        const picked = Number.isFinite(n) ? services[n - 1] : null;
+        const pickedName = picked?.name ? String(picked.name).trim() : "";
+        if (pickedName) {
+          effectiveText = pickedName;
+        }
+      }
+
+      const inferredActiveFlow =
+        lastOutboundLooksLikeWeAreAskingForInput({
+          normalizedOutbound: normalizedLastOutbound,
+          rawOutbound: lastOutboundContent,
+        }) &&
+        looksLikeShortFlowAnswer(normalizedCommand, rawText);
+
+      if (inferredActiveFlow) {
+        const cutMarkers = [
+          /responda\s+ia\s*[:-]/i,
+          /responde\s+ia\s*[:-]/i,
+          /respuesta\s+ia\s*[:-]/i,
+        ];
+        for (const m of cutMarkers) {
+          const idx = effectiveText.search(m);
+          if (idx > 0) {
+            const left = effectiveText.slice(0, idx).trim();
+            if (left) effectiveText = left;
+            break;
+          }
+        }
+      }
+      const normalizedEffective = normalizeForMatch(effectiveText);
+
       const hasActiveFlow =
         Boolean(session.serviceId) ||
         (Array.isArray((session as { fieldIds?: unknown }).fieldIds) && ((session as { fieldIds?: unknown[] }).fieldIds?.length ?? 0) > 0) ||
-        typeof (session as { currentFieldIndex?: unknown }).currentFieldIndex === "number";
+        typeof (session as { currentFieldIndex?: unknown }).currentFieldIndex === "number" ||
+        inferredActiveFlow;
 
       if (
         shouldBlockMessage({
           rawText,
-          normalized: normalizedCommand,
+          normalized: normalizedEffective || normalizedCommand,
           hasMedia,
           hasActiveFlow,
           applicantNeedsProfile,
@@ -518,7 +629,7 @@ currentFieldIndex: ${typeof session.currentFieldIndex === "number" ? session.cur
 capturedDataKeys: ${session.data ? Object.keys(session.data).join(", ") : "N/A"}
 [Fin contexto técnico]
 
-${args.text}
+${effectiveText}
     `.trim();
 
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
