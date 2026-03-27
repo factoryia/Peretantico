@@ -74,15 +74,8 @@ const OFF_TOPIC_REPLY = [
 
 function isStronglyOffTopic(normalized: string, raw: string): boolean {
   const t = raw.trim();
-  if (/[0-9]\s*[+*/]\s*[0-9]/.test(t)) return true;
-  if (/[0-9]\s*-\s*[0-9]/.test(t)) {
-    const normalizedRaw = normalizeForMatch(raw);
-    const looksLikeStreetNumber = /#\s*\d+\s*-\s*\d+/.test(t);
-    const looksLikeAddress =
-      looksLikeStreetNumber ||
-      /\b(calle|carrera|cra|cll|avenida|av|apto|apartamento|barrio|km|transversal|diagonal)\b/.test(normalizedRaw);
-    if (!looksLikeAddress) return true;
-  }
+  if (/^\s*\d+\s*[+*/]\s*\d+\s*$/.test(t)) return true;
+  if (/^\s*\d+\s*-\s*\d+\s*$/.test(t)) return true;
 
   const patterns: RegExp[] = [
     /\b(algebra|algebraico|ecuacion|ecuaciones|derivada|derivadas|integral|integrales|trigonometria|logaritmo|logaritmos|matematic|calculo|polinomio|factoriza|simplifica|fraccion|fracciones|raiz|raices)\b/,
@@ -614,23 +607,20 @@ export const processInboundMessage = internalAction({
         getRequestStatus,
       } satisfies ToolSet;
 
-      const contextPrompt = `
-[Contexto técnico]
-contactId: ${contactId}
-phoneNumber: ${contactId.replace(/^whatsapp:/, "")}
-resolvedProfileId: ${resolvedProfileId ?? "N/A"}
-resolvedProfileName: ${resolvedProfile?.fullName ?? "N/A"}
-mediaType: ${args.mediaType || "N/A"}
-mediaUrl: ${args.mediaUrl || "N/A"}
-mediaFilename: ${args.mediaFilename || "N/A"}
-sessionState: ${session.state || "N/A"}
-selectedServiceId: ${session.serviceId || "N/A"}
-currentFieldIndex: ${typeof session.currentFieldIndex === "number" ? session.currentFieldIndex : "N/A"}
-capturedDataKeys: ${session.data ? Object.keys(session.data).join(", ") : "N/A"}
-[Fin contexto técnico]
+      const contextParts = [
+        `contactId=${contactId}`,
+        `phone=${contactId.replace(/^whatsapp:/, "")}`,
+        resolvedProfileId ? `profileId=${resolvedProfileId}` : undefined,
+        resolvedProfile?.fullName ? `profileName=${String(resolvedProfile.fullName)}` : undefined,
+        args.mediaType ? `mediaType=${args.mediaType}` : undefined,
+        args.mediaUrl ? `mediaUrl=${args.mediaUrl}` : undefined,
+        args.mediaFilename ? `mediaFilename=${args.mediaFilename}` : undefined,
+        session.state ? `sessionState=${String(session.state)}` : undefined,
+        session.serviceId ? `serviceId=${String(session.serviceId)}` : undefined,
+        typeof session.currentFieldIndex === "number" ? `fieldIndex=${session.currentFieldIndex}` : undefined,
+      ].filter(Boolean);
 
-${effectiveText}
-    `.trim();
+      const contextPrompt = [`[ctx] ${contextParts.join(" ")}`, effectiveText].join("\n");
 
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
         prompt: contextPrompt,

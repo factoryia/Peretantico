@@ -1,6 +1,7 @@
 import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { anyApi } from "convex/server";
+import { components } from "../../../_generated/api";
 import type { Id } from "../../../_generated/dataModel";
 
 function hasMeaningfulValue(value: unknown): boolean {
@@ -277,11 +278,21 @@ export const createRequest = createTool({
       fieldTypeById.set(String(f._id), String(f.type ?? "Text"));
       fieldNameById.set(String(f._id), String(f.name ?? ""));
     }
+    const activeFields = (service.fields || []).filter((f) => f.status !== false);
     const provided = new Map<string, unknown>();
     for (const item of args.data || []) {
       const fid = String(item.fieldId ?? "").trim();
       if (!fid) continue;
       provided.set(fid, item.value);
+    }
+    const hasAnyMeaningful = (args.data || []).some((item) => hasMeaningfulValue(item.value));
+    if (activeFields.length > 0 && !hasAnyMeaningful) {
+      const first = activeFields[0];
+      return {
+        ok: false,
+        message: `Antes de crear la solicitud necesito al menos un dato del servicio. Empecemos con "${String(first?.name ?? "el primer campo")}".`,
+        missingFields: [String(first?.name ?? "Campo")],
+      };
     }
 
     const missing = requiredFields
@@ -357,18 +368,31 @@ export const createRequest = createTool({
     const request = await ctx.runQuery(anyApi.requests.get, { id: requestId as Id<"requests"> });
 
     if (contactId) {
-      const session = await ctx.runQuery(anyApi.whatsappBotState.getSessionByContact, { contactId });
-      if (session?._id) {
-        await ctx.runMutation(anyApi.whatsappBotState.patchSession, {
-          id: session._id,
-          serviceId: undefined,
-          fieldIds: undefined,
-          currentFieldIndex: undefined,
-          data: {},
-          attachments: [],
-          state: "INIT",
+      try {
+        const createdThread = await ctx.runMutation(components.agent.threads.createThread, {
+          title: `WhatsApp ${contactId} (${request?.applicationNumber || "nueva solicitud"})`,
+          userId: contactId,
         });
-      }
+
+        await ctx.runMutation(anyApi.conversationState.resetConversationForContact, {
+          contactId,
+          newThreadId: createdThread._id,
+        });
+
+        const session = await ctx.runQuery(anyApi.whatsappBotState.getSessionByContact, { contactId });
+        if (session?._id) {
+          await ctx.runMutation(anyApi.whatsappBotState.patchSession, {
+            id: session._id,
+            threadId: createdThread._id,
+            serviceId: undefined,
+            fieldIds: undefined,
+            currentFieldIndex: undefined,
+            data: {},
+            attachments: [],
+            state: "INIT",
+          });
+        }
+      } catch {}
     }
 
     return {
