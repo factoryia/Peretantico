@@ -3,6 +3,8 @@ export type RequestCompletionPayload = {
   message?: string;
   newThreadId?: string;
   closureApplied?: boolean;
+  contextRestarted?: boolean;
+  softReset?: boolean;
 };
 
 export type RawCreateRequestCompletion = {
