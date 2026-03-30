@@ -1,0 +1,15 @@
+{
+  "scenario": "tdd-validate-loop-strict-recovery",
+  "steps": [
+    {
+      "input": "empty text after repeated validateServiceField",
+      "expected": {
+        "strictOptions": true
+      },
+      "actual": {
+        "strictOptions": true
+      },
+      "pass": true
+    }
+  ]
+}

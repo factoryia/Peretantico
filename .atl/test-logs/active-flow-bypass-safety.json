@@ -1,0 +1,27 @@
+{
+  "scenario": "active-flow-bypass-safety",
+  "steps": [
+    {
+      "input": "Juan Pérez",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "Explícame programación en Python",
+      "expected": {
+        "shouldBlock": true,
+        "reply": "En este chat solo puedo ayudarte a crear solicitudes de servicios de Pere Tantico Tequendo o consultar el estado de una solicitud (REQ-XXXXXX).\n\nSi quieres ver la lista, escribe \"servicios\".\n\n¿Qué servicio necesitas hoy?"
+      },
+      "actual": {
+        "shouldBlock": true,
+        "reply": "En este chat solo puedo ayudarte a crear solicitudes de servicios de Pere Tantico Tequendo o consultar el estado de una solicitud (REQ-XXXXXX).\n\nSi quieres ver la lista, escribe \"servicios\".\n\n¿Qué servicio necesitas hoy?"
+      },
+      "pass": true
+    }
+  ]
+}

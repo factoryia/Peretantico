@@ -1,0 +1,19 @@
+{
+  "scenario": "context-prompt-details",
+  "steps": [
+    {
+      "input": "buildInboundContextPrompt",
+      "expected": {
+        "containsProfileId": true,
+        "containsServiceId": true,
+        "endsWithEffectiveText": true
+      },
+      "actual": {
+        "containsProfileId": true,
+        "containsServiceId": true,
+        "endsWithEffectiveText": true
+      },
+      "pass": true
+    }
+  ]
+}

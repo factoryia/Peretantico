@@ -1,0 +1,15 @@
+{
+  "scenario": "service-shorthand-after-list",
+  "steps": [
+    {
+      "input": "Matrimonio",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}

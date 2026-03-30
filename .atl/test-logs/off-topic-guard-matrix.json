@@ -1,0 +1,55 @@
+{
+  "scenario": "off-topic-guard-matrix",
+  "steps": [
+    {
+      "input": "Convierte 200 dólares a pesos colombianos",
+      "expected": {
+        "shouldBlock": true
+      },
+      "actual": {
+        "shouldBlock": true
+      },
+      "pass": true
+    },
+    {
+      "input": "Ayúdame con mi tarea de matemáticas: 7*8",
+      "expected": {
+        "shouldBlock": true
+      },
+      "actual": {
+        "shouldBlock": true
+      },
+      "pass": true
+    },
+    {
+      "input": "Redacta un email formal para mi jefe",
+      "expected": {
+        "shouldBlock": true
+      },
+      "actual": {
+        "shouldBlock": true
+      },
+      "pass": true
+    },
+    {
+      "input": "¿Cómo estará el clima mañana en Bogotá?",
+      "expected": {
+        "shouldBlock": true
+      },
+      "actual": {
+        "shouldBlock": true
+      },
+      "pass": true
+    },
+    {
+      "input": "Escribe un script en TypeScript para una API",
+      "expected": {
+        "shouldBlock": true
+      },
+      "actual": {
+        "shouldBlock": true
+      },
+      "pass": true
+    }
+  ]
+}

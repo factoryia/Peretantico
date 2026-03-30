@@ -1,0 +1,11 @@
+{
+  "scenario": "closure-success-single-message",
+  "steps": [
+    {
+      "input": "resolveRequestCompletionMessage success",
+      "expected": "Tu solicitud quedó registrada con el número REQ-1001.\n\nHe cerrado esta conversación.",
+      "actual": "Tu solicitud quedó registrada con el número REQ-1001.\n\nHe cerrado esta conversación.",
+      "pass": true
+    }
+  ]
+}

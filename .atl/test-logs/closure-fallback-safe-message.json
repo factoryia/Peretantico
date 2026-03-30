@@ -1,0 +1,17 @@
+{
+  "scenario": "closure-fallback-safe-message",
+  "steps": [
+    {
+      "input": "resolveRequestCompletionMessage fallback",
+      "expected": {
+        "containsApplicationNumber": true,
+        "containsFallbackInstruction": true
+      },
+      "actual": {
+        "containsApplicationNumber": true,
+        "containsFallbackInstruction": true
+      },
+      "pass": true
+    }
+  ]
+}

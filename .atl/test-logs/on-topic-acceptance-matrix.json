@@ -1,0 +1,85 @@
+{
+  "scenario": "on-topic-acceptance-matrix",
+  "steps": [
+    {
+      "input": "servicios",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "Quiero revisar el estado de REQ-219810",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "Mi nombre es Ana Gómez",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "CC 123456789",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "+57 3001234567",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "ana@example.com",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "Calle 123 #45-67",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "sí",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}

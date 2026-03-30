@@ -14,6 +14,16 @@ import { validateServiceField } from "./system/ai/tools/validateServiceField";
 import { createApplicantProfile } from "./system/ai/tools/createApplicantProfile";
 import { createRequest } from "./system/ai/tools/createRequest";
 import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
+import { buildRequestCompletionMessage, resolveRequestCompletionMessage } from "./system/ai/requestCompletion";
+import {
+  buildInboundContextPrompt,
+  deriveInboundFlowDecision,
+  extractCreateRequestCompletion,
+  getUnsupportedIntentReply,
+  isResetThreadTitle,
+  normalizeForMatch,
+  resolveAgentEmptyReply,
+} from "./ycloudBot.helpers";
 
 type MediaType = "image" | "video" | "audio" | "document";
 
@@ -52,128 +62,6 @@ function phoneVariants(raw: string): string[] {
   }
 
   return Array.from(variants).filter(Boolean);
-}
-
-function normalizeForMatch(input: string): string {
-  return input
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-const OFF_TOPIC_REPLY = [
-  "En este chat solo puedo ayudarte a crear solicitudes de servicios de Pere Tantico Tequendo o consultar el estado de una solicitud (REQ-XXXXXX).",
-  "",
-  'Si quieres ver la lista, escribe "servicios".',
-  "",
-  "¿Qué servicio necesitas hoy?",
-].join("\n");
-
-function isStronglyOffTopic(normalized: string, raw: string): boolean {
-  const t = raw.trim();
-  if (/^\s*\d+\s*[+*/]\s*\d+\s*$/.test(t)) return true;
-  if (/^\s*\d+\s*-\s*\d+\s*$/.test(t)) return true;
-
-  const patterns: RegExp[] = [
-    /\b(algebra|algebraico|ecuacion|ecuaciones|derivada|derivadas|integral|integrales|trigonometria|logaritmo|logaritmos|matematic|calculo|polinomio|factoriza|simplifica|fraccion|fracciones|raiz|raices)\b/,
-    /\b(programacion|programar|codigo|code|python|javascript|typescript|react|node|sql)\b/,
-    /\b(chiste|cuentame un chiste|cuento|poema|cancion|letra|horoscopo)\b/,
-  ];
-
-  return patterns.some((r) => r.test(normalized));
-}
-
-function isOnTopicMessage(normalized: string, raw: string): boolean {
-  if (!normalized) return false;
-
-  if (/\breq\s*\d{3,}\b/.test(normalized)) return true;
-
-  if (
-    /\b(servicio|servicios|solicitud|solicitudes|pedido|pedidos|estado|seguimiento|consultar|consulta|precio|costo|valor|pago|pagar|prioridad|prioritario|radicacion|autorizacion|cita|citas|medicamento|medicamentos|domicilio|entrega)\b/.test(
-      normalized
-    )
-  ) {
-    return true;
-  }
-
-  if (/\b(documento|cedula|cc|ti|pasaporte|nombre|direccion|correo|email)\b/.test(normalized)) return true;
-
-  if (/\b(ayuda|me ayudas|necesito ayuda)\b/.test(normalized)) return true;
-
-  if (
-    normalized === "si" ||
-    normalized === "no" ||
-    normalized === "ok" ||
-    normalized === "listo" ||
-    normalized === "correcto" ||
-    normalized === "confirmo" ||
-    normalized === "de acuerdo"
-  ) {
-    return true;
-  }
-
-  if (/^\s*(hola|buenas|buenos dias|buenas tardes|buenas noches|buen dia)\b/.test(normalized)) return true;
-
-  if (/\S+@\S+\.\S+/.test(raw)) return true;
-
-  if (/\b(calle|carrera|cra|cll|avenida|av|apto|apartamento|barrio|km|transversal|diagonal)\b/.test(normalized)) return true;
-
-  const digitCount = raw.replace(/\D/g, "").length;
-  if (digitCount >= 6) return true;
-
-  return false;
-}
-
-function wordCount(normalized: string): number {
-  if (!normalized) return 0;
-  return normalized.split(/\s+/g).filter(Boolean).length;
-}
-
-function looksLikeShortFlowAnswer(normalized: string, raw: string): boolean {
-  const t = raw.trim();
-  if (!t) return false;
-  if (/^\d{1,3}$/.test(t)) return true;
-  if (/\S+@\S+\.\S+/.test(t)) return true;
-  if (t.replace(/\D/g, "").length >= 6) return true;
-  const wc = wordCount(normalized);
-  if (wc >= 1 && wc <= 40 && t.length <= 250) return true;
-  return false;
-}
-
-function lastOutboundLooksLikeWeAreAskingForInput(args: { normalizedOutbound: string; rawOutbound: string }): boolean {
-  const normalizedOutbound = args.normalizedOutbound;
-  if (!normalizedOutbound && !args.rawOutbound) return false;
-  if (normalizedOutbound.includes("que servicio necesitas")) return true;
-  if (normalizedOutbound.includes("cual de estos servicios necesitas")) return true;
-  if (normalizedOutbound.includes("lista de servicios disponibles")) return true;
-  if (normalizedOutbound.includes("comenzaremos con el campo")) return true;
-  if (normalizedOutbound.includes("por favor indicame")) return true;
-  if (normalizedOutbound.includes("por favor indiqueme")) return true;
-  if (normalizedOutbound.includes("cual de las siguientes opciones prefieres")) return true;
-  if (normalizedOutbound.includes("empecemos")) return true;
-  if (args.rawOutbound.includes("?")) return true;
-  return false;
-}
-
-function shouldBlockMessage(args: {
-  rawText: string;
-  normalized: string;
-  hasMedia: boolean;
-  hasActiveFlow: boolean;
-  applicantNeedsProfile: boolean;
-}): boolean {
-  const text = args.rawText.trim();
-  if (!text && !args.hasMedia) return false;
-  if (args.hasMedia) return false;
-
-  if (isStronglyOffTopic(args.normalized, args.rawText)) return true;
-
-  if (args.hasActiveFlow || args.applicantNeedsProfile) return false;
-
-  return !isOnTopicMessage(args.normalized, args.rawText);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -235,6 +123,64 @@ async function sendWhatsAppText(args: { contactId: string; content: string }): P
   }
 
   return null;
+}
+
+async function clearContactMessageHistory(
+  ctx: { runMutation: (...args: any[]) => Promise<any> },
+  internalAny: any,
+  contactId: string
+): Promise<void> {
+  for (;;) {
+    const res = await ctx.runMutation(internalAny.ycloudState.deleteMessagesByContactBatch, {
+      contactId,
+      limit: 500,
+    });
+    if (res?.isDone) break;
+  }
+}
+
+async function applyConversationReset(args: {
+  ctx: { runAction: (...args: any[]) => Promise<any>; runMutation: (...args: any[]) => Promise<any> };
+  internalAny: any;
+  sessionId: Id<"botSessions">;
+  contactId: string;
+  customerName?: string;
+  currentThreadId?: string;
+  newThreadId: string;
+  clearProfileAssociation: boolean;
+  deleteCurrentThreadMessages: boolean;
+}): Promise<void> {
+  if (args.deleteCurrentThreadMessages && args.currentThreadId) {
+    await args.ctx
+      .runAction(components.agent.threads.deleteAllForThreadIdSync, { threadId: args.currentThreadId })
+      .catch(() => null);
+  }
+
+  await clearContactMessageHistory(args.ctx, args.internalAny, args.contactId);
+
+  if (args.clearProfileAssociation) {
+    await args.ctx.runMutation(args.internalAny.whatsappBotState.clearProfileAssociationForContact, {
+      contactId: args.contactId,
+    });
+  }
+
+  await args.ctx.runMutation(args.internalAny.conversationState.resetConversationForContact, {
+    contactId: args.contactId,
+    newThreadId: args.newThreadId,
+    customerName: args.customerName,
+  });
+
+  await args.ctx.runMutation(args.internalAny.whatsappBotState.patchSession, {
+    id: args.sessionId,
+    threadId: args.newThreadId,
+    profileId: args.clearProfileAssociation ? null : undefined,
+    serviceId: null,
+    fieldIds: null,
+    currentFieldIndex: null,
+    data: {},
+    attachments: [],
+    state: "INIT",
+  });
 }
 
 export const processInboundMessage = internalAction({
@@ -302,9 +248,9 @@ export const processInboundMessage = internalAction({
       if (session.state === "INIT" && session.serviceId) {
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
-          serviceId: undefined,
-          fieldIds: undefined,
-          currentFieldIndex: undefined,
+          serviceId: null,
+          fieldIds: null,
+          currentFieldIndex: null,
           data: {},
           attachments: [],
           state: "INIT",
@@ -328,9 +274,9 @@ export const processInboundMessage = internalAction({
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
           threadId: created.threadId,
-          serviceId: undefined,
-          fieldIds: undefined,
-          currentFieldIndex: undefined,
+          serviceId: null,
+          fieldIds: null,
+          currentFieldIndex: null,
           data: {},
           attachments: [],
           state: "INIT",
@@ -341,9 +287,9 @@ export const processInboundMessage = internalAction({
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
           threadId,
-          serviceId: undefined,
-          fieldIds: undefined,
-          currentFieldIndex: undefined,
+          serviceId: null,
+          fieldIds: null,
+          currentFieldIndex: null,
           data: {},
           attachments: [],
           state: "INIT",
@@ -405,36 +351,17 @@ export const processInboundMessage = internalAction({
         normalizedCommand === "borrar memoria";
 
       if (isResetCommand) {
-        if (threadId) {
-          await ctx.runAction(components.agent.threads.deleteAllForThreadIdSync, { threadId }).catch(() => null);
-        }
-
-        for (;;) {
-          const res = await ctx.runMutation(internalAny.ycloudState.deleteMessagesByContactBatch, {
-            contactId,
-            limit: 500,
-          });
-          if (res?.isDone) break;
-        }
-
-        await ctx.runMutation(internalAny.whatsappBotState.clearProfileAssociationForContact, { contactId });
-
         const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId} (reset)`, userId: contactId });
-        await ctx.runMutation(internalAny.conversationState.resetConversationForContact, {
+        await applyConversationReset({
+          ctx,
+          internalAny,
+          sessionId,
           contactId,
-          newThreadId: created.threadId,
           customerName: args.customerName,
-        });
-        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
-          id: sessionId,
-          threadId: created.threadId,
-          profileId: undefined,
-          serviceId: undefined,
-          fieldIds: undefined,
-          currentFieldIndex: undefined,
-          data: {},
-          attachments: [],
-          state: "INIT",
+          currentThreadId: threadId,
+          newThreadId: created.threadId,
+          clearProfileAssociation: true,
+          deleteCurrentThreadMessages: true,
         });
 
         const replyText = ["Listo. Reinicié la conversación.", "¿Qué servicio necesitas hoy?"].join("\n");
@@ -453,6 +380,29 @@ export const processInboundMessage = internalAction({
           });
         }
         return;
+      }
+
+      if (threadId) {
+        const activeThread = await ctx.runQuery(components.agent.threads.getThread, { threadId }).catch(() => null);
+        if (isResetThreadTitle(activeThread?.title)) {
+          const created = await tanticoAgent.createThread(ctx, { title: `WhatsApp ${contactId}`, userId: contactId });
+          await ctx.runMutation(internalAny.conversationState.resetConversationForContact, {
+            contactId,
+            newThreadId: created.threadId,
+            customerName: args.customerName,
+          });
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            threadId: created.threadId,
+            serviceId: null,
+            fieldIds: null,
+            currentFieldIndex: null,
+            data: {},
+            attachments: [],
+            state: "INIT",
+          });
+          threadId = created.threadId;
+        }
       }
 
       const wantsServices =
@@ -518,67 +468,29 @@ export const processInboundMessage = internalAction({
           break;
         }
       }
-      const normalizedLastOutbound = normalizeForMatch(lastOutboundContent);
+      const allServices = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
+        name?: string;
+        status?: boolean;
+      }>;
+      const flowDecision = deriveInboundFlowDecision({
+        rawText,
+        hasMedia,
+        lastOutboundContent,
+        services: allServices || [],
+        hasSessionServiceId: Boolean(session.serviceId),
+        sessionFieldIdsCount: Array.isArray((session as { fieldIds?: unknown[] }).fieldIds)
+          ? (((session as { fieldIds?: unknown[] }).fieldIds?.length ?? 0) as number)
+          : 0,
+        currentFieldIndex:
+          typeof (session as { currentFieldIndex?: unknown }).currentFieldIndex === "number"
+            ? ((session as { currentFieldIndex?: number }).currentFieldIndex ?? undefined)
+            : undefined,
+        applicantNeedsProfile,
+      });
+      const effectiveText = flowDecision.effectiveText;
 
-      let effectiveText = rawText;
-      const numericChoice = rawText.trim().match(/^\d{1,3}$/)?.[0] ?? "";
-      const lastWasServiceList = normalizedLastOutbound.includes("lista de servicios disponibles");
-      if (numericChoice && lastWasServiceList) {
-        const all = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
-          name?: string;
-          status?: boolean;
-        }>;
-        const services = (all || [])
-          .filter((s) => s.status !== false)
-          .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), "es"));
-        const n = Number(numericChoice);
-        const picked = Number.isFinite(n) ? services[n - 1] : null;
-        const pickedName = picked?.name ? String(picked.name).trim() : "";
-        if (pickedName) {
-          effectiveText = pickedName;
-        }
-      }
-
-      const inferredActiveFlow =
-        lastOutboundLooksLikeWeAreAskingForInput({
-          normalizedOutbound: normalizedLastOutbound,
-          rawOutbound: lastOutboundContent,
-        }) &&
-        looksLikeShortFlowAnswer(normalizedCommand, rawText);
-
-      if (inferredActiveFlow) {
-        const cutMarkers = [
-          /responda\s+ia\s*[:-]/i,
-          /responde\s+ia\s*[:-]/i,
-          /respuesta\s+ia\s*[:-]/i,
-        ];
-        for (const m of cutMarkers) {
-          const idx = effectiveText.search(m);
-          if (idx > 0) {
-            const left = effectiveText.slice(0, idx).trim();
-            if (left) effectiveText = left;
-            break;
-          }
-        }
-      }
-      const normalizedEffective = normalizeForMatch(effectiveText);
-
-      const hasActiveFlow =
-        Boolean(session.serviceId) ||
-        (Array.isArray((session as { fieldIds?: unknown }).fieldIds) && ((session as { fieldIds?: unknown[] }).fieldIds?.length ?? 0) > 0) ||
-        typeof (session as { currentFieldIndex?: unknown }).currentFieldIndex === "number" ||
-        inferredActiveFlow;
-
-      if (
-        shouldBlockMessage({
-          rawText,
-          normalized: normalizedEffective || normalizedCommand,
-          hasMedia,
-          hasActiveFlow,
-          applicantNeedsProfile,
-        })
-      ) {
-        const replyText = OFF_TOPIC_REPLY;
+      if (flowDecision.shouldBlock) {
+        const replyText = getUnsupportedIntentReply();
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
           const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
@@ -607,29 +519,85 @@ export const processInboundMessage = internalAction({
         getRequestStatus,
       } satisfies ToolSet;
 
-      const contextParts = [
-        `contactId=${contactId}`,
-        `phone=${contactId.replace(/^whatsapp:/, "")}`,
-        resolvedProfileId ? `profileId=${resolvedProfileId}` : undefined,
-        resolvedProfile?.fullName ? `profileName=${String(resolvedProfile.fullName)}` : undefined,
-        args.mediaType ? `mediaType=${args.mediaType}` : undefined,
-        args.mediaUrl ? `mediaUrl=${args.mediaUrl}` : undefined,
-        args.mediaFilename ? `mediaFilename=${args.mediaFilename}` : undefined,
-        session.state ? `sessionState=${String(session.state)}` : undefined,
-        session.serviceId ? `serviceId=${String(session.serviceId)}` : undefined,
-        typeof session.currentFieldIndex === "number" ? `fieldIndex=${session.currentFieldIndex}` : undefined,
-      ].filter(Boolean);
-
-      const contextPrompt = [`[ctx] ${contextParts.join(" ")}`, effectiveText].join("\n");
+      const contextPrompt = buildInboundContextPrompt({
+        contactId,
+        effectiveText,
+        resolvedProfileId,
+        resolvedProfileName: resolvedProfile?.fullName ? String(resolvedProfile.fullName) : null,
+        mediaType: args.mediaType,
+        mediaUrl: args.mediaUrl,
+        mediaFilename: args.mediaFilename,
+        sessionState: session.state ? String(session.state) : null,
+        serviceId: session.serviceId ? String(session.serviceId) : null,
+        currentFieldIndex: typeof session.currentFieldIndex === "number" ? session.currentFieldIndex : null,
+      });
 
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
         prompt: contextPrompt,
         tools,
-        
       });
 
-      let replyText = response.text ?? "";
-      replyText = replyText.trim();
+      const rawCompletion = extractCreateRequestCompletion(response.toolResults);
+
+      if (rawCompletion?.ok && !rawCompletion.completion) {
+        try {
+          const created = await tanticoAgent.createThread(ctx, {
+            title: `WhatsApp ${contactId}`,
+            userId: contactId,
+          });
+
+          rawCompletion.completion = {
+            closeConversation: true,
+            message: buildRequestCompletionMessage({
+              applicationNumber: rawCompletion.applicationNumber,
+              contextRestarted: true,
+            }),
+            newThreadId: created.threadId,
+            closureApplied: true,
+          };
+        } catch {
+          rawCompletion.completion = {
+            closeConversation: true,
+            message: buildRequestCompletionMessage({
+              applicationNumber: rawCompletion.applicationNumber,
+              contextRestarted: false,
+            }),
+            closureApplied: false,
+          };
+        }
+      }
+
+      let replyText = (response.text ?? "").trim();
+
+      if (rawCompletion?.ok && rawCompletion.completion?.closeConversation) {
+        const completion = rawCompletion.completion;
+        let closureFailed = false;
+
+        if (completion.newThreadId) {
+          try {
+            await applyConversationReset({
+              ctx,
+              internalAny,
+              sessionId,
+              contactId,
+              customerName: args.customerName,
+              currentThreadId: threadId,
+              newThreadId: completion.newThreadId,
+              clearProfileAssociation: true,
+              deleteCurrentThreadMessages: true,
+            });
+            threadId = completion.newThreadId;
+          } catch (closureError) {
+            console.error("Conversation closure error:", closureError);
+            closureFailed = true;
+          }
+        }
+
+        replyText = resolveRequestCompletionMessage({
+          rawCompletion,
+          closureFailed,
+        });
+      }
         
       if (!replyText) {
         const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
@@ -639,6 +607,16 @@ export const processInboundMessage = internalAction({
           replyText = extractTextFromMessageContent(content).trim();
         }
       }
+
+      if (rawCompletion?.ok && rawCompletion.completion?.closeConversation) {
+        replyText = replyText || rawCompletion.completion.message?.trim() || "";
+      }
+
+      replyText = resolveAgentEmptyReply({
+        assistantText: replyText,
+        toolResults: response.toolResults,
+        lastOutboundContent,
+      });
 
       if (replyText) {
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });

@@ -3,6 +3,19 @@ import { jsonSchema } from "ai";
 import { anyApi } from "convex/server";
 import { components } from "../../../_generated/api";
 import type { Id } from "../../../_generated/dataModel";
+import { buildRequestCompletionMessage } from "../requestCompletion";
+
+export function buildCompletionThreadTitles(args: {
+  contactId: string;
+  applicationNumber?: string;
+}): { closedThreadTitle: string; nextActiveThreadTitle: string } {
+  const safeContact = args.contactId.trim();
+  const reqLabel = args.applicationNumber?.trim() || "nueva solicitud";
+  return {
+    closedThreadTitle: `WhatsApp ${safeContact} (${reqLabel})`,
+    nextActiveThreadTitle: `WhatsApp ${safeContact}`,
+  };
+}
 
 function hasMeaningfulValue(value: unknown): boolean {
   if (value === null || value === undefined) return false;
@@ -260,6 +273,7 @@ export const createRequest = createTool({
       id: args.serviceId as Id<"services">,
     })) as
       | {
+          price?: number;
           fields?: Array<{
             _id: Id<"serviceFields">;
             name?: string;
@@ -350,8 +364,7 @@ export const createRequest = createTool({
       normalizedAttachments.push({ fileName: fileName || "Adjunto", url, storageId: a.storageId });
     }
 
-    const baseServicePrice =
-      typeof (service as any)?.price === "number" ? (service as any).price : 0;
+    const baseServicePrice = typeof service.price === "number" ? service.price : 0;
 
     const requestId = await ctx.runMutation(anyApi.requests.create, {
       applicantId,
@@ -367,38 +380,60 @@ export const createRequest = createTool({
 
     const request = await ctx.runQuery(anyApi.requests.get, { id: requestId as Id<"requests"> });
 
+    let completion:
+      | {
+          closeConversation: boolean;
+          message: string;
+          newThreadId?: string;
+          closureApplied: boolean;
+        }
+      | undefined;
+
     if (contactId) {
       try {
+        const titles = buildCompletionThreadTitles({
+          contactId,
+          applicationNumber: request?.applicationNumber,
+        });
+        const currentThreadId = (ctx as { threadId?: string }).threadId;
+        if (currentThreadId) {
+          await ctx.runMutation(components.agent.threads.updateThread, {
+            threadId: currentThreadId,
+            patch: { title: titles.closedThreadTitle },
+          });
+        }
+
         const createdThread = await ctx.runMutation(components.agent.threads.createThread, {
-          title: `WhatsApp ${contactId} (${request?.applicationNumber || "nueva solicitud"})`,
+          title: titles.nextActiveThreadTitle,
           userId: contactId,
         });
 
-        await ctx.runMutation(anyApi.conversationState.resetConversationForContact, {
-          contactId,
+        completion = {
+          closeConversation: true,
+          message: buildRequestCompletionMessage({
+            applicationNumber: request?.applicationNumber,
+            contextRestarted: true,
+          }),
           newThreadId: createdThread._id,
-        });
-
-        const session = await ctx.runQuery(anyApi.whatsappBotState.getSessionByContact, { contactId });
-        if (session?._id) {
-          await ctx.runMutation(anyApi.whatsappBotState.patchSession, {
-            id: session._id,
-            threadId: createdThread._id,
-            serviceId: undefined,
-            fieldIds: undefined,
-            currentFieldIndex: undefined,
-            data: {},
-            attachments: [],
-            state: "INIT",
-          });
-        }
-      } catch {}
+          closureApplied: true,
+        };
+      } catch {
+        completion = {
+          closeConversation: true,
+          message: buildRequestCompletionMessage({
+            applicationNumber: request?.applicationNumber,
+            contextRestarted: false,
+          }),
+          closureApplied: false,
+        };
+      }
     }
 
     return {
       ok: true,
       requestId,
       applicationNumber: request?.applicationNumber,
+      completion,
     };
   },
 });

@@ -1,0 +1,15 @@
+{
+  "scenario": "tdd-progress-question-on-topic",
+  "steps": [
+    {
+      "input": "en que campo voy ?",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}

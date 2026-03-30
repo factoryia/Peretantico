@@ -1,0 +1,15 @@
+{
+  "scenario": "tdd-numeric-answer-after-indica-prompt",
+  "steps": [
+    {
+      "input": "123231",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}

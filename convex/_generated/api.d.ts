@@ -28,6 +28,7 @@ import type * as services from "../services.js";
 import type * as specialDates from "../specialDates.js";
 import type * as system_ai_agents_tanticoAgent from "../system/ai/agents/tanticoAgent.js";
 import type * as system_ai_constants from "../system/ai/constants.js";
+import type * as system_ai_requestCompletion from "../system/ai/requestCompletion.js";
 import type * as system_ai_tools_createApplicantProfile from "../system/ai/tools/createApplicantProfile.js";
 import type * as system_ai_tools_createRequest from "../system/ai/tools/createRequest.js";
 import type * as system_ai_tools_getRequestStatus from "../system/ai/tools/getRequestStatus.js";
@@ -36,6 +37,7 @@ import type * as system_ai_tools_getSpecialDateToday from "../system/ai/tools/ge
 import type * as system_ai_tools_listServices from "../system/ai/tools/listServices.js";
 import type * as system_ai_tools_searchProfileByNumber from "../system/ai/tools/searchProfileByNumber.js";
 import type * as system_ai_tools_validateServiceField from "../system/ai/tools/validateServiceField.js";
+import type * as system_ai_unsupportedIntent from "../system/ai/unsupportedIntent.js";
 import type * as system_gemini from "../system/gemini.js";
 import type * as system_tanticoPrompt from "../system/tanticoPrompt.js";
 import type * as transportationTypes from "../transportationTypes.js";
@@ -71,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   specialDates: typeof specialDates;
   "system/ai/agents/tanticoAgent": typeof system_ai_agents_tanticoAgent;
   "system/ai/constants": typeof system_ai_constants;
+  "system/ai/requestCompletion": typeof system_ai_requestCompletion;
   "system/ai/tools/createApplicantProfile": typeof system_ai_tools_createApplicantProfile;
   "system/ai/tools/createRequest": typeof system_ai_tools_createRequest;
   "system/ai/tools/getRequestStatus": typeof system_ai_tools_getRequestStatus;
@@ -79,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   "system/ai/tools/listServices": typeof system_ai_tools_listServices;
   "system/ai/tools/searchProfileByNumber": typeof system_ai_tools_searchProfileByNumber;
   "system/ai/tools/validateServiceField": typeof system_ai_tools_validateServiceField;
+  "system/ai/unsupportedIntent": typeof system_ai_unsupportedIntent;
   "system/gemini": typeof system_gemini;
   "system/tanticoPrompt": typeof system_tanticoPrompt;
   transportationTypes: typeof transportationTypes;

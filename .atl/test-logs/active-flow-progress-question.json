@@ -1,0 +1,15 @@
+{
+  "scenario": "active-flow-progress-question",
+  "steps": [
+    {
+      "input": "en que campo voy ?",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}

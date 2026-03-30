@@ -1,0 +1,17 @@
+{
+  "scenario": "tdd-numeric-selection-alternate-service-list-wording",
+  "steps": [
+    {
+      "input": "11",
+      "expected": {
+        "shouldBlock": false,
+        "mappedToService": true
+      },
+      "actual": {
+        "shouldBlock": false,
+        "mappedToService": true
+      },
+      "pass": true
+    }
+  ]
+}

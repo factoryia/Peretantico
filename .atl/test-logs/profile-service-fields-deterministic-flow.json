@@ -1,0 +1,75 @@
+{
+  "scenario": "profile-service-fields-deterministic-flow",
+  "steps": [
+    {
+      "input": "resolved-profile-context: +573001234567",
+      "expected": {
+        "effectiveText": "+573001234567",
+        "normalizedEffective": "573001234567",
+        "shouldBlock": false
+      },
+      "actual": {
+        "effectiveText": "+573001234567",
+        "normalizedEffective": "573001234567",
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "select-service-by-number: 2",
+      "expected": {
+        "effectiveText": "Domicilio de medicamentos",
+        "normalizedEffective": "domicilio de medicamentos",
+        "shouldBlock": false
+      },
+      "actual": {
+        "effectiveText": "Domicilio de medicamentos",
+        "normalizedEffective": "domicilio de medicamentos",
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "field-answer-name: Ana Gómez",
+      "expected": {
+        "effectiveText": "Ana Gómez",
+        "normalizedEffective": "ana gomez",
+        "shouldBlock": false
+      },
+      "actual": {
+        "effectiveText": "Ana Gómez",
+        "normalizedEffective": "ana gomez",
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "field-answer-email: ana@example.com",
+      "expected": {
+        "effectiveText": "ana@example.com",
+        "normalizedEffective": "ana example com",
+        "shouldBlock": false
+      },
+      "actual": {
+        "effectiveText": "ana@example.com",
+        "normalizedEffective": "ana example com",
+        "shouldBlock": false
+      },
+      "pass": true
+    },
+    {
+      "input": "field-answer-address: Calle 80 # 10-15",
+      "expected": {
+        "effectiveText": "Calle 80 # 10-15",
+        "normalizedEffective": "calle 80 10 15",
+        "shouldBlock": false
+      },
+      "actual": {
+        "effectiveText": "Calle 80 # 10-15",
+        "normalizedEffective": "calle 80 10 15",
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}

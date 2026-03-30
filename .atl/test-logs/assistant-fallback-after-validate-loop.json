@@ -1,0 +1,17 @@
+{
+  "scenario": "assistant-fallback-after-validate-loop",
+  "steps": [
+    {
+      "input": "empty assistant text + 5 validateServiceField calls",
+      "expected": {
+        "hasReply": true,
+        "strictOptions": true
+      },
+      "actual": {
+        "hasReply": true,
+        "strictOptions": true
+      },
+      "pass": true
+    }
+  ]
+}

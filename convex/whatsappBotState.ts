@@ -244,20 +244,62 @@ export const ensureSession = internalMutation({
 export const patchSession = internalMutation({
   args: {
     id: v.id("botSessions"),
-    profileId: v.optional(v.id("profiles")),
-    threadId: v.optional(v.string()),
-    serviceId: v.optional(v.id("services")),
-    fieldIds: v.optional(v.array(v.id("serviceFields"))),
-    currentFieldIndex: v.optional(v.number()),
+    profileId: v.optional(v.union(v.id("profiles"), v.null())),
+    threadId: v.optional(v.union(v.string(), v.null())),
+    serviceId: v.optional(v.union(v.id("services"), v.null())),
+    fieldIds: v.optional(v.union(v.array(v.id("serviceFields")), v.null())),
+    currentFieldIndex: v.optional(v.union(v.number(), v.null())),
     data: v.optional(v.any()),
     attachments: v.optional(v.any()),
-    state: v.optional(v.string()),
+    state: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
-    const { id, ...rest } = args;
-    await ctx.db.patch(id, { ...rest, updatedAt: Date.now() });
+    const updates = buildPatchSessionUpdates(args);
+
+    await ctx.db.patch(args.id, updates);
   },
 });
+
+export function buildPatchSessionUpdates(args: {
+  id: Id<"botSessions">;
+  profileId?: Id<"profiles"> | null;
+  threadId?: string | null;
+  serviceId?: Id<"services"> | null;
+  fieldIds?: Id<"serviceFields">[] | null;
+  currentFieldIndex?: number | null;
+  data?: unknown;
+  attachments?: unknown;
+  state?: string | null;
+}): Record<string, unknown> {
+  const updates: Record<string, unknown> = { updatedAt: Date.now() };
+
+    if (Object.prototype.hasOwnProperty.call(args, "profileId")) {
+      updates.profileId = args.profileId ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "threadId")) {
+      updates.threadId = args.threadId ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "serviceId")) {
+      updates.serviceId = args.serviceId ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "fieldIds")) {
+      updates.fieldIds = args.fieldIds ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "currentFieldIndex")) {
+      updates.currentFieldIndex = args.currentFieldIndex ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "data")) {
+      updates.data = args.data;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "attachments")) {
+      updates.attachments = args.attachments;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "state")) {
+      updates.state = args.state ?? undefined;
+    }
+
+  return updates;
+}
 
 export const clearProfileAssociationForContact = internalMutation({
   args: { contactId: v.string() },

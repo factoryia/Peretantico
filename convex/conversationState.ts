@@ -4,6 +4,24 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 type MediaType = "image" | "video" | "audio" | "document";
 
+function sortByUpdatedAt<T extends { updatedAt?: number }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+}
+
+export function resolveThreadIdForConversation(args: {
+  currentThreadId?: string;
+  requestedThreadId?: string;
+}): string | undefined {
+  const requested = args.requestedThreadId?.trim();
+  if (requested) return requested;
+  const current = args.currentThreadId?.trim();
+  return current || undefined;
+}
+
+function getOpenConversation<T extends { status?: string }>(rows: T[]): T | null {
+  return rows.find((row) => row.status !== "closed") ?? null;
+}
+
 function buildPreview(args: { content: string; mediaType?: MediaType }): string {
   if (args.mediaType === "image") return "Imagen";
   if (args.mediaType === "video") return "Video";
@@ -17,13 +35,14 @@ function buildPreview(args: { content: string; mediaType?: MediaType }): string 
 export const getConversationByContact = internalQuery({
   args: { contactId: v.string() },
   handler: async (ctx, args) => {
-    const rows = await ctx.db
+    const rows = sortByUpdatedAt(
+      await ctx.db
       .query("conversations")
       .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
-      .collect();
+      .collect()
+    );
     if (rows.length === 0) return null;
-    rows.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    return rows[0] ?? null;
+    return getOpenConversation(rows) ?? rows[0] ?? null;
   },
 });
 
@@ -35,24 +54,28 @@ export const ensureConversationForContact = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const rows = await ctx.db
+    const rows = sortByUpdatedAt(
+      await ctx.db
       .query("conversations")
       .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
-      .collect();
+      .collect()
+    );
 
-    rows.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    const primary = rows[0] ?? null;
-    const duplicates = rows.slice(1);
-    for (const d of duplicates) {
+    const openRows = rows.filter((row) => row.status !== "closed");
+    const primary = openRows[0] ?? null;
+    for (const d of openRows.slice(1)) {
       await ctx.db.delete(d._id);
     }
 
     if (primary) {
-      const nextThreadId = primary.threadId ?? args.threadId;
+      const nextThreadId = resolveThreadIdForConversation({
+        currentThreadId: primary.threadId,
+        requestedThreadId: args.threadId,
+      });
       await ctx.db.patch(primary._id, {
         threadId: nextThreadId,
         customerName: args.customerName?.trim() || primary.customerName,
-        status: primary.status === "closed" ? "open" : primary.status,
+        status: primary.status === "pending" ? "pending" : "open",
         updatedAt: now,
       });
       return { conversationId: primary._id, threadId: nextThreadId };
@@ -82,15 +105,16 @@ export const setThreadIdForContact = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const rows = await ctx.db
+    const rows = sortByUpdatedAt(
+      await ctx.db
       .query("conversations")
       .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
-      .collect();
+      .collect()
+    );
 
-    rows.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    const primary = rows[0] ?? null;
-    const duplicates = rows.slice(1);
-    for (const d of duplicates) {
+    const openRows = rows.filter((row) => row.status !== "closed");
+    const primary = openRows[0] ?? null;
+    for (const d of openRows.slice(1)) {
       await ctx.db.delete(d._id);
     }
 
@@ -98,7 +122,7 @@ export const setThreadIdForContact = internalMutation({
       await ctx.db.patch(primary._id, {
         threadId: args.threadId,
         customerName: args.customerName?.trim() || primary.customerName,
-        status: primary.status === "closed" ? "open" : primary.status,
+        status: primary.status === "pending" ? "pending" : "open",
         updatedAt: now,
       });
       return { conversationId: primary._id };
@@ -128,29 +152,25 @@ export const resetConversationForContact = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const rows = await ctx.db
+    const rows = sortByUpdatedAt(
+      await ctx.db
       .query("conversations")
       .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
-      .collect();
+      .collect()
+    );
 
-    rows.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    const primary = rows[0] ?? null;
-    const duplicates = rows.slice(1);
-    for (const d of duplicates) {
+    const openRows = rows.filter((row) => row.status !== "closed");
+    const primary = openRows[0] ?? null;
+    for (const d of openRows.slice(1)) {
       await ctx.db.delete(d._id);
     }
 
     if (primary) {
       await ctx.db.patch(primary._id, {
-        threadId: args.newThreadId,
-        status: "open",
+        status: "closed",
         customerName: args.customerName?.trim() || primary.customerName,
-        lastMessageAt: now,
-        lastMessagePreview: undefined,
-        lastMessageDirection: undefined,
         updatedAt: now,
       });
-      return { conversationId: primary._id };
     }
 
     const conversationId = await ctx.db.insert("conversations", {
@@ -181,15 +201,16 @@ export const updateLastMessage = internalMutation({
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
-    const rows = await ctx.db
+    const rows = sortByUpdatedAt(
+      await ctx.db
       .query("conversations")
       .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
-      .collect();
+      .collect()
+    );
 
-    rows.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    const primary = rows[0] ?? null;
-    const duplicates = rows.slice(1);
-    for (const d of duplicates) {
+    const openRows = rows.filter((row) => row.status !== "closed");
+    const primary = openRows[0] ?? null;
+    for (const d of openRows.slice(1)) {
       await ctx.db.delete(d._id);
     }
 
@@ -239,7 +260,15 @@ export const listContacts = query({
       .order("desc")
       .take(500);
 
-    let list = recent.map((c) => ({
+    const deduped = new Map<string, (typeof recent)[number]>();
+    for (const conversation of recent) {
+      const existing = deduped.get(conversation.contactId);
+      if (!existing || (existing.status === "closed" && conversation.status !== "closed")) {
+        deduped.set(conversation.contactId, conversation);
+      }
+    }
+
+    let list = Array.from(deduped.values()).map((c) => ({
       contactId: c.contactId,
       customerName: c.customerName,
       lastMessageAt: c.lastMessageAt,

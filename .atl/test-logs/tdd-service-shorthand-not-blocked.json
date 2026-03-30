@@ -1,0 +1,15 @@
+{
+  "scenario": "tdd-service-shorthand-not-blocked",
+  "steps": [
+    {
+      "input": "Matrimonio",
+      "expected": {
+        "shouldBlock": false
+      },
+      "actual": {
+        "shouldBlock": false
+      },
+      "pass": true
+    }
+  ]
+}
