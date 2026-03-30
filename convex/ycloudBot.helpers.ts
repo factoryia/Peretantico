@@ -343,15 +343,19 @@ export type AgentToolResultSummary = {
   result?: unknown;
 };
 
+export type RequestCompletion = {
+  closeConversation?: boolean;
+  message?: string;
+  newThreadId?: string;
+  closureApplied?: boolean;
+  contextRestarted?: boolean;
+  softReset?: boolean;
+};
+
 export function extractCreateRequestCompletion(toolResults?: AgentToolResultSummary[]): {
   ok?: boolean;
   applicationNumber?: string;
-  completion?: {
-    closeConversation?: boolean;
-    message?: string;
-    newThreadId?: string;
-    closureApplied?: boolean;
-  };
+  completion?: RequestCompletion;
 } | null {
   const createRequestResult = [...(Array.isArray(toolResults) ? toolResults : [])]
     .reverse()
@@ -367,24 +371,14 @@ export function extractCreateRequestCompletion(toolResults?: AgentToolResultSumm
     return boxed.value as {
       ok?: boolean;
       applicationNumber?: string;
-      completion?: {
-        closeConversation?: boolean;
-        message?: string;
-        newThreadId?: string;
-        closureApplied?: boolean;
-      };
+      completion?: RequestCompletion;
     };
   }
 
   return candidate as {
     ok?: boolean;
     applicationNumber?: string;
-    completion?: {
-      closeConversation?: boolean;
-      message?: string;
-      newThreadId?: string;
-      closureApplied?: boolean;
-    };
+    completion?: RequestCompletion;
   };
 }
 

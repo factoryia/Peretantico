@@ -539,64 +539,44 @@ export const processInboundMessage = internalAction({
 
       const rawCompletion = extractCreateRequestCompletion(response.toolResults);
 
+      // NEW POLICY: If ok=true but no completion, create soft reset instead of new thread
       if (rawCompletion?.ok && !rawCompletion.completion) {
-        try {
-          const created = await tanticoAgent.createThread(ctx, {
-            title: `WhatsApp ${contactId}`,
-            userId: contactId,
-          });
-
-          rawCompletion.completion = {
-            closeConversation: true,
-            message: buildRequestCompletionMessage({
-              applicationNumber: rawCompletion.applicationNumber,
-              contextRestarted: true,
-            }),
-            newThreadId: created.threadId,
-            closureApplied: true,
-          };
-        } catch {
-          rawCompletion.completion = {
-            closeConversation: true,
-            message: buildRequestCompletionMessage({
-              applicationNumber: rawCompletion.applicationNumber,
-              contextRestarted: false,
-            }),
-            closureApplied: false,
-          };
-        }
+        rawCompletion.completion = {
+          closeConversation: false,
+          message: buildRequestCompletionMessage({
+            applicationNumber: rawCompletion.applicationNumber,
+            contextRestarted: false,
+          }),
+          closureApplied: false,
+          contextRestarted: false,
+          softReset: true,
+        };
       }
 
       let replyText = (response.text ?? "").trim();
 
-      if (rawCompletion?.ok && rawCompletion.completion?.closeConversation) {
-        const completion = rawCompletion.completion;
-        let closureFailed = false;
-
-        if (completion.newThreadId) {
-          try {
-            await applyConversationReset({
-              ctx,
-              internalAny,
-              sessionId,
-              contactId,
-              customerName: args.customerName,
-              currentThreadId: threadId,
-              newThreadId: completion.newThreadId,
-              clearProfileAssociation: true,
-              deleteCurrentThreadMessages: true,
-            });
-            threadId = completion.newThreadId;
-          } catch (closureError) {
-            console.error("Conversation closure error:", closureError);
-            closureFailed = true;
-          }
-        }
-
-        replyText = resolveRequestCompletionMessage({
-          rawCompletion,
-          closureFailed,
+      // NEW POLICY: Soft reset instead of thread rotation
+      // - No new thread creation
+      // - No message deletion
+      // - Keep profile association for identity continuity
+      // - Only reset session state (service, fields, data)
+      if (rawCompletion?.ok && rawCompletion.completion?.softReset) {
+        // Soft reset: clear session state but keep profile/identity
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          // Keep threadId - no rotation
+          // Keep profileId - preserve identity
+          serviceId: null,
+          fieldIds: null,
+          currentFieldIndex: null,
+          data: {},
+          attachments: [],
+          state: "INIT",
         });
+
+        // Close the conversation but keep thread (for context continuity if needed later)
+        // Actually, per new policy: don't close anything, just reset for clean next message
+        // The conversation stays open, just session state is reset
       }
         
       if (!replyText) {

@@ -250,10 +250,13 @@ export const create = mutation({
     status: v.optional(v.boolean()),
     
     applicationScore: v.optional(v.number()),
+    
+    // Optional applicationNumber for testing or explicit assignment
+    applicationNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const randomDigits = Math.floor(100000 + Math.random() * 900000);
-    const applicationNumber = `REQ-${randomDigits}`;
+    const applicationNumber = args.applicationNumber || `REQ-${randomDigits}`;
 
     const requestId = await ctx.db.insert("requests", {
       applicationNumber,
@@ -295,7 +298,7 @@ export const create = mutation({
       ),
     ]);
 
-    return requestId;
+    return { requestId, applicationNumber };
   },
 });
 

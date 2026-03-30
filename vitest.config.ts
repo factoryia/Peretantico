@@ -1,9 +1,22 @@
 import { defineConfig } from "vitest/config";
+import path from "node:path";
 
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: [
+      "tests/unit/**/*.test.ts",
+      "tests/tools/**/*.test.ts",
+      "tests/integration/**/*.test.ts",
+      "tests/conversation/**/*.test.ts",
+    ],
     clearMocks: true,
+    globals: true,
+  },
+  resolve: {
+    alias: {
+      "@/*": path.resolve(__dirname, "./src/*"),
+      "@convex/*": path.resolve(__dirname, "./convex/*"),
+    },
   },
 });

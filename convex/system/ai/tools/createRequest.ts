@@ -366,7 +366,11 @@ export const createRequest = createTool({
 
     const baseServicePrice = typeof service.price === "number" ? service.price : 0;
 
-    const requestId = await ctx.runMutation(anyApi.requests.create, {
+    // Generate applicationNumber before mutation so it can be passed and returned
+    const randomDigits = Math.floor(100000 + Math.random() * 900000);
+    const generatedApplicationNumber = `REQ-${randomDigits}`;
+
+    const createdRequest = await ctx.runMutation(anyApi.requests.create, {
       applicantId,
       serviceId: args.serviceId as Id<"services">,
       title: args.title,
@@ -376,63 +380,55 @@ export const createRequest = createTool({
       paymentMethod: args.paymentMethod,
       isPrioritized: args.isPrioritized,
       serviceValue: baseServicePrice,
+      // Pass applicationNumber so mutation returns it in response
+      applicationNumber: generatedApplicationNumber,
     });
 
-    const request = await ctx.runQuery(anyApi.requests.get, { id: requestId as Id<"requests"> });
+    const requestId = typeof createdRequest === 'object' && createdRequest !== null 
+      ? (createdRequest as { requestId: Id<"requests"> }).requestId 
+      : createdRequest as Id<"requests">;
+    
+    const applicationNumberFromCreate = typeof createdRequest === 'object' && createdRequest !== null
+      ? (createdRequest as { applicationNumber?: string }).applicationNumber
+      : generatedApplicationNumber;
 
+    const request = await ctx.runQuery(anyApi.requests.get, { id: requestId });
+    
+    // Use applicationNumber from create mutation response, fallback to generated or query result
+    const applicationNumber = applicationNumberFromCreate || request?.applicationNumber;
+
+    // NEW POLICY: No thread rotation. Just reset session state for clean context.
+    // Keep profileId for identity continuity.
     let completion:
       | {
           closeConversation: boolean;
           message: string;
           newThreadId?: string;
           closureApplied: boolean;
+          contextRestarted?: boolean;
+          softReset: boolean;
         }
       | undefined;
 
     if (contactId) {
-      try {
-        const titles = buildCompletionThreadTitles({
-          contactId,
-          applicationNumber: request?.applicationNumber,
-        });
-        const currentThreadId = (ctx as { threadId?: string }).threadId;
-        if (currentThreadId) {
-          await ctx.runMutation(components.agent.threads.updateThread, {
-            threadId: currentThreadId,
-            patch: { title: titles.closedThreadTitle },
-          });
-        }
-
-        const createdThread = await ctx.runMutation(components.agent.threads.createThread, {
-          title: titles.nextActiveThreadTitle,
-          userId: contactId,
-        });
-
-        completion = {
-          closeConversation: true,
-          message: buildRequestCompletionMessage({
-            applicationNumber: request?.applicationNumber,
-            contextRestarted: true,
-          }),
-          newThreadId: createdThread._id,
-          closureApplied: true,
-        };
-      } catch {
-        completion = {
-          closeConversation: true,
-          message: buildRequestCompletionMessage({
-            applicationNumber: request?.applicationNumber,
-            contextRestarted: false,
-          }),
-          closureApplied: false,
-        };
-      }
+      // Soft reset: just indicate the session state should be cleared
+      // No thread creation, no thread closure - keeps context simple
+      completion = {
+        closeConversation: false,
+        message: buildRequestCompletionMessage({
+          applicationNumber,
+          contextRestarted: false,
+        }),
+        closureApplied: false,
+        contextRestarted: false,
+        softReset: true,
+      };
     }
 
     return {
       ok: true,
       requestId,
-      applicationNumber: request?.applicationNumber,
+      applicationNumber,
       completion,
     };
   },
