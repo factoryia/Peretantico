@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveRequestCompletionMessage } from "../convex/system/ai/requestCompletion";
+import { resolveRequestCompletionMessage } from "../../convex/system/ai/requestCompletion";
 import {
   buildInboundContextPrompt,
   deriveInboundFlowDecision,
@@ -8,8 +8,8 @@ import {
   isResetThreadTitle,
   normalizeForMatch,
   resolveAgentEmptyReply,
-} from "../convex/ycloudBot.helpers";
-import { createScenarioRecorder } from "./utils/scenarioLogger";
+} from "../../convex/ycloudBot.helpers";
+import { createScenarioRecorder } from "../harness/scenarioLogger";
 
 describe("ycloud bot topic guard", () => {
   it("blocks strongly off-topic matrix", () => {

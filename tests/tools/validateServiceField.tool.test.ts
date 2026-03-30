@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { validateServiceField } from "../convex/system/ai/tools/validateServiceField";
+import { validateServiceField } from "../../convex/system/ai/tools/validateServiceField";
 
 type MockField = {
   _id: string;

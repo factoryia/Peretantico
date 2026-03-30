@@ -1,0 +1,14 @@
+/**
+ * Conversation/E2E Tests
+ * 
+ * Placeholder for future TDD conversational tests and end-to-end scenarios.
+ * 
+ * To implement:
+ * 1. Create a mock LLM provider or use a test-specific simulation
+ * 2. Define conversation flow scenarios (happy path, edge cases, error recovery)
+ * 3. Implement chat session simulation with message history
+ * 
+ * Example structure:
+ * - conversation/flows/*.test.ts - Individual conversation flows
+ * - conversation/scenarios/*.test.ts - Complete user journeys
+ */

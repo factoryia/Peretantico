@@ -3,8 +3,8 @@ import {
   deriveInboundFlowDecision,
   getUnsupportedIntentReply,
   resolveAgentEmptyReply,
-} from "../convex/ycloudBot.helpers";
-import { createScenarioRecorder } from "./utils/scenarioLogger";
+} from "../../convex/ycloudBot.helpers";
+import { createScenarioRecorder } from "../harness/scenarioLogger";
 
 describe("chat behavior TDD regressions", () => {
   it("reproduces and protects: progress question must stay on-topic", () => {

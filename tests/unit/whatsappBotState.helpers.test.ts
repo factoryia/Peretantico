@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPatchSessionUpdates } from "../convex/whatsappBotState";
+import { buildPatchSessionUpdates } from "../../convex/whatsappBotState";
 
 describe("whatsapp session patch updates", () => {
   it("clears service flow fields when null values are provided", () => {

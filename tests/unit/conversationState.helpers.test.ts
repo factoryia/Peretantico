@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveThreadIdForConversation } from "../convex/conversationState";
+import { resolveThreadIdForConversation } from "../../convex/conversationState";
 
 describe("conversation thread resolution", () => {
   it("prefers requested thread id over existing thread id", () => {
