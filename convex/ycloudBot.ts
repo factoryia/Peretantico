@@ -14,7 +14,7 @@ import { validateServiceField } from "./system/ai/tools/validateServiceField";
 import { createApplicantProfile } from "./system/ai/tools/createApplicantProfile";
 import { createRequest } from "./system/ai/tools/createRequest";
 import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
-import { buildRequestCompletionMessage, resolveRequestCompletionMessage } from "./system/ai/requestCompletion";
+import { buildRequestCompletionMessage } from "./system/ai/requestCompletion";
 import {
   buildServicesListReply,
   buildInboundContextPrompt,

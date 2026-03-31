@@ -1,7 +1,7 @@
 import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { anyApi } from "convex/server";
-import { components } from "../../../_generated/api";
+
 import type { Id } from "../../../_generated/dataModel";
 import { buildRequestCompletionMessage } from "../requestCompletion";
 
