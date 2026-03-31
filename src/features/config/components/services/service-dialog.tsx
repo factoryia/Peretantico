@@ -40,6 +40,7 @@ import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { AlertModal } from "@/components/common/alert-modal";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   open: boolean;
@@ -89,6 +90,10 @@ export const ServiceDialog = ({
       description: editingService?.description || "",
       price: editingService?.price || 0,
       status: editingService?.status || "activo",
+      hasPriority: editingService?.hasPriority ?? false,
+      priorityPrice: editingService?.priorityPrice ?? undefined,
+      estimatedHours: editingService?.estimatedHours ?? undefined,
+      priorityHours: editingService?.priorityHours ?? undefined,
       fields:
         editingService?.fields?.map((f) => ({
           id: f.id,
@@ -120,6 +125,10 @@ export const ServiceDialog = ({
         description: "",
         price: 0,
         status: "activo",
+        hasPriority: false,
+        priorityPrice: undefined,
+        estimatedHours: undefined,
+        priorityHours: undefined,
         fields: [],
       });
     } else {
@@ -128,6 +137,10 @@ export const ServiceDialog = ({
         description: editingService.description,
         price: editingService.price,
         status: editingService.status,
+        hasPriority: editingService.hasPriority ?? false,
+        priorityPrice: editingService.priorityPrice ?? undefined,
+        estimatedHours: editingService.estimatedHours ?? undefined,
+        priorityHours: editingService.priorityHours ?? undefined,
         fields:
           editingService.fields?.map((f) => ({
             id: f.id,
@@ -173,6 +186,10 @@ export const ServiceDialog = ({
           description: data.description ?? undefined,
           price: data.price,
           status: data.status === "activo",
+          hasPriority: data.hasPriority ?? false,
+          priorityPrice: data.priorityPrice,
+          estimatedHours: data.estimatedHours,
+          priorityHours: data.priorityHours,
           fields: payloadFields,
         });
 
@@ -186,6 +203,10 @@ export const ServiceDialog = ({
           description: data.description ?? undefined,
           price: data.price,
           status: data.status === "activo",
+          hasPriority: data.hasPriority ?? false,
+          priorityPrice: data.priorityPrice,
+          estimatedHours: data.estimatedHours,
+          priorityHours: data.priorityHours,
           fields: payloadFields,
         });
         toast.success("Servicio creado", {
@@ -356,6 +377,114 @@ export const ServiceDialog = ({
                 </FormItem>
               )}
             />
+
+            {/* Priority Support Fields */}
+            <div className="space-y-4 border rounded-md p-4 bg-gray-50/50">
+              <h3 className="text-sm font-medium border-b pb-2">
+                Configuración de Prioridad
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Habilita opciones de servicio prioritario si aplica.
+              </p>
+
+              <FormField
+                control={form.control}
+                name="hasPriority"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm">Soporte prioritario</FormLabel>
+                      <p className="text-xs text-gray-500">
+                        ¿Este servicio puede ser priorizado?
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={Boolean(field.value)}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="priorityPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Precio prioritario</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="Precio para atención prioritaria"
+                        {...field}
+                        value={field.value as string | number | undefined ?? ""}
+                        onChange={(e) =>
+                          field.onChange(e.target.value ? Number(e.target.value) : undefined)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    <FormDescription>
+                      Precio adicional o específico para atención prioritaria.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="estimatedHours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Horas estimadas</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="Horas estándar"
+                          {...field}
+                          value={field.value as string | number | undefined ?? ""}
+                          onChange={(e) =>
+                            field.onChange(e.target.value ? Number(e.target.value) : undefined)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      <FormDescription>
+                        Tiempo estimado estándar.
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="priorityHours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Horas prioritarias</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="Horas prioritarias"
+                          {...field}
+                          value={field.value as string | number | undefined ?? ""}
+                          onChange={(e) =>
+                            field.onChange(e.target.value ? Number(e.target.value) : undefined)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      <FormDescription>
+                        Tiempo estimado para prioridad.
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">

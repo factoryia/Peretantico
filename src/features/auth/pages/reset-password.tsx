@@ -20,7 +20,7 @@ import { FormWrapper } from "@/features/auth/components/form-wrapper";
 
 const resetPasswordSchema = z
   .object({
-    mail: z.string().min(1, {
+    email: z.string().min(1, {
       message: "Este campo es obligatorio.",
     }),
   })
@@ -33,12 +33,12 @@ export function ResetPassword() {
   const { signIn } = useAuthActions();
 
   const title =
-    "Por favor, ingrese su nombre de usuario o correo electrónico asociada a su cuenta para enviarte las indicaciones.";
+    "Por favor, ingrese su correo electrónico asociado a su cuenta para enviarte las indicaciones.";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      mail: "",
+      email: "",
     },
   });
 
@@ -46,12 +46,15 @@ export function ResetPassword() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await signIn("password", { email: values.mail, flow: "reset" });
-      toast.success("Código de verificación enviado a tu correo.");
+      await signIn("password", { email: values.email, flow: "reset" }) as any;
+      // Always show success message to avoid user enumeration
+      toast.success("Si el correo existe, se enviaron instrucciones.");
       navigate("/nueva-contraseña");
     } catch (error) {
       console.log(error);
-      toast.error("Error al solicitar el restablecimiento. Verifica el correo e intenta nuevamente.");
+      // Always show generic message
+      toast.success("Si el correo existe, se enviaron instrucciones.");
+      navigate("/nueva-contraseña");
     }
   };
 
@@ -71,7 +74,7 @@ export function ResetPassword() {
           </div>
           <FormField
             control={form.control}
-            name="mail"
+            name="email"
             render={({ field }) => (
               <FormItem>
                 <div className="relative">
@@ -82,7 +85,7 @@ export function ResetPassword() {
                     <Input
                       disabled={isSubmitting}
                       className="pl-10"
-                      placeholder="Usuario o correo electrónico"
+                      placeholder="tu-correo@email.com"
                       {...field}
                     />
                   </FormControl>

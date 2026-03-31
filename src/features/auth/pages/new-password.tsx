@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAuthActions } from "@convex-dev/auth/react";
 import {
   ArrowLeft,
   Eye,
@@ -14,6 +13,7 @@ import {
   Loader2,
   User,
 } from "lucide-react";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 import {
   Form,
@@ -30,14 +30,14 @@ import { Input } from "@/components/ui/input";
 
 const newPasswordSchema = z
   .object({
-    name: z.string().min(1, {
+    email: z.string().min(1, {
       message: "Este campo es obligatorio.",
     }),
-    new_pass: z.string().min(1, {
+    code: z.string().min(1, {
       message: "Este campo es obligatorio.",
     }),
-    temp_pass: z.string().min(1, {
-      message: "Este campo es obligatorio.",
+    newPassword: z.string().min(8, {
+      message: "La contraseña debe tener al menos 8 caracteres.",
     }),
   })
   .strict();
@@ -47,18 +47,18 @@ type FormValues = z.infer<typeof newPasswordSchema>;
 export function NewPassword() {
   const navigate = useNavigate();
   const { signIn } = useAuthActions();
-  const [showTempPassword, setShowTempPassword] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
   const title =
-    "Hemos enviado una contraseña temporal a tu correo electrónico. Ingresa la contraseña temporal y crea una nueva contraseña segura para acceder a tu cuenta.";
+    "Hemos enviado un código de verificación a tu correo electrónico. Ingresa el código y crea una nueva contraseña segura para acceder a tu cuenta.";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(newPasswordSchema),
     defaultValues: {
-      name: "",
-      new_pass: "",
-      temp_pass: "",
+      email: "",
+      code: "",
+      newPassword: "",
     },
   });
 
@@ -66,12 +66,12 @@ export function NewPassword() {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await signIn("password", { 
-        email: values.name, 
-        code: values.temp_pass, 
-        newPassword: values.new_pass, 
-        flow: "reset-verification" 
-      });
+      await signIn("password", {
+        email: values.email,
+        code: values.code,
+        newPassword: values.newPassword,
+        flow: "reset-verification",
+      }) as any;
       toast.success("Contraseña actualizada con éxito.");
       navigate("/iniciar-sesion");
     } catch (error) {
@@ -96,10 +96,10 @@ export function NewPassword() {
 
           <FormField
             control={form.control}
-            name="name"
+            name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Usuario o correo electrónico</FormLabel>
+                <FormLabel>Correo electrónico</FormLabel>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <User size={18} className="text-gray-400" />
@@ -108,7 +108,7 @@ export function NewPassword() {
                     <Input
                       disabled={isSubmitting}
                       className="pl-10"
-                      placeholder="Usuario o correo electrónico"
+                      placeholder="tu-correo@email.com"
                       {...field}
                     />
                   </FormControl>
@@ -120,10 +120,10 @@ export function NewPassword() {
 
           <FormField
             control={form.control}
-            name="temp_pass"
+            name="code"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contraseña temporal</FormLabel>
+                <FormLabel>Código de verificación</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -131,19 +131,20 @@ export function NewPassword() {
                     </div>
                     <FormControl>
                       <Input
-                        type={showTempPassword ? "text" : "password"}
-                        placeholder="••••••••••"
+                        type={showCode ? "text" : "password"}
+                        placeholder="••••••"
                         className="px-10"
+                        maxLength={6}
                         {...field}
                       />
                     </FormControl>
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
                       <button
                         type="button"
-                        onClick={() => setShowTempPassword(!showTempPassword)}
+                        onClick={() => setShowCode(!showCode)}
                         className="text-gray-400 hover:text-gray-500 focus:outline-none"
                       >
-                        {showTempPassword ? (
+                        {showCode ? (
                           <EyeOff size={18} />
                         ) : (
                           <Eye size={18} />
@@ -159,10 +160,10 @@ export function NewPassword() {
 
           <FormField
             control={form.control}
-            name="new_pass"
+            name="newPassword"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contraseña nueva</FormLabel>
+                <FormLabel>Nueva contraseña</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

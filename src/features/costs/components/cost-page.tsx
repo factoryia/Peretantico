@@ -24,7 +24,7 @@ import {
 
 /**
  * Página principal para la gestión de pagos a repartidores.
- * Permite filtrar solicitudes finalizadas por repartidor y calcular el total a pagar.
+ * Permite filtrar solicitudes atendidas y finalizadas por repartidor y calcular el total a pagar.
  */
 export default function CostManagementPage() {
   // --- Estados locales ---
@@ -50,7 +50,7 @@ export default function CostManagementPage() {
   const distributors = useQuery(api.distributors.listAll, {}) || [];
   const isLoadingDistributors = distributors === undefined;
 
-  // --- Query de solicitudes finalizadas ---
+  // --- Query de solicitudes pendientes de pago ---
   const rawFinishedRequests = useQuery(
     api.payments.getPendingRequestsByDistributor,
     selectedDistributorId
@@ -198,8 +198,8 @@ export default function CostManagementPage() {
           </h2>
           <p className="text-slate-500 text-center mt-2 max-w-sm font-medium text-sm">
             {isDistributor
-              ? "Cargando tus solicitudes finalizadas..."
-              : "Seleccione un repartidor en el filtro superior para ver las solicitudes finalizadas y proceder con la liquidación de servicios."}
+              ? "Cargando tus solicitudes pendientes de pago..."
+              : "Seleccione un repartidor en el filtro superior para ver las solicitudes pendientes de pago y proceder con la liquidación de servicios."}
           </p>
         </div>
       ) : (
@@ -225,7 +225,7 @@ export default function CostManagementPage() {
                 variant="outline"
                 className="w-fit h-6 px-3 bg-blue-50 text-blue-700 border-blue-100 font-bold uppercase text-[9px] tracking-widest rounded-full"
               >
-                {finishedRequests.length} Solicitudes Finalizadas
+                {finishedRequests.length} Solicitudes Pendientes de Pago
               </Badge>
             </div>
           </CardHeader>

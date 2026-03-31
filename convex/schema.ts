@@ -46,6 +46,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     price: v.number(),
     status: v.boolean(),
+    // Priority support fields
+    hasPriority: v.optional(v.boolean()),
+    priorityPrice: v.optional(v.number()),
+    estimatedHours: v.optional(v.number()),
+    priorityHours: v.optional(v.number()),
   })
     .index("by_name", ["name"])
     .index("by_code", ["code"]),

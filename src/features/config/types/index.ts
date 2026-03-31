@@ -32,6 +32,11 @@ export interface Service {
   status: "activo" | "inactivo";
   creationDate: string;
   fields?: ServiceField[];
+  // Priority support fields
+  hasPriority?: boolean;
+  priorityPrice?: number;
+  estimatedHours?: number;
+  priorityHours?: number;
 }
 
 export interface Subservice {

@@ -59,6 +59,10 @@ export const ServicesTab = () => {
       price: s.price ?? 0,
       status: s.status ? "activo" : "inactivo",
       creationDate: s._creationTime ? new Date(s._creationTime).toISOString().split('T')[0] : "",
+      hasPriority: s.hasPriority ?? false,
+      priorityPrice: s.priorityPrice ?? 0,
+      estimatedHours: s.estimatedHours ?? 0,
+      priorityHours: s.priorityHours ?? 0,
       fields,
     };
   });

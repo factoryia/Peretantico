@@ -30,6 +30,10 @@ export const serviceSchema = z.object({
   description: z.string().max(500, "Máximo 500 caracteres").optional(),
   price: z.coerce.number().int().min(0, "El precio debe ser mayor o igual a 0"),
   status: z.enum(["activo", "inactivo"]),
+  hasPriority: z.boolean().default(false),
+  priorityPrice: z.coerce.number().int().min(0).optional(),
+  estimatedHours: z.coerce.number().int().min(0).optional(),
+  priorityHours: z.coerce.number().int().min(0).optional(),
   fields: z.array(serviceFieldSchema).default([]),
 });
 

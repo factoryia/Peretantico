@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 
 export const getByUserId = query({
@@ -10,7 +11,7 @@ export const getByUserId = query({
     // Try to query by userId first
     const distributor = await ctx.db
       .query("distributors")
-      .withIndex("by_userId", (q) => q.eq("userId", args.userId as any))
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId as Id<"users">))
       .first();
       
     if (distributor) return distributor._id;
@@ -21,6 +22,27 @@ export const getByUserId = query({
     // So let's stick to userId lookup.
     
     return null;
+  },
+});
+
+export const getNotificationEmail = internalQuery({
+  args: { distributorId: v.id("distributors") },
+  handler: async (ctx, args) => {
+    const distributor = await ctx.db.get(args.distributorId);
+    if (!distributor) {
+      return null;
+    }
+
+    if (distributor.email?.trim()) {
+      return distributor.email.trim();
+    }
+
+    if (!distributor.userId) {
+      return null;
+    }
+
+    const user = await ctx.db.get(distributor.userId);
+    return user?.email?.trim() || null;
   },
 });
 
@@ -293,7 +315,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { id, entryDate, ...rest } = args;
     
-    const updates: any = { ...rest };
+    const updates: Partial<Doc<"distributors">> = { ...rest };
     if (entryDate) {
       updates.entryDate = new Date(entryDate).getTime();
     }

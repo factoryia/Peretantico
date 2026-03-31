@@ -3,7 +3,57 @@ import { UNSUPPORTED_INTENT_REPLY } from "./system/ai/unsupportedIntent";
 export type BotServiceSummary = {
   name?: string;
   status?: boolean;
+  price?: number;
+  hasPriority?: boolean;
+  priorityPrice?: number;
 };
+
+export function formatCurrency(value?: number): string | undefined {
+  return typeof value === "number" ? `$${value.toLocaleString("es-CO")}` : undefined;
+}
+
+export function formatServiceListItem(service: BotServiceSummary, index: number): string {
+  const name = String(service.name ?? "").trim();
+  const basePrice = formatCurrency(service.price);
+  const priorityPrice = service.hasPriority ? formatCurrency(service.priorityPrice) : undefined;
+
+  const priceParts = [basePrice ? `normal ${basePrice}` : undefined, priorityPrice ? `prioritario ${priorityPrice}` : undefined].filter(
+    Boolean
+  );
+
+  return `${index}) ${name}${priceParts.length ? ` - ${priceParts.join(" | ")}` : ""}`;
+}
+
+export function buildServicesListReply(services: BotServiceSummary[]): string {
+  const lines = [
+    "Aquí tienes la lista de servicios disponibles:",
+    "",
+    ...sortServicesForDisplay(services)
+      .map((service, idx) => formatServiceListItem(service, idx + 1))
+      .filter((line) => !/^\d+\)\s*$/.test(line)),
+    "",
+    "Responde con el número o el nombre del servicio.",
+  ];
+
+  return lines.join("\n");
+}
+
+export function buildPriorityQuestion(service: BotServiceSummary): string {
+  const serviceName = String(service.name ?? "el servicio").trim();
+  const basePrice = formatCurrency(service.price);
+  const priorityPrice = formatCurrency(service.priorityPrice);
+  const details = [
+    basePrice ? `valor normal ${basePrice}` : undefined,
+    priorityPrice ? `valor prioritario ${priorityPrice}` : undefined,
+  ].filter(Boolean);
+
+  return [
+    `Has seleccionado el servicio de **${serviceName}**.`,
+    "",
+    details.length ? `Este servicio puede solicitarse con prioridad (${details.join(" y ")}).` : "Este servicio puede solicitarse con prioridad.",
+    "¿Deseas radicarlo como prioridad? Responde sí o no.",
+  ].join("\n");
+}
 
 function referencesKnownService(normalized: string, services: BotServiceSummary[]): boolean {
   const cleaned = normalized.trim();

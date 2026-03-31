@@ -19,6 +19,8 @@ export const listServices = createTool({
       code?: string;
       description?: string;
       price?: number;
+      hasPriority?: boolean;
+      priorityPrice?: number;
     }>;
     const services = (all || [])
       .filter((s) => s.status !== false)
@@ -28,6 +30,8 @@ export const listServices = createTool({
         code: s.code ?? undefined,
         description: s.description ?? undefined,
         price: s.price ?? undefined,
+        hasPriority: s.hasPriority ?? false,
+        priorityPrice: s.priorityPrice ?? undefined,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
     return { services: services.map((s, idx) => ({ ...s, index: idx + 1 })) };

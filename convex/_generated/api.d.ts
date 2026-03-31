@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as ResendOTP from "../ResendOTP.js";
 import type * as auth from "../auth.js";
 import type * as conversationState from "../conversationState.js";
 import type * as coverageAreas from "../coverageAreas.js";
@@ -19,6 +20,7 @@ import type * as files from "../files.js";
 import type * as findAccount from "../findAccount.js";
 import type * as fixAdmin from "../fixAdmin.js";
 import type * as http from "../http.js";
+import type * as migrate_services from "../migrate_services.js";
 import type * as payments from "../payments.js";
 import type * as playground from "../playground.js";
 import type * as profiles from "../profiles.js";
@@ -53,6 +55,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ResendOTP: typeof ResendOTP;
   auth: typeof auth;
   conversationState: typeof conversationState;
   coverageAreas: typeof coverageAreas;
@@ -64,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   findAccount: typeof findAccount;
   fixAdmin: typeof fixAdmin;
   http: typeof http;
+  migrate_services: typeof migrate_services;
   payments: typeof payments;
   playground: typeof playground;
   profiles: typeof profiles;

@@ -1,6 +1,7 @@
+import { anyApi } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 // import { paginationOptsValidator } from "convex/server";
 
 export const list = query({
@@ -293,10 +294,15 @@ export const create = mutation({
           requestId,
           fileName: item.fileName,
           url: item.url,
-          storageId: item.storageId as any,
+          storageId: item.storageId as Id<"_storage"> | undefined,
         })
       ),
     ]);
+
+    // Notify admins about new request (non-blocking)
+    ctx.scheduler.runAfter(0, anyApi.emails.notifyNewRequest, {
+      requestId,
+    });
 
     return { requestId, applicationNumber };
   },
@@ -345,7 +351,26 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { id, data, ...fields } = args;
 
-    const patchData: any = { ...fields };
+    // Get current request to detect changes
+    const currentRequest = await ctx.db.get(id);
+    if (!currentRequest) {
+      throw new Error("Request not found");
+    }
+
+    // Track changes for notifications
+    const oldStatus = currentRequest.requestStatus;
+    const newStatus = fields.requestStatus;
+    const hasStatusChanged = newStatus !== undefined && newStatus !== oldStatus;
+
+    const oldScore = currentRequest.applicationScore;
+    const newScore = fields.applicationScore;
+    const hasScoreChanged = newScore !== undefined && newScore !== oldScore;
+
+    const oldObservations = currentRequest.observations;
+    const newObservations = fields.observations;
+    const hasObservationsChanged = newObservations !== undefined && newObservations !== oldObservations;
+
+    const patchData: Partial<Doc<"requests">> = { ...fields };
     // observations is in schema, so we can update it
     
     await ctx.db.patch(id, patchData);
@@ -370,6 +395,24 @@ export const update = mutation({
         }
       }
     }
+
+    // Notify about status change (non-blocking)
+    if (hasStatusChanged) {
+      ctx.scheduler.runAfter(0, anyApi.emails.notifyRequestStatusChange, {
+        requestId: id,
+        oldStatus,
+        newStatus,
+      });
+    }
+
+    // Notify about score or observations change (non-blocking)
+    if (hasScoreChanged || hasObservationsChanged) {
+      ctx.scheduler.runAfter(0, anyApi.emails.notifyRequestScoreOrObservations, {
+        requestId: id,
+        hasScoreChange: hasScoreChanged,
+        hasObservationsChange: hasObservationsChanged,
+      });
+    }
   },
 });
 
@@ -379,10 +422,22 @@ export const assignDistributor = mutation({
     distributorId: v.id("distributors"),
   },
   handler: async (ctx, args) => {
+    // Get current request to check previous distributor
+    const currentRequest = await ctx.db.get(args.id);
+    const previousDistributorId = currentRequest?.distributorId || undefined;
+
     await ctx.db.patch(args.id, {
       distributorId: args.distributorId,
       requestStatus: "EnProceso",
     });
+
+    // Notify admin + distributor about assignment (non-blocking)
+    if (previousDistributorId !== args.distributorId) {
+      ctx.scheduler.runAfter(0, anyApi.emails.notifyDistributorAssignment, {
+        requestId: args.id,
+        distributorId: args.distributorId,
+      });
+    }
   },
 });
 

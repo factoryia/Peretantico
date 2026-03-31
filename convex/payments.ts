@@ -34,6 +34,13 @@ export const create = mutation({
       )
     );
 
+    // Update all paid requests to Finalizada status
+    await Promise.all(
+      args.requestIds.map((requestId) =>
+        ctx.db.patch(requestId, { requestStatus: "Finalizada" })
+      )
+    );
+
     return paymentId;
   },
 });
@@ -87,26 +94,21 @@ export const getPendingRequestsByDistributor = query({
     distributorId: v.id("distributors"),
   },
   handler: async (ctx, args) => {
-    // 1. Get all finished requests for the distributor
+    // 1. Get all requests for the distributor that are Atendida or Finalizada
     const requests = await ctx.db
       .query("requests")
       .withIndex("by_distributor", (q) => q.eq("distributorId", args.distributorId))
-      .filter((q) => q.eq(q.field("requestStatus"), "Finalizada"))
+      .filter((q) => 
+        q.or(
+          q.eq(q.field("requestStatus"), "Atendida"),
+          q.eq(q.field("requestStatus"), "Finalizada")
+        )
+      )
       .collect();
 
     if (requests.length === 0) return [];
 
-    // 2. Check which ones are already paid
-    // We can't easily join in Convex, so we'll check for existence in paymentRequests
-    // Since we expect the number of pending requests to be manageable, this is okay.
-    // However, checking every request against paymentRequests might be slow if there are many.
-    // Better approach:
-    // Get all paymentRequests. This is also not efficient if there are many.
-    
-    // Optimized approach:
-    // We only care if a request has *any* payment associated.
-    // We can iterate and check.
-    
+    // 2. Check which ones are already paid (don't have payment associated)
     const pendingRequests = await Promise.all(
       requests.map(async (request) => {
         const paymentParams = await ctx.db

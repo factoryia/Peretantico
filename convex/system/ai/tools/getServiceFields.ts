@@ -29,6 +29,11 @@ export const getServiceFields = createTool({
       _id: Id<"services">;
       name?: string;
       status?: boolean;
+      price?: number;
+      hasPriority?: boolean;
+      priorityPrice?: number;
+      estimatedHours?: number;
+      priorityHours?: number;
       fields?: Array<{
         _id: Id<"serviceFields">;
         name?: string;
@@ -69,7 +74,15 @@ export const getServiceFields = createTool({
 
     return {
       found: true,
-      service: { id: String(service._id), name: String(service.name ?? "") },
+      service: {
+        id: String(service._id),
+        name: String(service.name ?? ""),
+        price: service.price ?? undefined,
+        hasPriority: service.hasPriority ?? false,
+        priorityPrice: service.priorityPrice ?? undefined,
+        estimatedHours: service.estimatedHours ?? undefined,
+        priorityHours: service.priorityHours ?? undefined,
+      },
       fields,
     };
   },

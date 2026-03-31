@@ -256,6 +256,39 @@ export function EditRequestModal({
     ? (currentService as any).fields
     : [];
 
+  // Handle service change to load values from service configuration
+  const handleServiceChange = (serviceId: string) => {
+    const service = services.find((s: any) => s.id === serviceId) || null;
+    if (service) {
+      // Load service value from price
+      form.setValue("serviceValue", service.price ?? 0);
+      
+      // Load estimated hours from service (default to 0 if not set)
+      form.setValue("estimatedHours", service.estimatedHours ?? 0);
+      
+      // Load priority value if service supports priority
+      if (service.hasPriority && service.priorityPrice) {
+        form.setValue("priorityValue", service.priorityPrice);
+      } else {
+        form.setValue("priorityValue", 0);
+      }
+      
+      // Load priority hours if service supports priority
+      if (service.hasPriority && service.priorityHours) {
+        form.setValue("priorityEstimatedHours", service.priorityHours);
+      } else {
+        form.setValue("priorityEstimatedHours", 0);
+      }
+      
+      // If service doesn't support priority, disable the priority toggle and clear priority values
+      if (!service.hasPriority) {
+        form.setValue("isPrioritized", false);
+        form.setValue("priorityValue", 0);
+        form.setValue("priorityEstimatedHours", 0);
+      }
+    }
+  };
+
   useEffect(() => {
     const loadRequestData = async () => {
       if (request && isOpen) {
@@ -337,11 +370,12 @@ export function EditRequestModal({
         // Financials
         logisticsCosts: data.logisticsCosts,
         serviceValue: data.serviceValue,
+        prioritizedValue: data.isPrioritized ? data.priorityValue : undefined,
         paymentMethod: data.paymentMethod || undefined,
         
         // Timings
         estimatedApplicationHour: data.estimatedHours,
-        estimatedPrioritizedHour: data.priorityEstimatedHours,
+        estimatedPrioritizedHour: data.isPrioritized ? data.priorityEstimatedHours : undefined,
         applicationScore: data.applicationScore,
         
         // Flags
@@ -506,7 +540,10 @@ export function EditRequestModal({
                     <FormItem>
                       <FormLabel>Servicio *</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          handleServiceChange(value);
+                        }}
                         value={field.value}
                       >
                         <FormControl>
@@ -999,23 +1036,33 @@ export function EditRequestModal({
                 <FormField
                   control={form.control}
                   name="isPrioritized"
-                  render={({ field }) => (
-                    <FormItem className="grid gap-2">
-                      <FormLabel>Solicitud prioritaria</FormLabel>
-                      <FormControl>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                          <span className="text-xs text-gray-500">
-                            ¿Es una solicitud prioritaria?
-                          </span>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    // Get current service to check if priority is supported
+                    const serviceId = form.watch("serviceId");
+                    const service = services.find((s: any) => s.id === serviceId);
+                    const supportsPriority = service?.hasPriority === true;
+                    
+                    return (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>Solicitud prioritaria</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-3">
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={!supportsPriority}
+                            />
+                            <span className="text-xs text-gray-500">
+                              {supportsPriority 
+                                ? "¿Es una solicitud prioritaria?" 
+                                : "Este servicio no soporta prioridad"}
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
               </div>
 

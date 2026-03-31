@@ -15,6 +15,10 @@ type ServiceSeedConfig = {
   code: string;
   description?: string;
   price: number;
+  hasPriority?: boolean;
+  priorityPrice?: number;
+  estimatedHours?: number;
+  priorityHours?: number;
   fields: FieldConfig[];
 };
 
@@ -45,7 +49,11 @@ export const seed = internalMutation({
         name: "Certificado de Propiedad",
         code: "property_certification",
         description: "Solicitud de certificado de propiedad",
-        price: 50000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Cuenta con la matrícula inmobiliaria", code: "field_property_registered", type: "Boolean", order: 10, description: "Indique si el predio cuenta con matrícula inmobiliaria registrada." },
           { name: "Número de matrícula inmobiliaria", code: "field_property_number", type: "Text", order: 20, description: "Número único de identificación de la matrícula inmobiliaria." },
@@ -58,7 +66,11 @@ export const seed = internalMutation({
         name: "Solicitud Desenglobe",
         code: "property_unbundling_request",
         description: "Solicitud de desenglobe de propiedad",
-        price: 80000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Razón social / Nombre", code: "field_full_name", type: "Text", order: 10, description: "Nombre completo de la persona o razón social de la empresa." },
           { name: "Teléfono de contacto", code: "field_phone_number", type: "Text", order: 20, description: "Número de teléfono para contacto directo." },
@@ -80,7 +92,11 @@ export const seed = internalMutation({
         name: "Partida de Matrimonio",
         code: "marriage_certificate_request",
         description: "Solicitud de partida de matrimonio",
-        price: 35000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Tipo de matrimonio", code: "field_marriage_type", type: "Select", order: 10, options: { items: [{ value: "civil", label: "Civil" }, { value: "catolico", label: "Católico" }, { value: "otro", label: "Otro" }] }, description: "Seleccione el tipo de matrimonio celebrado." },
           { name: "Registro en Registraduría/Notaría", code: "field_marriage_registry", type: "Select", order: 20, options: { items: [{ value: "notaria", label: "Notaría" }, { value: "registraduria", label: "Registraduría" }] }, description: "Lugar donde se encuentra registrado el matrimonio." },
@@ -95,7 +111,11 @@ export const seed = internalMutation({
         name: "Partida de Defunción",
         code: "death_certificate_request",
         description: "Solicitud de partida de defunción",
-        price: 35000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Motivo de la solicitud", code: "field_reason_the_request", type: "Text", order: 10, description: "Motivo por el cual solicita la partida de defunción." },
           { name: "Documento base", code: "field_base_document", type: "File", order: 20, description: "Documento base para la búsqueda del registro." },
@@ -108,7 +128,11 @@ export const seed = internalMutation({
         name: "Cert. Entrega Agua",
         code: "water_sample_fridge",
         description: "Certificado de entrega de muestras de agua",
-        price: 28000,
+        price: 26000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Prioridad", code: "field_priority", type: "Boolean", order: 10, description: "Indique si el envío requiere prioridad alta." },
           { name: "Servicio de agua", code: "field_water_service", type: "Select", order: 20, options: { items: [{ value: "por_nevera", label: "Por nevera" }, { value: "radicacion_por_caja", label: "Radicación por caja" }] }, description: "Seleccione el tipo de servicio de entrega de agua." },
@@ -127,7 +151,11 @@ export const seed = internalMutation({
         name: "Envío de Correspondencia",
         code: "correspondence_delivery",
         description: "Servicio de envío de correspondencia",
-        price: 25000,
+        price: 30000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Nombre remitente", code: "field_sender_full_name", type: "Text", order: 10, description: "Nombre completo del remitente." },
           { name: "Teléfono remitente", code: "field_sender_contact_phone", type: "Text", order: 20, description: "Teléfono de contacto del remitente." },
@@ -146,7 +174,11 @@ export const seed = internalMutation({
         name: "Solicitud de Medicamentos",
         code: "medication_request",
         description: "Solicitud de medicamentos",
-        price: 32000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 100000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "EPS", code: "field_eps", type: "Text", order: 10, description: "Nombre de la EPS a la que está afiliado." },
           { name: "Droguería", code: "field_drugstore", type: "Text", order: 20, description: "Nombre de la droguería o farmacia." },
@@ -158,7 +190,11 @@ export const seed = internalMutation({
         name: "Registro Civil",
         code: "civil_registry_request",
         description: "Datos del registro civil",
-        price: 45000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Nombre y apellidos (Inscrito)", code: "field_registrant_full_name", type: "Text", order: 10, description: "Nombre completo de la persona inscrita." },
           { name: "¿Tiene número de registro?", code: "field_has_registration_number", type: "Boolean", order: 20, description: "¿Cuenta con el número de registro civil?" },
@@ -172,7 +208,7 @@ export const seed = internalMutation({
         name: "Alquila Pere Tantico",
         code: "rent_service",
         description: "Servicio de alquiler Pere Tantico",
-        price: 90000,
+        price: 100000,
         fields: [
           { name: "Tipo de cliente", code: "field_client_type", type: "Select", order: 10, options: { items: [{ value: "persona_natural", label: "Persona Natural" }, { value: "empresa", label: "Empresa" }] }, description: "Tipo de cliente (Persona Natural o Empresa)." },
           { name: "Nombre y apellidos", code: "field_full_name", type: "Text", order: 20, description: "Nombre completo del solicitante." },
@@ -186,7 +222,11 @@ export const seed = internalMutation({
         name: "Copia de Escrituras",
         code: "deed_copy_request",
         description: "Solicitud de copia de escrituras",
-        price: 60000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [
           { name: "Ciudad de la escritura", code: "field_deed_city", type: "Text", order: 10, description: "Ciudad donde está registrada la escritura." },
           { name: "URL documento", code: "field_path", type: "File", order: 20, description: "Documento de referencia o soporte." },
@@ -214,7 +254,11 @@ export const seed = internalMutation({
         name: "Plano de Predio",
         code: "property_plan_request",
         description: "Solicitud de plano de predio",
-        price: 75000,
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 80000,
+        estimatedHours: 24,
+        priorityHours: 8,
         fields: [{ name: "Plano del predio", code: "field_property_plan", type: "File", order: 10, description: "Información o archivo del plano del predio." }]
       },
       {
@@ -239,6 +283,10 @@ export const seed = internalMutation({
                 name: s.name,
                 description: s.description ?? undefined,
                 price: s.price,
+                hasPriority: s.hasPriority ?? false,
+                priorityPrice: s.priorityPrice,
+                estimatedHours: s.estimatedHours,
+                priorityHours: s.priorityHours,
                 status: true,
             });
             
@@ -256,6 +304,10 @@ export const seed = internalMutation({
                 code: s.code,
                 description: s.description ?? undefined,
                 price: s.price,
+                hasPriority: s.hasPriority ?? false,
+                priorityPrice: s.priorityPrice,
+                estimatedHours: s.estimatedHours,
+                priorityHours: s.priorityHours,
                 status: true,
             });
         }

@@ -16,6 +16,7 @@ import { createRequest } from "./system/ai/tools/createRequest";
 import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
 import { buildRequestCompletionMessage, resolveRequestCompletionMessage } from "./system/ai/requestCompletion";
 import {
+  buildServicesListReply,
   buildInboundContextPrompt,
   deriveInboundFlowDecision,
   extractCreateRequestCompletion,
@@ -417,26 +418,14 @@ export const processInboundMessage = internalAction({
         const all = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
           name?: string;
           price?: number;
+          hasPriority?: boolean;
+          priorityPrice?: number;
           status?: boolean;
         }>;
         const services = (all || [])
           .filter((s) => s.status !== false)
           .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), "es"));
-        const lines = [
-          "Aquí tienes la lista de servicios disponibles:",
-          "",
-          ...services
-            .map(
-              (s, idx) =>
-                `${idx + 1}) ${String(s.name ?? "").trim()}${
-                  typeof s.price === "number" ? ` - $${s.price.toLocaleString("es-CO")}` : ""
-                }`
-            )
-            .filter((l) => !/^\d+\)\s*$/.test(l)),
-          "",
-          "Responde con el número o el nombre del servicio.",
-        ];
-        const replyText = lines.join("\n");
+        const replyText = buildServicesListReply(services);
         const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
         if (providerMessageId) {
           const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {

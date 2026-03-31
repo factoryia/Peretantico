@@ -92,10 +92,12 @@ const baseFormSchema = z.object({
   applicantId: z.string().min(1, "El cliente es requerido"),
   serviceId: z.string().min(1, "El tipo de servicio es requerido"),
   entryDate: z.string().min(1, "La fecha de entrada es requerida"),
-  priorityValue: z.boolean().optional(),
+  priorityValue: z.number().optional(),
+  priorityEstimatedHours: z.number().optional(),
   paymentMethod: z.string().optional(),
   isPrioritized: z.boolean().optional(),
   serviceValue: z.number().optional(),
+  estimatedHours: z.number().optional(),
 });
 
 // Función para crear un schema dinámico basado en los campos del servicio
@@ -199,10 +201,12 @@ export function NewRequestModal({
       applicantId: "",
       serviceId: "",
       entryDate: new Date().toISOString().split("T")[0],
-      priorityValue: false,
+      priorityValue: 0,
+      priorityEstimatedHours: 0,
       paymentMethod: "",
       isPrioritized: false,
       serviceValue: 0,
+      estimatedHours: 0,
     },
   });
 
@@ -246,7 +250,36 @@ export function NewRequestModal({
     setSelectedService(service);
     form.setValue("serviceId", serviceId);
     if (service) {
+      // Load service value from price
       form.setValue("serviceValue", service.price || 0);
+      
+      // Load estimated hours from service
+      if (service.estimatedHours) {
+        form.setValue("estimatedHours", service.estimatedHours);
+      } else {
+        form.setValue("estimatedHours", 0);
+      }
+      
+      // Load priority value if service supports priority
+      if (service.hasPriority && service.priorityPrice) {
+        form.setValue("priorityValue", service.priorityPrice);
+      } else {
+        form.setValue("priorityValue", 0);
+      }
+      
+      // Load priority hours if service supports priority
+      if (service.hasPriority && service.priorityHours) {
+        form.setValue("priorityEstimatedHours", service.priorityHours);
+      } else {
+        form.setValue("priorityEstimatedHours", 0);
+      }
+      
+      // If service doesn't support priority, disable the priority toggle and clear values
+      if (!service.hasPriority) {
+        form.setValue("isPrioritized", false);
+        form.setValue("priorityValue", 0);
+        form.setValue("priorityEstimatedHours", 0);
+      }
     }
     
     // Regenerar ID con el nuevo servicio si es necesario
@@ -300,6 +333,10 @@ export function NewRequestModal({
         requestStatus: "EnProceso",
         attachments: [], // TODO: Implement file upload
         serviceValue: values.serviceValue,
+        // Include priority value and estimated hours when prioritized
+        prioritizedValue: values.isPrioritized ? (values.priorityValue || 0) : undefined,
+        estimatedPrioritizedHour: values.isPrioritized ? (values.priorityEstimatedHours || undefined) : undefined,
+        estimatedApplicationHour: values.estimatedHours,
       };
 
       await createRequest(payload);
@@ -805,23 +842,30 @@ export function NewRequestModal({
                 <FormField
                   control={form.control}
                   name="isPrioritized"
-                  render={({ field }) => (
-                    <FormItem className="grid gap-2">
-                      <FormLabel>Solicitud prioritaria</FormLabel>
-                      <FormControl>
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={Boolean(field.value)}
-                            onCheckedChange={field.onChange}
-                          />
-                          <span className="text-xs text-gray-500">
-                            ¿Es una solicitud prioritaria?
-                          </span>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const supportsPriority = selectedService?.hasPriority === true;
+                    
+                    return (
+                      <FormItem className="grid gap-2">
+                        <FormLabel>Solicitud prioritaria</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-3">
+                            <Switch
+                              checked={Boolean(field.value)}
+                              onCheckedChange={field.onChange}
+                              disabled={!supportsPriority}
+                            />
+                            <span className="text-xs text-gray-500">
+                              {supportsPriority 
+                                ? "¿Es una solicitud prioritaria?" 
+                                : "Este servicio no soporta prioridad"}
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
               </div>
             </div>

@@ -102,6 +102,10 @@ export const createHandler = async (ctx: any, args: any) => {
       price: args.price,
       status: args.status,
       description: args.description,
+      hasPriority: args.hasPriority ?? false,
+      priorityPrice: args.priorityPrice,
+      estimatedHours: args.estimatedHours,
+      priorityHours: args.priorityHours,
     });
 
     await Promise.all(
@@ -123,6 +127,10 @@ export const create = mutation({
     description: v.optional(v.string()),
     price: v.number(),
     status: v.boolean(),
+    hasPriority: v.optional(v.boolean()),
+    priorityPrice: v.optional(v.number()),
+    estimatedHours: v.optional(v.number()),
+    priorityHours: v.optional(v.number()),
     fields: v.array(
       v.object({
         name: v.string(),
@@ -186,6 +194,10 @@ export const update = mutation({
     description: v.optional(v.string()),
     price: v.optional(v.number()),
     status: v.optional(v.boolean()),
+    hasPriority: v.optional(v.boolean()),
+    priorityPrice: v.optional(v.number()),
+    estimatedHours: v.optional(v.number()),
+    priorityHours: v.optional(v.number()),
     fields: v.optional(v.array(
       v.object({
         id: v.optional(v.id("serviceFields")),

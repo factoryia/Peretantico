@@ -273,7 +273,11 @@ export const createRequest = createTool({
       id: args.serviceId as Id<"services">,
     })) as
       | {
+          hasPriority?: boolean;
           price?: number;
+          priorityPrice?: number;
+          estimatedHours?: number;
+          priorityHours?: number;
           fields?: Array<{
             _id: Id<"serviceFields">;
             name?: string;
@@ -365,6 +369,17 @@ export const createRequest = createTool({
     }
 
     const baseServicePrice = typeof service.price === "number" ? service.price : 0;
+    const prioritizedValue =
+      args.isPrioritized && service.hasPriority
+        ? typeof service.priorityPrice === "number"
+          ? service.priorityPrice
+          : baseServicePrice
+        : undefined;
+    const estimatedApplicationHour = typeof service.estimatedHours === "number" ? service.estimatedHours : undefined;
+    const estimatedPrioritizedHour =
+      args.isPrioritized && service.hasPriority && typeof service.priorityHours === "number"
+        ? service.priorityHours
+        : undefined;
 
     // Generate applicationNumber before mutation so it can be passed and returned
     const randomDigits = Math.floor(100000 + Math.random() * 900000);
@@ -380,6 +395,9 @@ export const createRequest = createTool({
       paymentMethod: args.paymentMethod,
       isPrioritized: args.isPrioritized,
       serviceValue: baseServicePrice,
+      prioritizedValue,
+      estimatedApplicationHour,
+      estimatedPrioritizedHour,
       // Pass applicationNumber so mutation returns it in response
       applicationNumber: generatedApplicationNumber,
     });

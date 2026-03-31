@@ -78,7 +78,7 @@ export const fetchDistributors = async (): Promise<Distributor[]> => {
   }
 };
 
-// Función para obtener solicitudes finalizadas por distribuidor
+// Función para obtener solicitudes atendidas/finalizadas pendientes de pago por distribuidor
 export const fetchFinishedRequestsByDistributor = async (
   distributorId: string,
 ) => fetchFinishedRequestsByDistributorBackend(distributorId);
@@ -151,12 +151,12 @@ export const fetchFinishedRequestsByDistributorBackend = async (
     ? raw.data
     : [];
   
-  // Filtrar por seguridad en el frontend también, por si el backend no soporta los filtros en params
+  // Filtrar por seguridad en el frontend también: considerar tanto "Atendida" como "Finalizada"
    const filteredList = list.filter(item => {
      const status = (item.requestStatus || item.field_request_status || "").toLowerCase();
      const payment = (item.paymentStatus || item.field_payment_status || "").toLowerCase();
      
-     return (status === "finalizada" || status === "finalizada") && 
+     return (status === "atendida" || status === "finalizada") && 
             (payment !== "pagado" && payment !== "paid");
    });
 

@@ -32,6 +32,8 @@ export const ServiceTable = ({
             <TableHead>Nombre</TableHead>
             <TableHead>Descripción</TableHead>
             <TableHead>Precio</TableHead>
+            <TableHead>Precio prioritario</TableHead>
+            <TableHead>¿Prioritario?</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Fecha Creación</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
@@ -40,7 +42,7 @@ export const ServiceTable = ({
         <TableBody>
           {isLoading ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-6">
+              <TableCell colSpan={8} className="text-center py-6">
                 <div className="flex justify-center items-center gap-2 py-6">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   <span className="text-muted-foreground">
@@ -51,7 +53,7 @@ export const ServiceTable = ({
             </TableRow>
           ) : services.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-6">
+              <TableCell colSpan={8} className="text-center py-6">
                 <span className="text-muted-foreground">
                   No se encontraron servicios.
                 </span>
@@ -70,6 +72,22 @@ export const ServiceTable = ({
                     currency: "COP",
                     maximumFractionDigits: 0,
                   }).format(service.price)}
+                </TableCell>
+                <TableCell className="font-medium">
+                  {service.hasPriority && typeof service.priorityPrice === "number"
+                    ? new Intl.NumberFormat("es-CO", {
+                        style: "currency",
+                        currency: "COP",
+                        maximumFractionDigits: 0,
+                      }).format(service.priorityPrice)
+                    : "-"}
+                </TableCell>
+                <TableCell>
+                  {service.hasPriority ? (
+                    <Badge variant="default">Sí</Badge>
+                  ) : (
+                    <Badge variant="secondary">No</Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge

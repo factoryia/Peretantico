@@ -133,7 +133,7 @@ export function FinishedRequestsTable({
                   <div className="flex flex-col items-center gap-2">
                     <Receipt className="h-8 w-8 text-slate-200" />
                     <span>
-                      No se encontraron solicitudes finalizadas para este
+                      No se encontraron solicitudes pendientes de pago para este
                       repartidor.
                     </span>
                   </div>

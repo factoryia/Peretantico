@@ -53,7 +53,7 @@ export function DistributorRequestCard({
       case "Finalizada":
         return "Finalizada";
       case "Atendida":
-        return "Finalizada"; // Mapear Atendida a Finalizada visualmente si es necesario
+        return "Atendida";
       case "EnProceso":
         return "En proceso";
       case "Incompleta":
@@ -137,7 +137,7 @@ export function DistributorRequestCard({
       await updateRequest({
          id: request.id as Id<"requests">,
          evidenceStorageId: storageId,
-         requestStatus: "Finalizada",
+         requestStatus: "Atendida",
          status: true,
          observations: "Actualizada desde evidencia",
       });

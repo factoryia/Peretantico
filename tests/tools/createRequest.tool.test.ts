@@ -67,6 +67,63 @@ describe("createRequest tool", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("persists priority pricing and ETA when the prioritized service is requested", async () => {
+    const serviceId = "service_priority";
+    const fieldId = "field_priority_required";
+    let createdPayload: Record<string, unknown> | null = null;
+
+    const ctx = {
+      runQuery: vi.fn().mockImplementation((queryFn: ReturnType<typeof vi.fn>, queryArgs: { id?: string }) => {
+        if (queryArgs?.id === serviceId) {
+          return Promise.resolve({
+            price: 40000,
+            hasPriority: true,
+            priorityPrice: 100000,
+            estimatedHours: 24,
+            priorityHours: 8,
+            fields: [{ _id: fieldId, name: "EPS", type: "Text", required: true, status: true }],
+          });
+        }
+
+        if (queryArgs?.id === "request_priority_created") {
+          return Promise.resolve({ applicationNumber: "REQ-555555" });
+        }
+
+        return Promise.resolve(null);
+      }),
+      runMutation: vi.fn().mockImplementation((mutationFn: ReturnType<typeof vi.fn>, mutationArgs: Record<string, unknown>) => {
+        if (mutationArgs?.applicationNumber) {
+          createdPayload = mutationArgs;
+          return Promise.resolve({ requestId: "request_priority_created", applicationNumber: "REQ-555555" });
+        }
+
+        return Promise.resolve({});
+      }),
+      storage: {
+        store: async () => "storage_x",
+        getUrl: async () => "https://storage.local/storage_x",
+      },
+    };
+
+    const result = (await invokeCreateRequest(ctx, {
+      contactId: "whatsapp:+573001234567",
+      applicantId: "profile_1",
+      serviceId,
+      isPrioritized: true,
+      data: [{ fieldId, value: "Nueva EPS" }],
+    })) as { ok: boolean; applicationNumber?: string };
+
+    expect(result.ok).toBe(true);
+    expect(result.applicationNumber).toBe("REQ-555555");
+    expect(createdPayload).toMatchObject({
+      isPrioritized: true,
+      serviceValue: 40000,
+      prioritizedValue: 100000,
+      estimatedApplicationHour: 24,
+      estimatedPrioritizedHour: 8,
+    });
+  });
+
   describe("thread closure and rotation on request creation", () => {
     const serviceId = "service_test";
     const contactId = "whatsapp:+573001234567";

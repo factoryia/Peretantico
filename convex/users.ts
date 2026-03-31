@@ -70,7 +70,35 @@ export const debugInspectUser = internalQuery({
 
      return { results };
    },
- });
+  });
+
+export const listAdminNotificationEmails = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const adminRole = await ctx.db
+      .query("roles")
+      .withIndex("by_name", (q) => q.eq("name", "Administrador"))
+      .first();
+
+    if (!adminRole) {
+      return [] as string[];
+    }
+
+    const adminUserRoles = await ctx.db
+      .query("userRoles")
+      .withIndex("by_role", (q) => q.eq("roleId", adminRole._id))
+      .collect();
+
+    const emails = await Promise.all(
+      [...new Set(adminUserRoles.map((item) => item.userId))].map(async (userId) => {
+        const user = await ctx.db.get(userId);
+        return user?.email?.trim() || null;
+      })
+    );
+
+    return emails.filter((email): email is string => Boolean(email));
+  },
+});
 
 export const getMe = query({
   args: {},
