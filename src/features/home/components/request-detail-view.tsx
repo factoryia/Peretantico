@@ -188,6 +188,22 @@ export function RequestDetailViewModal({
     }
   };
 
+  const normalizePaymentMethod = (value?: string | null) => {
+    const normalized = String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) return "";
+    if (normalized === "transferencia") return "transfer";
+    if (normalized === "efectivo") return "cash";
+    if (normalized === "tarjeta") return "card";
+    if (normalized === "contraentrega") return "contraentrega";
+    if (normalized === "delivery") return "contraentrega";
+    return normalized;
+  };
+
   const statusLabel = mapRequestStatusToLabel(request.requestStatus);
   const adminValidationStatusLabel =
     request.adminValidationStatus === "approved"
@@ -197,14 +213,19 @@ export function RequestDetailViewModal({
         : request.adminValidationStatus === "pending"
           ? "Pendiente"
           : "No requerida";
+  const paymentMethodKey = normalizePaymentMethod(request.paymentMethod);
   const paymentMethodLabel =
-    request.paymentMethod === "transfer"
+    paymentMethodKey === "transfer"
       ? "Transferencia"
-      : request.paymentMethod === "cash"
+      : paymentMethodKey === "cash"
         ? "Efectivo"
-        : request.paymentMethod === "card"
+        : paymentMethodKey === "card"
           ? "Tarjeta"
-          : "Sin método de pago";
+          : paymentMethodKey === "contraentrega"
+            ? "Contraentrega"
+            : paymentMethodKey
+              ? request.paymentMethod ?? paymentMethodKey
+              : "Sin método de pago";
 
   const handleAdminValidation = async (status: "approved" | "rejected") => {
     if (!request?.id) return;
@@ -508,7 +529,7 @@ export function RequestDetailViewModal({
                         )}
                       </div>
 
-                      {!isDistributor && request.adminValidationStatus === "pending" && request.paymentMethod === "transfer" && (
+                      {!isDistributor && request.adminValidationStatus === "pending" && paymentMethodKey === "transfer" && (
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" onClick={() => handleAdminValidation("approved")}>
                             <CheckCircle2 className="h-4 w-4" /> Aprobar comprobante
