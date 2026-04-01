@@ -4,6 +4,7 @@ import { anyApi } from "convex/server";
 
 import type { Id } from "../../../_generated/dataModel";
 import { buildRequestCompletionMessage } from "../requestCompletion";
+import { isDeterministicWorkflowEnabled, resolveRequestFlow } from "../../requestFlow";
 
 export function buildCompletionThreadTitles(args: {
   contactId: string;
@@ -60,6 +61,8 @@ export const createRequest = createTool({
     data: { fieldId: string; value: unknown }[];
     attachments?: { fileName: string; url: string; storageId?: string }[];
     paymentMethod?: string;
+    address?: string;
+    updateProfileAddress?: boolean;
     isPrioritized?: boolean;
   }>({
     type: "object",
@@ -96,6 +99,8 @@ export const createRequest = createTool({
         },
       },
       paymentMethod: { type: "string" },
+      address: { type: "string" },
+      updateProfileAddress: { type: "boolean" },
       isPrioritized: { type: "boolean" },
     },
     required: ["serviceId", "data"],
@@ -283,20 +288,37 @@ export const createRequest = createTool({
             name?: string;
             type?: string;
             required?: boolean;
-            status?: boolean;
-          }>;
+          status?: boolean;
+          multiple?: boolean;
+          settings?: unknown;
+        }>;
+          workflowMode?: string;
+          workflowConfig?: unknown;
         }
       | null;
     if (!service) return { ok: false, message: "No encontré el servicio." };
 
-    const requiredFields = (service.fields || []).filter((f) => f.status !== false && f.required === true);
+    const session = contactId
+      ? ((await ctx.runQuery(anyApi.whatsappBotState.getSessionByContact, { contactId })) as {
+          _id: Id<"botSessions">;
+          data?: { flow?: { branchKey?: string | null; addressConfirmed?: boolean; paymentDraft?: { method?: string | null } } };
+        } | null)
+      : null;
+
+    const flowState = session?.data?.flow;
+    const deterministicEnabled = isDeterministicWorkflowEnabled({
+      workflowMode: service.workflowMode,
+      workflowConfig: service.workflowConfig as Parameters<typeof resolveRequestFlow>[0]["workflowConfig"],
+    });
+    const allActiveFields = (service.fields || []).filter((f) => f.status !== false);
+    const requiredFields = allActiveFields.filter((f) => f.required === true);
     const fieldTypeById = new Map<string, string>();
     const fieldNameById = new Map<string, string>();
     for (const f of service.fields || []) {
       fieldTypeById.set(String(f._id), String(f.type ?? "Text"));
       fieldNameById.set(String(f._id), String(f.name ?? ""));
     }
-    const activeFields = (service.fields || []).filter((f) => f.status !== false);
+    const activeFields = allActiveFields;
     const provided = new Map<string, unknown>();
     for (const item of args.data || []) {
       const fid = String(item.fieldId ?? "").trim();
@@ -329,6 +351,7 @@ export const createRequest = createTool({
     };
 
     const normalizedData: { fieldId: string; value: unknown }[] = [];
+    const normalizedAttachments: { fileName: string; url: string; storageId?: string; fieldId?: Id<"serviceFields">; kind?: string }[] = [];
     for (const item of args.data || []) {
       const fieldId = String(item.fieldId ?? "").trim();
       const value = item.value;
@@ -349,10 +372,38 @@ export const createRequest = createTool({
       normalizedData.push({ fieldId, value });
     }
 
-    const normalizedAttachments: { fileName: string; url: string; storageId?: string }[] = [];
+    for (const item of normalizedData) {
+      const type = fieldTypeById.get(item.fieldId) ?? "Text";
+      if (type !== "File") continue;
+      const values = Array.isArray(item.value) ? item.value : [item.value];
+      for (const storageId of values) {
+        if (!storageId) continue;
+        const url = await storageCtx.storage.getUrl(storageId as Id<"_storage">);
+        if (!url) continue;
+        normalizedAttachments.push({
+          fieldId: item.fieldId as Id<"serviceFields">,
+          kind: "service_field",
+          fileName: fieldNameById.get(item.fieldId) || "Archivo",
+          url,
+          storageId: String(storageId),
+        });
+      }
+    }
+
+    const paymentMethod = args.paymentMethod ?? flowState?.paymentDraft?.method ?? undefined;
+
     for (const a of args.attachments || []) {
       const url = String(a.url ?? "").trim();
       const fileName = String(a.fileName ?? "").trim();
+        if (a.storageId) {
+          normalizedAttachments.push({
+            fileName: fileName || "Adjunto",
+            url,
+            storageId: a.storageId,
+            kind: deterministicEnabled && paymentMethod === "transfer" ? "payment_receipt" : "evidence",
+          });
+          continue;
+        }
       if (url && isHttpUrl(url)) {
         const stored = await downloadAndStoreUrl(storageCtx, url, fileName || undefined);
         if (stored) {
@@ -360,12 +411,50 @@ export const createRequest = createTool({
             fileName: stored.fileName ?? (fileName || "Adjunto"),
             url: stored.url,
             storageId: String(stored.storageId),
+            kind: deterministicEnabled && paymentMethod === "transfer" ? "payment_receipt" : "evidence",
           });
           continue;
         }
         return { ok: false, message: `No pude guardar el adjunto "${fileName || "Adjunto"}". Por favor reenvíalo.` };
       }
-      normalizedAttachments.push({ fileName: fileName || "Adjunto", url, storageId: a.storageId });
+      normalizedAttachments.push({
+        fileName: fileName || "Adjunto",
+        url,
+        storageId: a.storageId,
+        kind: deterministicEnabled && paymentMethod === "transfer" ? "payment_receipt" : "evidence",
+      });
+    }
+
+    const collectedData = Object.fromEntries(normalizedData.map((item) => [item.fieldId, item.value]));
+    const profile = await ctx.runQuery(anyApi.profiles.get, { id: applicantId });
+    const chosenAddress = (args.address ?? profile?.address ?? "").trim();
+
+    const flow = resolveRequestFlow({
+      workflowMode: service.workflowMode,
+      workflowConfig: service.workflowConfig as Parameters<typeof resolveRequestFlow>[0]["workflowConfig"],
+      fieldIds: activeFields.map((field) => String(field._id)),
+      collectedData,
+      branchKey: flowState?.branchKey ?? null,
+      profileAddress: profile?.address ?? null,
+      addressConfirmed: Boolean(chosenAddress),
+      paymentMethod,
+      receiptAttachmentIds: normalizedAttachments.filter((item) => item.kind === "payment_receipt").map((item) => item.storageId).filter(Boolean) as string[],
+      adminValidationStatus: deterministicEnabled && paymentMethod === "transfer" ? "pending" : "not_required",
+    });
+
+    if (flow.stage === "payment") {
+      return { ok: false, message: "Antes de terminar, necesito que elijas un método de pago." };
+    }
+
+    if (flow.stage === "receipt") {
+      return { ok: false, message: "Si el pago es por transferencia, debes adjuntar el comprobante." };
+    }
+
+    if (args.updateProfileAddress && chosenAddress && chosenAddress !== (profile?.address ?? "")) {
+      await ctx.runMutation(anyApi.profiles.updateCustomer, {
+        id: applicantId,
+        address: chosenAddress,
+      });
     }
 
     const baseServicePrice = typeof service.price === "number" ? service.price : 0;
@@ -392,7 +481,17 @@ export const createRequest = createTool({
       entryDate: Date.now(),
       data: normalizedData.map((d) => ({ fieldId: d.fieldId as Id<"serviceFields">, value: d.value })),
       attachments: normalizedAttachments,
-      paymentMethod: args.paymentMethod,
+      paymentMethod,
+      addressSnapshot: deterministicEnabled && chosenAddress
+        ? {
+            raw: chosenAddress,
+            source: chosenAddress === (profile?.address ?? "") ? "profile" : "user_edit",
+            confirmedAt: Date.now(),
+          }
+        : undefined,
+      flowStatus: deterministicEnabled ? flow.stage : undefined,
+      paymentStatus: deterministicEnabled ? flow.paymentStatus : undefined,
+      adminValidationStatus: deterministicEnabled ? flow.adminValidationStatus : undefined,
       isPrioritized: args.isPrioritized,
       serviceValue: baseServicePrice,
       prioritizedValue,
@@ -428,9 +527,27 @@ export const createRequest = createTool({
         }
       | undefined;
 
+    if (contactId && session?._id) {
+      await ctx.runMutation(anyApi.whatsappBotState.patchSession, {
+        id: session!._id,
+        data: {
+          ...(session?.data ?? {}),
+          flow: deterministicEnabled
+            ? {
+                ...(flowState ?? {}),
+                stage: flow.stage,
+                branchKey: flow.branchKey,
+                pendingFieldIds: flow.pendingFieldIds,
+                draftAddress: chosenAddress || undefined,
+                paymentDraft: { method: paymentMethod },
+              }
+            : undefined,
+        },
+      });
+
+    }
+
     if (contactId) {
-      // Soft reset: just indicate the session state should be cleared
-      // No thread creation, no thread closure - keeps context simple
       completion = {
         closeConversation: false,
         message: buildRequestCompletionMessage({

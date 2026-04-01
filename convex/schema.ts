@@ -43,9 +43,12 @@ export default defineSchema({
   services: defineTable({
     name: v.string(),
     code: v.optional(v.string()),
+    category: v.optional(v.union(v.literal("salud"), v.literal("notarial"))),
     description: v.optional(v.string()),
     price: v.number(),
     status: v.boolean(),
+    workflowMode: v.optional(v.union(v.literal("legacy"), v.literal("deterministic"))),
+    workflowConfig: v.optional(v.any()),
     // Priority support fields
     hasPriority: v.optional(v.boolean()),
     priorityPrice: v.optional(v.number()),
@@ -53,7 +56,8 @@ export default defineSchema({
     priorityHours: v.optional(v.number()),
   })
     .index("by_name", ["name"])
-    .index("by_code", ["code"]),
+    .index("by_code", ["code"])
+    .index("by_category", ["category"]),
 
   serviceFields: defineTable({
     serviceId: v.id("services"),
@@ -94,6 +98,18 @@ export default defineSchema({
     serviceValue: v.optional(v.number()),
     prioritizedValue: v.optional(v.number()),
     paymentMethod: v.optional(v.string()),
+    addressSnapshot: v.optional(v.object({
+      raw: v.string(),
+      source: v.union(v.literal("profile"), v.literal("user_edit")),
+      confirmedAt: v.number(),
+    })),
+    flowStatus: v.optional(v.string()),
+    paymentStatus: v.optional(v.string()),
+    receiptAttachmentIds: v.optional(v.array(v.id("attachments"))),
+    adminValidationStatus: v.optional(v.string()),
+    adminValidationAt: v.optional(v.number()),
+    adminValidationBy: v.optional(v.id("users")),
+    adminValidationReason: v.optional(v.string()),
     
     // Timings
     entryDate: v.number(), // Timestamp
@@ -129,6 +145,8 @@ export default defineSchema({
   attachments: defineTable({
     requestId: v.optional(v.id("requests")),
     profileId: v.optional(v.id("profiles")),
+    fieldId: v.optional(v.id("serviceFields")),
+    kind: v.optional(v.string()),
     fileName: v.string(),
     url: v.string(), // Legacy URL support
     mimeType: v.optional(v.string()),

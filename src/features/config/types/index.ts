@@ -8,6 +8,25 @@ export interface Category {
 
 export type FieldType = "Text" | "Number" | "Date" | "Boolean" | "Select" | "File";
 
+export interface WorkflowBranchRule {
+  fieldId: string;
+  equals?: string;
+}
+
+export interface WorkflowBranch {
+  key: string;
+  label?: string;
+  fieldIds?: string[];
+  rules?: WorkflowBranchRule[];
+}
+
+export interface WorkflowConfig {
+  addressStrategy?: "profile_confirm" | "always_prompt";
+  requirePaymentMethod?: boolean;
+  paymentMethods?: Array<"cash" | "transfer" | "card">;
+  branches?: WorkflowBranch[];
+}
+
 export interface ServiceField {
   id: string;
   name: string;
@@ -19,7 +38,10 @@ export interface ServiceField {
   order: number;
   options?: unknown | null;
   status: boolean;
-  settings?: unknown | null;
+  settings?: {
+    maxFiles?: number;
+    acceptedMimeTypes?: string[];
+  } | null;
 }
 
 export interface Service {
@@ -37,6 +59,10 @@ export interface Service {
   priorityPrice?: number;
   estimatedHours?: number;
   priorityHours?: number;
+  workflowMode?: "legacy" | "deterministic";
+  workflowConfig?: WorkflowConfig | null;
+  // Service category for workflow routing
+  category?: "salud" | "notarial";
 }
 
 export interface Subservice {

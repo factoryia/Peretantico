@@ -9,6 +9,7 @@
  */
 
 import type * as ResendOTP from "../ResendOTP.js";
+import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
 import type * as conversationState from "../conversationState.js";
 import type * as coverageAreas from "../coverageAreas.js";
@@ -26,6 +27,7 @@ import type * as playground from "../playground.js";
 import type * as profiles from "../profiles.js";
 import type * as requests from "../requests.js";
 import type * as seed from "../seed.js";
+import type * as seedAdmin from "../seedAdmin.js";
 import type * as services from "../services.js";
 import type * as specialDates from "../specialDates.js";
 import type * as system_ai_agents_tanticoAgent from "../system/ai/agents/tanticoAgent.js";
@@ -41,6 +43,7 @@ import type * as system_ai_tools_searchProfileByNumber from "../system/ai/tools/
 import type * as system_ai_tools_validateServiceField from "../system/ai/tools/validateServiceField.js";
 import type * as system_ai_unsupportedIntent from "../system/ai/unsupportedIntent.js";
 import type * as system_gemini from "../system/gemini.js";
+import type * as system_requestFlow from "../system/requestFlow.js";
 import type * as system_tanticoPrompt from "../system/tanticoPrompt.js";
 import type * as transportationTypes from "../transportationTypes.js";
 import type * as users from "../users.js";
@@ -56,6 +59,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ResendOTP: typeof ResendOTP;
+  admin: typeof admin;
   auth: typeof auth;
   conversationState: typeof conversationState;
   coverageAreas: typeof coverageAreas;
@@ -73,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   profiles: typeof profiles;
   requests: typeof requests;
   seed: typeof seed;
+  seedAdmin: typeof seedAdmin;
   services: typeof services;
   specialDates: typeof specialDates;
   "system/ai/agents/tanticoAgent": typeof system_ai_agents_tanticoAgent;
@@ -88,6 +93,7 @@ declare const fullApi: ApiFromModules<{
   "system/ai/tools/validateServiceField": typeof system_ai_tools_validateServiceField;
   "system/ai/unsupportedIntent": typeof system_ai_unsupportedIntent;
   "system/gemini": typeof system_gemini;
+  "system/requestFlow": typeof system_requestFlow;
   "system/tanticoPrompt": typeof system_tanticoPrompt;
   transportationTypes: typeof transportationTypes;
   users: typeof users;

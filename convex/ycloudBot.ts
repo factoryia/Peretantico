@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { action, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { anyApi } from "convex/server";
 import { components, internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -15,6 +16,7 @@ import { createApplicantProfile } from "./system/ai/tools/createApplicantProfile
 import { createRequest } from "./system/ai/tools/createRequest";
 import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
 import { buildRequestCompletionMessage } from "./system/ai/requestCompletion";
+import { resolveRequestFlow } from "./system/requestFlow";
 import {
   buildServicesListReply,
   buildInboundContextPrompt,
@@ -25,8 +27,133 @@ import {
   normalizeForMatch,
   resolveAgentEmptyReply,
 } from "./ycloudBot.helpers";
+import { mergeSessionFlow } from "./whatsappBotState";
 
 type MediaType = "image" | "video" | "audio" | "document";
+
+type AgentToolResult = {
+  type?: string;
+  toolName?: string;
+  input?: Record<string, unknown>;
+  result?: unknown;
+  output?: unknown;
+};
+
+function unwrapToolPayload(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  const boxed = value as { type?: unknown; value?: unknown };
+  if (boxed.type === "json" && boxed.value && typeof boxed.value === "object") {
+    return boxed.value as Record<string, unknown>;
+  }
+  return value as Record<string, unknown>;
+}
+
+async function syncDeterministicSessionFlow(args: {
+  ctx: Pick<ActionCtx, "runMutation" | "runQuery">;
+  internalAny: typeof anyApi;
+  sessionId: Id<"botSessions">;
+  session: {
+    serviceId?: Id<"services">;
+    fieldIds?: Id<"serviceFields">[];
+    currentFieldIndex?: number | null;
+    data?: unknown;
+  };
+  toolResults?: unknown[];
+}) {
+  const toolResults = Array.isArray(args.toolResults) ? (args.toolResults as AgentToolResult[]) : [];
+  if (toolResults.length === 0) return;
+
+  let serviceId = args.session.serviceId ? String(args.session.serviceId) : null;
+  let fieldIds = Array.isArray(args.session.fieldIds) ? args.session.fieldIds.map((id) => String(id)) : [];
+  let currentData = args.session.data;
+
+  for (const toolResult of toolResults) {
+    if (toolResult?.type !== "tool-result") continue;
+    const input = unwrapToolPayload(toolResult.input) ?? {};
+    const output = unwrapToolPayload(toolResult.output) ?? unwrapToolPayload(toolResult.result) ?? {};
+
+    if (toolResult.toolName === "getServiceFields") {
+      const found = output.found !== false;
+      const service = output.service && typeof output.service === "object" ? (output.service as Record<string, unknown>) : null;
+      if (!found || !service?.id) continue;
+
+      serviceId = String(service.id);
+      fieldIds = Array.isArray(output.fields)
+        ? output.fields
+            .map((field) => (field && typeof field === "object" ? String((field as Record<string, unknown>).id ?? "") : ""))
+            .filter(Boolean)
+        : [];
+
+      currentData = mergeSessionFlow(currentData, {
+        stage: typeof output.branchKey === "string" ? "fields" : "branch",
+        branchKey: typeof output.branchKey === "string" ? output.branchKey : null,
+        pendingFieldIds: fieldIds,
+      });
+    }
+
+    if (toolResult.toolName === "validateServiceField" && output.ok === true) {
+      const fieldId = String(input.fieldId ?? "").trim();
+      if (!fieldId) continue;
+      const normalizedValue = output.normalizedValue;
+      currentData = mergeSessionFlow(currentData, {
+        stage: "fields",
+        collectedData: { [fieldId]: normalizedValue },
+      });
+    }
+
+    if (toolResult.toolName === "createRequest") {
+      const paymentMethod = String(input.paymentMethod ?? "").trim() || null;
+      currentData = mergeSessionFlow(currentData, {
+        paymentDraft: { method: paymentMethod },
+      });
+    }
+  }
+
+  if (!serviceId) return;
+
+  const service = await args.ctx.runQuery(args.internalAny.services.get, {
+    id: serviceId,
+  }).catch(() => null);
+  const serviceRecord = service && typeof service === "object" ? (service as Record<string, unknown>) : null;
+  if (!serviceRecord) return;
+
+  const flow = (currentData && typeof currentData === "object" && "flow" in (currentData as Record<string, unknown>)
+    ? ((currentData as Record<string, unknown>).flow as Record<string, unknown> | undefined)
+    : undefined) ?? {};
+
+  const resolved = resolveRequestFlow({
+    workflowMode: String(serviceRecord.workflowMode ?? "legacy"),
+    workflowConfig: (serviceRecord.workflowConfig ?? undefined) as Parameters<typeof resolveRequestFlow>[0]["workflowConfig"],
+    fieldIds,
+    collectedData:
+      flow.collectedData && typeof flow.collectedData === "object"
+        ? (flow.collectedData as Record<string, unknown>)
+        : undefined,
+    branchKey: typeof flow.branchKey === "string" ? flow.branchKey : null,
+    addressConfirmed: Boolean(flow.addressConfirmed || flow.draftAddress),
+    paymentMethod:
+      flow.paymentDraft && typeof flow.paymentDraft === "object" && typeof (flow.paymentDraft as Record<string, unknown>).method === "string"
+        ? String((flow.paymentDraft as Record<string, unknown>).method)
+        : null,
+  });
+
+  currentData = mergeSessionFlow(currentData, {
+    stage: resolved.stage,
+    branchKey: resolved.branchKey,
+    pendingFieldIds: resolved.pendingFieldIds,
+  });
+
+  const nextFieldIndex = resolved.pendingFieldIds.length > 0 ? fieldIds.indexOf(resolved.pendingFieldIds[0]) : -1;
+
+  await args.ctx.runMutation(args.internalAny.whatsappBotState.patchSession, {
+    id: args.sessionId,
+    serviceId: serviceId as unknown as Id<"services">,
+    fieldIds: fieldIds.map((id) => id as unknown as Id<"serviceFields">),
+    currentFieldIndex: nextFieldIndex >= 0 ? nextFieldIndex : null,
+    data: currentData,
+    state: resolved.stage === "complete" ? "INIT" : "IN_PROGRESS",
+  });
+}
 
 function normalizeWhatsAppContactId(raw: string): string {
   const trimmed = (raw ?? "").trim();
@@ -127,8 +254,8 @@ async function sendWhatsAppText(args: { contactId: string; content: string }): P
 }
 
 async function clearContactMessageHistory(
-  ctx: { runMutation: (...args: any[]) => Promise<any> },
-  internalAny: any,
+  ctx: Pick<ActionCtx, "runMutation">,
+  internalAny: typeof anyApi,
   contactId: string
 ): Promise<void> {
   for (;;) {
@@ -136,13 +263,14 @@ async function clearContactMessageHistory(
       contactId,
       limit: 500,
     });
-    if (res?.isDone) break;
+    const boxed = res && typeof res === "object" ? (res as Record<string, unknown>) : null;
+    if (boxed?.isDone === true) break;
   }
 }
 
 async function applyConversationReset(args: {
-  ctx: { runAction: (...args: any[]) => Promise<any>; runMutation: (...args: any[]) => Promise<any> };
-  internalAny: any;
+  ctx: Pick<ActionCtx, "runAction" | "runMutation">;
+  internalAny: typeof anyApi;
   sessionId: Id<"botSessions">;
   contactId: string;
   customerName?: string;
@@ -524,6 +652,16 @@ export const processInboundMessage = internalAction({
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
         prompt: contextPrompt,
         tools,
+      });
+
+      await syncDeterministicSessionFlow({
+        ctx,
+        internalAny,
+        sessionId,
+        session,
+        toolResults: response.toolResults,
+      }).catch((syncError) => {
+        console.error("Session flow sync error:", syncError);
       });
 
       const rawCompletion = extractCreateRequestCompletion(response.toolResults);

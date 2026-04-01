@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { CompleteRequest } from "../utils/complete-request";
+import { adaptRequestFlowState } from "../utils/request-flow-adapter";
 
 export const useRequestDetail = (requestId: string | null | undefined) => {
   const request = useQuery(api.requests.get, 
@@ -30,8 +31,13 @@ export const useRequestDetail = (requestId: string | null | undefined) => {
       field_priority_value: Number(request.prioritizedValue) || 0,
       field_observations: request.observations || "",
       paymentMethod: request.paymentMethod ?? null,
+      paymentFlowStatus: request.paymentStatus ?? null,
       isPrioritized: request.isPrioritized ?? false,
       requestStatus: (request.requestStatus as any) ?? "EnProceso",
+      flowStatus: request.flowStatus ?? undefined,
+      adminValidationStatus: request.adminValidationStatus ?? undefined,
+      adminValidationReason: request.adminValidationReason ?? undefined,
+      adminValidationAt: request.adminValidationAt ?? undefined,
       status: request.status,
       promote: request.promote,
       sticky: request.sticky,
@@ -104,6 +110,7 @@ export const useRequestDetail = (requestId: string | null | undefined) => {
           priority: request.isPrioritized ? "Alta" : "Normal",
           // Add specific fields if needed by mapping from request.data
       } as any,
+      ...adaptRequestFlowState(request),
     };
   }, [request]);
 

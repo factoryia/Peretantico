@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { ServiceType } from "@/types/global";
+import { adaptRequestFlowState } from "./request-flow-adapter";
 
 // --- Interfaces ---
 
@@ -48,9 +49,19 @@ export interface CompleteRequest {
   promote?: boolean;
   sticky?: boolean;
   paymentMethod?: string | null;
+  paymentFlowStatus?: string | null;
   isPrioritized?: boolean;
   requestStatus?: "Finalizada" | "EnProceso" | "Atendida" | "Incompleta";
   serviceId?: string; // Added serviceId field
+  flowStatus?: string;
+  adminValidationStatus?: string;
+  adminValidationReason?: string;
+  adminValidationAt?: number;
+  addressSnapshot?: {
+    raw: string;
+    source: "profile" | "user_edit";
+    confirmedAt?: number;
+  };
   field_info_service?: {
     type: ServiceType;
     id: string;
@@ -77,6 +88,26 @@ export interface CompleteRequest {
   };
   evidenceStorageId?: string;
   evidenceUrl?: string;
+  receiptAttachments?: {
+    id: string;
+    label: string;
+    url: string;
+    kind: "service_field" | "payment_receipt" | "evidence" | "other";
+    fieldId?: string;
+    fieldName?: string;
+  }[];
+  attachmentGroups?: {
+    key: string;
+    title: string;
+    items: {
+      id: string;
+      label: string;
+      url: string;
+      kind: "service_field" | "payment_receipt" | "evidence" | "other";
+      fieldId?: string;
+      fieldName?: string;
+    }[];
+  }[];
   data?: {
     id: string;
     fieldId: string;
@@ -297,8 +328,9 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
              options: d.field.options,
              status: d.field.status,
              settings: d.field.settings
-          } : undefined
+           } : undefined
         })) : [],
+        ...adaptRequestFlowState(req),
     }));
   }
 

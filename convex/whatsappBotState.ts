@@ -2,6 +2,53 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
+export type BotSessionFlowState = {
+  stage?: string | null;
+  branchKey?: string | null;
+  pendingFieldIds?: string[];
+  draftAddress?: string;
+  addressConfirmed?: boolean;
+  paymentDraft?: { method?: string | null };
+  collectedData?: Record<string, unknown>;
+};
+
+export function mergeSessionFlow(
+  currentData: unknown,
+  nextFlow: Partial<BotSessionFlowState>
+): Record<string, unknown> {
+  const data = currentData && typeof currentData === "object" ? { ...(currentData as Record<string, unknown>) } : {};
+  const currentFlow =
+    data.flow && typeof data.flow === "object" ? { ...(data.flow as Record<string, unknown>) } : {};
+
+  data.flow = {
+    ...currentFlow,
+    ...nextFlow,
+    pendingFieldIds: Array.isArray(nextFlow.pendingFieldIds)
+      ? nextFlow.pendingFieldIds.filter(Boolean)
+      : (currentFlow.pendingFieldIds as string[] | undefined),
+    collectedData:
+      nextFlow.collectedData && typeof nextFlow.collectedData === "object"
+        ? {
+            ...(currentFlow.collectedData && typeof currentFlow.collectedData === "object"
+              ? (currentFlow.collectedData as Record<string, unknown>)
+              : {}),
+            ...nextFlow.collectedData,
+          }
+        : (currentFlow.collectedData as Record<string, unknown> | undefined),
+    paymentDraft:
+      nextFlow.paymentDraft && typeof nextFlow.paymentDraft === "object"
+        ? {
+            ...(currentFlow.paymentDraft && typeof currentFlow.paymentDraft === "object"
+              ? (currentFlow.paymentDraft as Record<string, unknown>)
+              : {}),
+            ...nextFlow.paymentDraft,
+          }
+        : (currentFlow.paymentDraft as Record<string, unknown> | undefined),
+  };
+
+  return data;
+}
+
 function normalizePhoneDigits(input: string): string {
   return (input ?? "").replace(/[^\d+]/g, "").trim();
 }

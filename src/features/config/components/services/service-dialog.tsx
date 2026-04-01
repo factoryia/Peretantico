@@ -27,8 +27,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input as NumberInput } from "@/components/ui/input";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type * as z from "zod";
 import type { Service } from "../../types";
 import { serviceSchema, type ServiceFormValues } from "../../schemas";
 import { Loader, Plus, Trash2 } from "lucide-react";
@@ -41,6 +42,175 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { AlertModal } from "@/components/common/alert-modal";
 import { Switch } from "@/components/ui/switch";
+import { isDeterministicRequestsUiEnabled } from "../../../../lib/deterministic-requests";
+
+type ServiceFormInputValues = z.input<typeof serviceSchema>;
+
+function ServiceBranchEditor({
+  control,
+  branchIndex,
+  fieldOptions,
+  onRemove,
+}: {
+  control: Control<ServiceFormInputValues>;
+  branchIndex: number;
+  fieldOptions: Array<{ id: string; name: string; type: string }>;
+  onRemove: () => void;
+}) {
+  const rulesArray = useFieldArray({
+    control,
+    name: `workflowConfig.branches.${branchIndex}.rules`,
+  });
+
+  return (
+    <div className="space-y-3 rounded-lg border bg-white p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">Rama {branchIndex + 1}</p>
+          <p className="text-xs text-muted-foreground">
+            Define qué campos quedan activos cuando se cumplan las reglas.
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <FormField
+          control={control}
+          name={`workflowConfig.branches.${branchIndex}.key`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Clave</FormLabel>
+              <FormControl>
+                <Input placeholder="persona-natural" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`workflowConfig.branches.${branchIndex}.label`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Etiqueta</FormLabel>
+              <FormControl>
+                <Input placeholder="Persona natural" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={control}
+        name={`workflowConfig.branches.${branchIndex}.fieldIds`}
+        render={({ field }) => {
+          const selected = Array.isArray(field.value) ? field.value : [];
+          return (
+            <FormItem>
+              <FormLabel>Campos habilitados en esta rama</FormLabel>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 rounded-md border p-3 bg-slate-50">
+                {fieldOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Agregá campos del servicio para poder asignarlos a una rama.</p>
+                ) : (
+                  fieldOptions.map((option) => (
+                    <label key={option.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={selected.includes(option.id)}
+                        onCheckedChange={(checked) =>
+                          field.onChange(
+                            checked
+                              ? [...selected, option.id]
+                              : selected.filter((value) => value !== option.id)
+                          )
+                        }
+                      />
+                      <span>{option.name} <span className="text-xs text-muted-foreground">({option.type})</span></span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
+      />
+
+      <div className="space-y-3 rounded-md border p-3 bg-slate-50/70">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium">Reglas</p>
+            <p className="text-xs text-muted-foreground">Todas las reglas deben cumplirse para activar la rama.</p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => rulesArray.append({ fieldId: "", equals: "" })}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Regla
+          </Button>
+        </div>
+
+        {rulesArray.fields.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Sin reglas: esta rama solo sirve como agrupador manual.</p>
+        ) : (
+          <div className="space-y-3">
+            {rulesArray.fields.map((rule, ruleIndex) => (
+              <div key={rule.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end rounded-md border bg-white p-3">
+                <FormField
+                  control={control}
+                  name={`workflowConfig.branches.${branchIndex}.rules.${ruleIndex}.fieldId`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campo condicionante</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccioná un campo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {fieldOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={control}
+                  name={`workflowConfig.branches.${branchIndex}.rules.${ruleIndex}.equals`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor esperado</FormLabel>
+                      <FormControl>
+                        <Input placeholder="persona" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="button" variant="ghost" size="icon" onClick={() => rulesArray.remove(ruleIndex)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   open: boolean;
@@ -69,6 +239,17 @@ function stringToOptions(str: string | undefined): any {
   return { items };
 }
 
+function mimeTypesToString(value: string[] | undefined | null): string {
+  return Array.isArray(value) ? value.join("\n") : "";
+}
+
+function stringToList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export const ServiceDialog = ({
   open,
   editingService,
@@ -76,6 +257,7 @@ export const ServiceDialog = ({
   setIsDialogOpen,
   setEditingService,
 }: Props) => {
+  const deterministicUiEnabled = isDeterministicRequestsUiEnabled();
   const createServiceMutation = useMutation(api.services.create);
   const updateServiceMutation = useMutation(api.services.update);
   const removeServiceMutation = useMutation(api.services.remove);
@@ -83,8 +265,8 @@ export const ServiceDialog = ({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const form = useForm({
-    resolver: zodResolver(serviceSchema),
+  const form = useForm<ServiceFormInputValues, unknown, ServiceFormValues>({
+    resolver: zodResolver<ServiceFormInputValues, unknown, ServiceFormValues>(serviceSchema),
     defaultValues: {
       name: editingService?.name || "",
       description: editingService?.description || "",
@@ -94,6 +276,13 @@ export const ServiceDialog = ({
       priorityPrice: editingService?.priorityPrice ?? undefined,
       estimatedHours: editingService?.estimatedHours ?? undefined,
       priorityHours: editingService?.priorityHours ?? undefined,
+      workflowMode: editingService?.workflowMode ?? "legacy",
+      workflowConfig: {
+        addressStrategy: editingService?.workflowConfig?.addressStrategy ?? "profile_confirm",
+        requirePaymentMethod: editingService?.workflowConfig?.requirePaymentMethod ?? true,
+        paymentMethods: editingService?.workflowConfig?.paymentMethods ?? ["cash", "transfer", "card"],
+        branches: editingService?.workflowConfig?.branches ?? [],
+      },
       fields:
         editingService?.fields?.map((f) => ({
           id: f.id,
@@ -106,6 +295,10 @@ export const ServiceDialog = ({
           order: f.order,
           status: f.status,
           options: optionsToString(f.options),
+          settings: {
+            maxFiles: f.settings?.maxFiles,
+            acceptedMimeTypes: mimeTypesToString(f.settings?.acceptedMimeTypes ?? undefined),
+          },
         })) ?? [],
     },
   });
@@ -114,9 +307,21 @@ export const ServiceDialog = ({
     control: form.control,
     name: "fields",
   });
+  const branchesArray = useFieldArray({
+    control: form.control,
+    name: "workflowConfig.branches",
+  });
 
   const { isValid, isSubmitting } = form.formState;
   const watchedFields = form.watch("fields") || [];
+  const workflowMode = form.watch("workflowMode");
+  const workflowFieldOptions = watchedFields
+    .map((field: any, index) => ({
+      id: String(field?.id ?? `draft-field-${index}`),
+      name: String(field?.name ?? `Campo ${index + 1}`),
+      type: String(field?.type ?? "Text"),
+    }))
+    .filter((field) => field.id && field.name);
 
   useEffect(() => {
     if (!editingService) {
@@ -127,10 +332,17 @@ export const ServiceDialog = ({
         status: "activo",
         hasPriority: false,
         priorityPrice: undefined,
-        estimatedHours: undefined,
-        priorityHours: undefined,
-        fields: [],
-      });
+          estimatedHours: undefined,
+          priorityHours: undefined,
+          workflowMode: "legacy",
+          workflowConfig: {
+            addressStrategy: "profile_confirm",
+            requirePaymentMethod: true,
+            paymentMethods: ["cash", "transfer", "card"],
+            branches: [],
+          },
+          fields: [],
+        });
     } else {
       form.reset({
         name: editingService.name,
@@ -141,6 +353,13 @@ export const ServiceDialog = ({
         priorityPrice: editingService.priorityPrice ?? undefined,
         estimatedHours: editingService.estimatedHours ?? undefined,
         priorityHours: editingService.priorityHours ?? undefined,
+        workflowMode: editingService.workflowMode ?? "legacy",
+        workflowConfig: {
+          addressStrategy: editingService.workflowConfig?.addressStrategy ?? "profile_confirm",
+          requirePaymentMethod: editingService.workflowConfig?.requirePaymentMethod ?? true,
+          paymentMethods: editingService.workflowConfig?.paymentMethods ?? ["cash", "transfer", "card"],
+          branches: editingService.workflowConfig?.branches ?? [],
+        },
         fields:
           editingService.fields?.map((f) => ({
             id: f.id,
@@ -153,6 +372,10 @@ export const ServiceDialog = ({
             order: f.order,
             status: f.status,
             options: optionsToString(f.options),
+            settings: {
+              maxFiles: f.settings?.maxFiles,
+              acceptedMimeTypes: mimeTypesToString(f.settings?.acceptedMimeTypes ?? undefined),
+            },
           })) ?? [],
       });
     }
@@ -162,7 +385,7 @@ export const ServiceDialog = ({
 
   const onSubmit = async (data: ServiceFormValues) => {
     try {
-      const payloadFields = (data.fields ?? []).map((field, index) => ({
+        const payloadFields = (data.fields ?? []).map((field, index) => ({
         id: field.id ? (field.id as Id<"serviceFields">) : undefined,
         name: field.name,
         code: field.code && field.code.length > 0 ? field.code : undefined,
@@ -174,10 +397,15 @@ export const ServiceDialog = ({
           typeof field.order === "number" && !Number.isNaN(field.order)
             ? field.order
             : index,
-        options: stringToOptions(field.options),
-        status: field.status ?? true,
-        settings: undefined,
-      }));
+          options: stringToOptions(field.options),
+          status: field.status ?? true,
+          settings: field.type === "File"
+            ? {
+                maxFiles: field.settings?.maxFiles,
+                acceptedMimeTypes: stringToList(field.settings?.acceptedMimeTypes),
+              }
+            : undefined,
+        }));
 
       if (editingService) {
         await updateServiceMutation({
@@ -190,6 +418,8 @@ export const ServiceDialog = ({
           priorityPrice: data.priorityPrice,
           estimatedHours: data.estimatedHours,
           priorityHours: data.priorityHours,
+          workflowMode: data.workflowMode,
+          workflowConfig: data.workflowConfig,
           fields: payloadFields,
         });
 
@@ -207,6 +437,8 @@ export const ServiceDialog = ({
           priorityPrice: data.priorityPrice,
           estimatedHours: data.estimatedHours,
           priorityHours: data.priorityHours,
+          workflowMode: data.workflowMode,
+          workflowConfig: data.workflowConfig,
           fields: payloadFields,
         });
         toast.success("Servicio creado", {
@@ -486,6 +718,113 @@ export const ServiceDialog = ({
               </div>
             </div>
 
+            <div className="space-y-4 border rounded-md p-4 bg-gray-50/50">
+              <h3 className="text-sm font-medium border-b pb-2">Flujo determinístico</h3>
+              <FormField
+                control={form.control}
+                name="workflowMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Modo de flujo</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione el modo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="legacy">Legacy</SelectItem>
+                        <SelectItem value="deterministic" disabled={!deterministicUiEnabled}>Determinístico</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Determinístico habilita ramas, confirmación de dirección y pago guiado.
+                      {!deterministicUiEnabled && " El kill switch global está activo, así que este modo queda solo de lectura."}
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="workflowConfig.addressStrategy"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estrategia de dirección</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccione una estrategia" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="profile_confirm">Confirmar perfil</SelectItem>
+                          <SelectItem value="always_prompt">Pedir siempre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="workflowConfig.requirePaymentMethod"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-md border px-3 py-2">
+                      <div>
+                        <FormLabel>Método de pago obligatorio</FormLabel>
+                        <FormDescription>Solicita el medio de pago antes del cierre.</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={Boolean(field.value)} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {deterministicUiEnabled && workflowMode === "deterministic" && (
+                <div className="space-y-3 rounded-md border bg-white p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Branches / ramas condicionales</p>
+                      <p className="text-xs text-muted-foreground">
+                        Elegí qué campos quedan activos según el valor de un campo previo.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => branchesArray.append({ key: "", label: "", fieldIds: [], rules: [] })}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Rama
+                    </Button>
+                  </div>
+
+                  {branchesArray.fields.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Sin ramas configuradas. Si no agregás ninguna, el flujo usa todos los campos activos.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {branchesArray.fields.map((branch, branchIndex) => (
+                        <ServiceBranchEditor
+                          key={branch.id}
+                          control={form.control}
+                          branchIndex={branchIndex}
+                          fieldOptions={workflowFieldOptions}
+                          onRemove={() => branchesArray.remove(branchIndex)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
@@ -510,6 +849,10 @@ export const ServiceDialog = ({
                       order: fields.length,
                       status: true,
                       options: "",
+                      settings: {
+                        maxFiles: undefined,
+                        acceptedMimeTypes: "",
+                      },
                     })
                   }
                 >
@@ -657,6 +1000,47 @@ export const ServiceDialog = ({
                               </FormItem>
                             )}
                           />
+                        )}
+
+                        {currentField.type === "File" && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FormField
+                              control={form.control}
+                              name={`fields.${index}.settings.maxFiles`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Máximo de archivos</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      value={(field.value as number | undefined) ?? ""}
+                                      onChange={(event) =>
+                                        field.onChange(event.target.value ? Number(event.target.value) : undefined)
+                                      }
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name={`fields.${index}.settings.acceptedMimeTypes`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Formatos permitidos</FormLabel>
+                                  <FormControl>
+                                    <Textarea
+                                      placeholder="application/pdf&#10;image/jpeg"
+                                      className="resize-none"
+                                      value={(field.value as string | undefined) ?? ""}
+                                      onChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormDescription>Uno por línea.</FormDescription>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                         )}
 
                         <FormField

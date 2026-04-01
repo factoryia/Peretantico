@@ -99,9 +99,12 @@ export const createHandler = async (ctx: any, args: any) => {
     const serviceId = await ctx.db.insert("services", {
       name: args.name,
       code: args.code,
+      category: args.category,
       price: args.price,
       status: args.status,
       description: args.description,
+      workflowMode: args.workflowMode,
+      workflowConfig: args.workflowConfig,
       hasPriority: args.hasPriority ?? false,
       priorityPrice: args.priorityPrice,
       estimatedHours: args.estimatedHours,
@@ -124,6 +127,7 @@ export const create = mutation({
   args: {
     name: v.string(),
     code: v.optional(v.string()),
+    category: v.optional(v.union(v.literal("salud"), v.literal("notarial"))),
     description: v.optional(v.string()),
     price: v.number(),
     status: v.boolean(),
@@ -131,6 +135,8 @@ export const create = mutation({
     priorityPrice: v.optional(v.number()),
     estimatedHours: v.optional(v.number()),
     priorityHours: v.optional(v.number()),
+    workflowMode: v.optional(v.union(v.literal("legacy"), v.literal("deterministic"))),
+    workflowConfig: v.optional(v.any()),
     fields: v.array(
       v.object({
         name: v.string(),
@@ -191,6 +197,7 @@ export const update = mutation({
     id: v.id("services"),
     name: v.optional(v.string()),
     code: v.optional(v.string()),
+    category: v.optional(v.union(v.literal("salud"), v.literal("notarial"))),
     description: v.optional(v.string()),
     price: v.optional(v.number()),
     status: v.optional(v.boolean()),
@@ -198,6 +205,8 @@ export const update = mutation({
     priorityPrice: v.optional(v.number()),
     estimatedHours: v.optional(v.number()),
     priorityHours: v.optional(v.number()),
+    workflowMode: v.optional(v.union(v.literal("legacy"), v.literal("deterministic"))),
+    workflowConfig: v.optional(v.any()),
     fields: v.optional(v.array(
       v.object({
         id: v.optional(v.id("serviceFields")),

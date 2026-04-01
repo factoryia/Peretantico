@@ -2,6 +2,7 @@ import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { anyApi } from "convex/server";
 import type { Id } from "../../../_generated/dataModel";
+import { getFieldFileConstraints } from "../../requestFlow";
 
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
@@ -141,7 +142,7 @@ function parseOptions(rawOptions: unknown): string[] {
 
 export const validateServiceField = createTool({
   description: "Valida y normaliza el valor de un campo de un servicio",
-  args: jsonSchema<{ serviceId: string; fieldId: string; value: string; mediaUrl?: string; fileName?: string; mediaFilename?: string }>({
+  args: jsonSchema<{ serviceId: string; fieldId: string; value: string; mediaUrl?: string; fileName?: string; mediaFilename?: string; mediaUrls?: string[]; fileNames?: string[] }>({
     type: "object",
     properties: {
       serviceId: { type: "string", description: "ID del servicio" },
@@ -150,6 +151,8 @@ export const validateServiceField = createTool({
       mediaUrl: { type: "string", description: "URL del archivo adjunto (si aplica)" },
       fileName: { type: "string", description: "Nombre del archivo adjunto (si aplica)" },
       mediaFilename: { type: "string", description: "Alias de nombre de archivo desde canal de entrada" },
+      mediaUrls: { type: "array", items: { type: "string" }, description: "Varias URLs de adjuntos cuando el campo acepta múltiples archivos" },
+      fileNames: { type: "array", items: { type: "string" }, description: "Nombres de archivo alineados con mediaUrls" },
     },
     required: ["serviceId", "fieldId", "value"],
     additionalProperties: false,
@@ -160,6 +163,8 @@ export const validateServiceField = createTool({
     const raw = (args.value ?? "").trim();
     const mediaUrl = (args.mediaUrl ?? "").trim();
     const fileName = (args.fileName ?? args.mediaFilename ?? "").trim();
+    const mediaUrls = (args.mediaUrls ?? []).map((item) => String(item).trim()).filter(Boolean);
+    const fileNames = (args.fileNames ?? []).map((item) => String(item).trim());
     if (!serviceId || !fieldId) return { ok: false, message: "Falta serviceId o fieldId." };
 
     const service = (await ctx.runQuery(anyApi.services.get, {
@@ -172,6 +177,8 @@ export const validateServiceField = createTool({
             type?: string;
             required?: boolean;
             options?: unknown;
+            settings?: unknown;
+            multiple?: boolean;
           }>;
         }
       | null;
@@ -180,45 +187,86 @@ export const validateServiceField = createTool({
 
     const type = String(field.type ?? "Text");
     const required = Boolean(field.required);
+    const fileConstraints = getFieldFileConstraints(field.settings);
 
     if (type === "File") {
-      const sourceUrl = mediaUrl || (isHttpUrl(raw) ? raw : "");
-      if (!sourceUrl) {
+      const explicitUrls = mediaUrls.length > 0 ? mediaUrls : [mediaUrl || (isHttpUrl(raw) ? raw : "")].filter(Boolean);
+      if (explicitUrls.length === 0) {
         if (required) return { ok: false, message: `Para "${field.name}", necesito que envíe el archivo.` };
         return { ok: true, normalizedValue: "" };
       }
-      if (looksTruncatedUrl(sourceUrl)) {
-        return { ok: false, message: `El enlace del archivo llegó incompleto. Por favor reenvía el archivo.` };
+      if (fileConstraints.maxFiles && explicitUrls.length > fileConstraints.maxFiles) {
+        return {
+          ok: false,
+          message: `Para "${field.name}", puedes enviar máximo ${fileConstraints.maxFiles} archivo(s).`,
+        };
       }
 
       const storageCtx = ctx as unknown as {
         storage: { store: (blob: Blob) => Promise<Id<"_storage">>; getUrl: (id: Id<"_storage">) => Promise<string | null> };
       };
-      const stored = await downloadAndStoreUrl(storageCtx, sourceUrl);
-      if (!stored.ok) {
-        const mediaId = extractMediaIdFromUrl(sourceUrl);
-        console.warn("validateServiceField file download failed", {
-          reason: stored.reason,
-          status: stored.status ?? null,
-          mediaId,
-        });
+      const storedFiles: Array<{ storageId: string; url: string; fileName?: string }> = [];
 
-        if (stored.reason === "expired") {
-          return { ok: false, message: `El enlace del archivo venció. Por favor reenvía el archivo.` };
+      for (const [index, sourceUrl] of explicitUrls.entries()) {
+        if (looksTruncatedUrl(sourceUrl)) {
+          return { ok: false, message: `El enlace del archivo llegó incompleto. Por favor reenvía el archivo.` };
         }
-        if (stored.reason === "not_found") {
-          return { ok: false, message: `No encontré ese archivo en el proveedor. Por favor reenvía el archivo.` };
+
+        const stored = await downloadAndStoreUrl(storageCtx, sourceUrl);
+        if (!stored.ok) {
+          const mediaId = extractMediaIdFromUrl(sourceUrl);
+          console.warn("validateServiceField file download failed", {
+            reason: stored.reason,
+            status: stored.status ?? null,
+            mediaId,
+          });
+
+          if (stored.reason === "expired") {
+            return { ok: false, message: `El enlace del archivo venció. Por favor reenvía el archivo.` };
+          }
+          if (stored.reason === "not_found") {
+            return { ok: false, message: `No encontré ese archivo en el proveedor. Por favor reenvía el archivo.` };
+          }
+          if (stored.reason === "provider_unavailable") {
+            return { ok: false, message: `El proveedor de archivos está temporalmente no disponible. Por favor reenvía el archivo en unos segundos.` };
+          }
+          return { ok: false, message: `No pude descargar el archivo. Por favor reenvía el archivo.` };
         }
-        if (stored.reason === "provider_unavailable") {
-          return { ok: false, message: `El proveedor de archivos está temporalmente no disponible. Por favor reenvía el archivo en unos segundos.` };
-        }
-        return { ok: false, message: `No pude descargar el archivo. Por favor reenvía el archivo.` };
+
+        storedFiles.push({
+          storageId: String(stored.storageId),
+          url: stored.url,
+          fileName: fileNames[index] || fileName || inferFileName(sourceUrl),
+        });
       }
 
+      const acceptedMimeTypes = fileConstraints.acceptedMimeTypes ?? [];
+      if (acceptedMimeTypes.length > 0) {
+        const invalidFile = storedFiles.find((item) => {
+          const detectedMime = item.fileName?.split(".").pop()?.toLowerCase();
+          return detectedMime ? !acceptedMimeTypes.some((mime) => mime.toLowerCase().includes(detectedMime)) : false;
+        });
+        if (invalidFile) {
+          return {
+            ok: false,
+            message: `Para "${field.name}", el formato del archivo no es válido.`,
+          };
+        }
+      }
+
+      if (field.multiple) {
+        return {
+          ok: true,
+          normalizedValue: storedFiles.map((item) => item.storageId),
+          files: storedFiles,
+        };
+      }
+
+      const firstFile = storedFiles[0];
       return {
         ok: true,
-        normalizedValue: stored.storageId,
-        file: { storageId: String(stored.storageId), url: stored.url, fileName: fileName || inferFileName(sourceUrl) },
+        normalizedValue: firstFile.storageId,
+        file: firstFile,
       };
     }
 

@@ -1,18 +1,100 @@
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import type { WorkflowBranch, WorkflowConfig } from "./system/requestFlow";
+
+// ============================================
+// RESET DATABASE - Borra todos los datos
+// ============================================
+export const reset = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Lista de tablas a borrar (orden importante por dependencias)
+    const tables = [
+      "requestShareLinks",
+      "botSessions",
+      "botApplicants",
+      "conversations",
+      "ycloudHandoffs",
+      "ycloudMessages",
+      "ycloudProcessingLocks",
+      "ycloudProcessedEvents",
+      "paymentRequests",
+      "payments",
+      "requestData",
+      "requests",
+      "attachments",
+      "serviceFields",
+      "services",
+      "distributors",
+      "coverageAreas",
+      "transportationTypes",
+      "specialDates",
+      "profiles",
+      "userRoles",
+      "roles",
+      // Auth tables - estas se borran con precaución
+      "userVerificationCodes",
+      "userInvitations",
+      "users",
+    ];
+
+    let totalDeleted = 0;
+    for (const tableName of tables) {
+      try {
+        // Convex no tiene delete all, hay que iterar y borrar cada documento
+        const docs = await (ctx.db.query as any)(tableName).collect();
+        let deleted = 0;
+        for (const doc of docs) {
+          await ctx.db.delete(doc._id);
+          deleted++;
+        }
+        console.log(`Tabla ${tableName}: ${deleted} documentos eliminados`);
+        totalDeleted += deleted;
+      } catch (e: any) {
+        // Tabla puede no existir - omitir
+        console.log(`Tabla ${tableName}: omitida (puede no existir)`);
+      }
+    }
+
+    return `✅ Base de datos reseteada. ${totalDeleted} documentos eliminados.`;
+  }
+});
+
+// ============================================
+// SEED - Datos iniciales
+// ============================================
 
 type FieldConfig = {
   name: string;
   code: string;
   type: string;
   order: number;
+  required: boolean;
+  multiple?: boolean;
   description?: string;
   options?: any;
+  settings?: any;
+};
+
+// Branch rule that references field codes (pre-ID resolution)
+type BranchFieldRef = {
+  fieldCode: string;
+  equals?: any;
+  in?: any[];
+};
+
+// Branch definition with code references (resolved to IDs during seed)
+type BranchConfig = {
+  key: string;
+  label?: string;
+  rules: BranchFieldRef[];
+  fieldIds: string[]; // field codes, resolved to IDs during seed
 };
 
 type ServiceSeedConfig = {
   name: string;
   code: string;
+  category: "salud" | "notarial";
   description?: string;
   price: number;
   hasPriority?: boolean;
@@ -20,7 +102,86 @@ type ServiceSeedConfig = {
   estimatedHours?: number;
   priorityHours?: number;
   fields: FieldConfig[];
+  workflowMode?: "deterministic";
+  workflowConfig?: {
+    branches: BranchConfig[];
+  };
 };
+
+// Helper: resolve field codes to field IDs in branch config
+function resolveFieldIds(
+  codeToId: Map<string, string>,
+  config: { branches: BranchConfig[] }
+): WorkflowConfig {
+  return {
+    branches: config.branches.map((branch) => ({
+      key: branch.key,
+      label: branch.label,
+      rules: branch.rules.map((rule) => {
+        const fieldId = codeToId.get(rule.fieldCode);
+        if (!fieldId) {
+          throw new Error(`Field code not found: ${rule.fieldCode}`);
+        }
+        const resolved: { fieldId: string; equals?: any; in?: any[] } = { fieldId };
+        if (rule.equals !== undefined) resolved.equals = rule.equals;
+        if (rule.in !== undefined) resolved.in = rule.in;
+        return resolved;
+      }),
+      fieldIds: branch.fieldIds
+        .map((code) => codeToId.get(code))
+        .filter((id): id is string => id !== undefined),
+    })),
+  };
+}
+
+// Helper: insert all fields for a service, return Map<code, fieldId>
+async function insertServiceFields(
+  ctx: any,
+  serviceId: Id<"services">,
+  fields: FieldConfig[]
+): Promise<Map<string, string>> {
+  const codeToId = new Map<string, string>();
+
+  // Delete existing fields if service exists
+  const existingFields = await ctx.db
+    .query("serviceFields")
+    .withIndex("by_service", (q: any) => q.eq("serviceId", serviceId))
+    .collect();
+  for (const f of existingFields) {
+    await ctx.db.delete(f._id);
+  }
+
+  // Insert fields and collect IDs
+  for (const f of fields) {
+    const fieldId = await ctx.db.insert("serviceFields", {
+      serviceId,
+      name: f.name,
+      code: f.code,
+      description: f.description ?? undefined,
+      type: f.type,
+      required: f.required,
+      multiple: f.multiple ?? false,
+      order: f.order,
+      options: f.options,
+      settings: f.settings,
+      status: true,
+    });
+    codeToId.set(f.code, fieldId);
+  }
+
+  return codeToId;
+}
+
+// Helper: patch service with resolved workflowConfig
+async function patchServiceWorkflow(
+  ctx: any,
+  serviceId: Id<"services">,
+  codeToId: Map<string, string>,
+  workflowConfig: { branches: BranchConfig[] }
+): Promise<void> {
+  const resolved = resolveFieldIds(codeToId, workflowConfig);
+  await ctx.db.patch(serviceId, { workflowConfig: resolved });
+}
 
 export const seed = internalMutation({
   args: {},
@@ -43,233 +204,911 @@ export const seed = internalMutation({
       }
     }
 
-    // 2. Services Data
+    // 2. Services Data — SOLO 7 servicios (3 salud + 4 notariales)
     const services: ServiceSeedConfig[] = [
-      {
-        name: "Certificado de Propiedad",
-        code: "property_certification",
-        description: "Solicitud de certificado de propiedad",
-        price: 40000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [
-          { name: "Cuenta con la matrícula inmobiliaria", code: "field_property_registered", type: "Boolean", order: 10, description: "Indique si el predio cuenta con matrícula inmobiliaria registrada." },
-          { name: "Número de matrícula inmobiliaria", code: "field_property_number", type: "Text", order: 20, description: "Número único de identificación de la matrícula inmobiliaria." },
-          { name: "Registro catastral", code: "field_cadastral_registration", type: "Text", order: 30, description: "Código o número del registro catastral del predio." },
-          { name: "URL documento identificación", code: "field_path", type: "File", order: 40, description: "Cargue una copia digital del documento de identificación." },
-          { name: "Observaciones", code: "field_observations", type: "Text", order: 50, description: "Información adicional o detalles relevantes para el trámite." }
-        ]
-      },
-      {
-        name: "Solicitud Desenglobe",
-        code: "property_unbundling_request",
-        description: "Solicitud de desenglobe de propiedad",
-        price: 40000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [
-          { name: "Razón social / Nombre", code: "field_full_name", type: "Text", order: 10, description: "Nombre completo de la persona o razón social de la empresa." },
-          { name: "Teléfono de contacto", code: "field_phone_number", type: "Text", order: 20, description: "Número de teléfono para contacto directo." },
-          { name: "Folio de matrícula inmobiliaria", code: "field_registry_serial_number", type: "Text", order: 30, description: "Número de folio de la matrícula inmobiliaria." },
-          { name: "Copia impuesto predial", code: "field_property_tax", type: "File", order: 40, description: "Copia del recibo o comprobante del impuesto predial." },
-          { name: "Copia de la escritura", code: "field_property_deed_copy", type: "File", order: 50, description: "Copia de la escritura pública del predio." },
-          { name: "Escritura de desenglobe", code: "field_disengagement_deed", type: "File", order: 60, description: "Documento de la escritura de desenglobe." },
-          { name: "Certificado representación legal", code: "field_legal_representation_certi", type: "File", order: 70, description: "Certificado vigente de representación legal." },
-          { name: "Certificado de libertad y tradición", code: "field_tradition_certificate", type: "File", order: 80, description: "Certificado de libertad y tradición reciente." },
-          { name: "Copia cédula del solicitante", code: "field_applicant_id_copy", type: "File", order: 90, description: "Copia del documento de identidad del solicitante." },
-          { name: "Plano del predio", code: "field_property_plan", type: "File", order: 100, description: "Plano oficial o levantamiento topográfico del predio." },
-          { name: "Poder notarial", code: "field_notarial_power", type: "File", order: 110, description: "Documento de poder notarial si aplica." },
-          { name: "Relación de predios colindantes", code: "field_neighboring_properties", type: "File", order: 120, description: "Documento con la relación de los predios colindantes." },
-          { name: "Resolución de Catastro", code: "field_cadastral_resolution", type: "File", order: 130, description: "Resolución emitida por la oficina de catastro." },
-          { name: "Ciudad de la escritura", code: "field_deed_city", type: "Text", order: 140, description: "Ciudad donde se encuentra registrada la escritura." }
-        ]
-      },
-      {
-        name: "Partida de Matrimonio",
-        code: "marriage_certificate_request",
-        description: "Solicitud de partida de matrimonio",
-        price: 40000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [
-          { name: "Tipo de matrimonio", code: "field_marriage_type", type: "Select", order: 10, options: { items: [{ value: "civil", label: "Civil" }, { value: "catolico", label: "Católico" }, { value: "otro", label: "Otro" }] }, description: "Seleccione el tipo de matrimonio celebrado." },
-          { name: "Registro en Registraduría/Notaría", code: "field_marriage_registry", type: "Select", order: 20, options: { items: [{ value: "notaria", label: "Notaría" }, { value: "registraduria", label: "Registraduría" }] }, description: "Lugar donde se encuentra registrado el matrimonio." },
-          { name: "Motivo de la solicitud", code: "field_marriage_case", type: "Select", order: 30, options: { items: [{ value: "caso1", label: "Caso 1" }, { value: "caso2", label: "Caso 2" }] }, description: "Seleccione el motivo específico de la solicitud." },
-          { name: "Autorización firmada", code: "field_signed_authorization", type: "File", order: 40, description: "Documento de autorización firmado por los implicados." },
-          { name: "Copia cédula del solicitante", code: "field_applicant_id_copy", type: "File", order: 50, description: "Copia del documento de identidad del solicitante." },
-          { name: "Certificado de matrimonio", code: "field_marriage_certificate", type: "File", order: 60, description: "Copia o referencia del certificado de matrimonio." },
-          { name: "Observaciones", code: "field_observations", type: "Text", order: 70, description: "Detalles adicionales sobre la solicitud." }
-        ]
-      },
-      {
-        name: "Partida de Defunción",
-        code: "death_certificate_request",
-        description: "Solicitud de partida de defunción",
-        price: 40000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [
-          { name: "Motivo de la solicitud", code: "field_reason_the_request", type: "Text", order: 10, description: "Motivo por el cual solicita la partida de defunción." },
-          { name: "Documento base", code: "field_base_document", type: "File", order: 20, description: "Documento base para la búsqueda del registro." },
-          { name: "Notaría", code: "field_deed_notary_name", type: "Text", order: 30, description: "Nombre de la notaría donde se registró la defunción." },
-          { name: "Ciudad de registro", code: "field_deed_city", type: "Text", order: 40, description: "Ciudad donde se realizó el registro de defunción." },
-          { name: "Número y año de la escritura", code: "field_deed_number_year", type: "Text", order: 50, description: "Número de escritura y año de registro." }
-        ]
-      },
-      {
-        name: "Cert. Entrega Agua",
-        code: "water_sample_fridge",
-        description: "Certificado de entrega de muestras de agua",
-        price: 26000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [
-          { name: "Prioridad", code: "field_priority", type: "Boolean", order: 10, description: "Indique si el envío requiere prioridad alta." },
-          { name: "Servicio de agua", code: "field_water_service", type: "Select", order: 20, options: { items: [{ value: "por_nevera", label: "Por nevera" }, { value: "radicacion_por_caja", label: "Radicación por caja" }] }, description: "Seleccione el tipo de servicio de entrega de agua." },
-          { name: "Nombre remitente", code: "field_sender_full_name", type: "Text", order: 30, description: "Nombre completo de quien envía la muestra." },
-          { name: "Teléfono remitente", code: "field_sender_contact_phone", type: "Text", order: 40, description: "Teléfono de contacto del remitente." },
-          { name: "Dirección remitente", code: "field_sender_address", type: "Text", order: 50, description: "Dirección física donde se recoge la muestra." },
-          { name: "Nombre destinatario", code: "field_recipient_full_name", type: "Text", order: 60, description: "Nombre completo del destinatario." },
-          { name: "Fecha de nacimiento", code: "field_birth_date", type: "Date", order: 70, description: "Fecha de nacimiento del destinatario (si aplica)." },
-          { name: "Descripción del contenido", code: "field_package_content_descriptio", type: "Text", order: 80, description: "Descripción detallada del contenido del paquete." },
-          { name: "URL soporte", code: "field_path", type: "File", order: 90, description: "Documento de soporte o guía de envío." },
-          { name: "¿Requiere radicado?", code: "field_requires_radicado", type: "Boolean", order: 100, description: "Indique si requiere número de radicado." },
-          { name: "Observaciones", code: "field_observations", type: "Text", order: 110, description: "Instrucciones especiales para la entrega." }
-        ]
-      },
-      {
-        name: "Envío de Correspondencia",
-        code: "correspondence_delivery",
-        description: "Servicio de envío de correspondencia",
-        price: 30000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [
-          { name: "Nombre remitente", code: "field_sender_full_name", type: "Text", order: 10, description: "Nombre completo del remitente." },
-          { name: "Teléfono remitente", code: "field_sender_contact_phone", type: "Text", order: 20, description: "Teléfono de contacto del remitente." },
-          { name: "Dirección remitente", code: "field_sender_address", type: "Text", order: 30, description: "Dirección completa de recogida." },
-          { name: "Nombre destinatario", code: "field_recipient_full_name", type: "Text", order: 40, description: "Nombre completo del destinatario." },
-          { name: "Dirección destinatario", code: "field_recipient_address", type: "Text", order: 50, description: "Dirección completa de entrega." },
-          { name: "Teléfono destinatario", code: "field_recipient_contact_phone", type: "Text", order: 60, description: "Teléfono de contacto del destinatario." },
-          { name: "Fecha de nacimiento", code: "field_birth_date", type: "Date", order: 70, description: "Fecha de nacimiento (si es requerido)." },
-          { name: "Contenido del paquete", code: "field_package_content_descriptio", type: "Text", order: 80, description: "Detalle del contenido del envío." },
-          { name: "URL soporte", code: "field_path", type: "File", order: 90, description: "Documento adjunto o soporte del envío." },
-          { name: "¿Requiere radicado?", code: "field_requires_radicado", type: "Boolean", order: 100, description: "¿Se requiere generar un radicado?" },
-          { name: "Observaciones", code: "field_observations", type: "Text", order: 110, description: "Observaciones adicionales para el mensajero." }
-        ]
-      },
+      // ===================== SALUD =====================
       {
         name: "Solicitud de Medicamentos",
         code: "medication_request",
-        description: "Solicitud de medicamentos",
+        category: "salud",
+        description: "Solicitud de medicamentos con fórmula médica",
         price: 40000,
         hasPriority: true,
         priorityPrice: 100000,
         estimatedHours: 24,
         priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "con_autorizacion",
+              label: "Con autorización EPS",
+              rules: [{ fieldCode: "field_has_eps_authorization", equals: true }],
+              fieldIds: [
+                "field_eps_name",
+                "field_drugstore_name",
+                "field_medical_order",
+                "field_mipres",
+                "field_eps_authorization",
+                "field_has_eps_authorization",
+              ],
+            },
+            {
+              key: "sin_autorizacion",
+              label: "Sin autorización EPS",
+              rules: [{ fieldCode: "field_has_eps_authorization", equals: false }],
+              fieldIds: [
+                "field_eps_name",
+                "field_drugstore_name",
+                "field_medical_order",
+                "field_mipres",
+                "field_has_eps_authorization",
+              ],
+            },
+          ],
+        },
         fields: [
-          { name: "EPS", code: "field_eps", type: "Text", order: 10, description: "Nombre de la EPS a la que está afiliado." },
-          { name: "Droguería", code: "field_drugstore", type: "Text", order: 20, description: "Nombre de la droguería o farmacia." },
-          { name: "Observaciones", code: "field_observations", type: "Text", order: 30, description: "Indicaciones sobre los medicamentos solicitados." },
-          { name: "URL soporte", code: "field_path", type: "File", order: 40, description: "Fórmula médica o documento de autorización." }
-        ]
+          {
+            name: "Nombre de la EPS",
+            code: "field_eps_name",
+            type: "Text",
+            order: 10,
+            required: true,
+            description: "Nombre de la EPS a la que está afiliado.",
+          },
+          {
+            name: "Nombre de la droguería",
+            code: "field_drugstore_name",
+            type: "Text",
+            order: 20,
+            required: true,
+            description: "Nombre de la droguería o farmacia.",
+          },
+          {
+            name: "¿Tiene autorización de la EPS?",
+            code: "field_has_eps_authorization",
+            type: "Boolean",
+            order: 30,
+            required: true,
+            description: "Indique si cuenta con autorización de la EPS.",
+          },
+          {
+            name: "Orden médica / MIPRES / Autorización",
+            code: "field_medical_order",
+            type: "File",
+            order: 40,
+            required: true,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF de la orden médica, MIPRES o autorización.",
+            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "MIPRES",
+            code: "field_mipres",
+            type: "File",
+            order: 50,
+            required: false,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF del MIPRES si aplica.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Autorización EPS",
+            code: "field_eps_authorization",
+            type: "File",
+            order: 60,
+            required: false,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF de la autorización de la EPS si aplica.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
       },
       {
-        name: "Registro Civil",
+        name: "Autorizaciones Médicas",
+        code: "medical_authorizations",
+        category: "salud",
+        description: "Solicitud de autorizaciones médicas",
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 100000,
+        estimatedHours: 24,
+        priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "con_mipres",
+              label: "Con MIPRES",
+              rules: [{ fieldCode: "field_has_mipres_auth", equals: true }],
+              fieldIds: [
+                "field_auth_eps_name",
+                "field_auth_medical_order",
+                "field_auth_clinical_summary",
+                "field_auth_mipres",
+                "field_has_mipres_auth",
+              ],
+            },
+            {
+              key: "sin_mipres",
+              label: "Sin MIPRES",
+              rules: [{ fieldCode: "field_has_mipres_auth", equals: false }],
+              fieldIds: [
+                "field_auth_eps_name",
+                "field_auth_medical_order",
+                "field_auth_clinical_summary",
+                "field_has_mipres_auth",
+              ],
+            },
+          ],
+        },
+        fields: [
+          {
+            name: "Nombre de la EPS",
+            code: "field_auth_eps_name",
+            type: "Text",
+            order: 10,
+            required: true,
+            description: "Nombre de la EPS.",
+          },
+          {
+            name: "Orden médica",
+            code: "field_auth_medical_order",
+            type: "File",
+            order: 20,
+            required: true,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF de la orden médica.",
+            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Resumen de historia clínica",
+            code: "field_auth_clinical_summary",
+            type: "File",
+            order: 30,
+            required: true,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF del resumen de historia clínica.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "¿Tiene MIPRES?",
+            code: "field_has_mipres_auth",
+            type: "Boolean",
+            order: 40,
+            required: true,
+            description: "Indique si cuenta con MIPRES.",
+          },
+          {
+            name: "MIPRES",
+            code: "field_auth_mipres",
+            type: "File",
+            order: 50,
+            required: false,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF del MIPRES si aplica.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
+      },
+      {
+        name: "Citas Médicas",
+        code: "medical_appointments",
+        category: "salud",
+        description: "Solicitud de citas médicas",
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 100000,
+        estimatedHours: 24,
+        priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "imagenes_diagnosticas",
+              label: "Cita de imágenes diagnósticas",
+              rules: [{ fieldCode: "field_is_diagnostic_imaging", equals: true }],
+              fieldIds: [
+                "field_appt_medical_order",
+                "field_appt_authorization",
+                "field_appt_clinical_summary",
+                "field_creatinine_result",
+                "field_is_diagnostic_imaging",
+              ],
+            },
+            {
+              key: "cita_general",
+              label: "Cita médica general",
+              rules: [{ fieldCode: "field_is_diagnostic_imaging", equals: false }],
+              fieldIds: [
+                "field_appt_medical_order",
+                "field_appt_authorization",
+                "field_appt_clinical_summary",
+                "field_is_diagnostic_imaging",
+              ],
+            },
+          ],
+        },
+        fields: [
+          {
+            name: "Orden médica",
+            code: "field_appt_medical_order",
+            type: "File",
+            order: 10,
+            required: true,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF de la orden médica.",
+            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Autorización",
+            code: "field_appt_authorization",
+            type: "File",
+            order: 20,
+            required: true,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF de la autorización.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "¿Es cita de imágenes diagnósticas?",
+            code: "field_is_diagnostic_imaging",
+            type: "Boolean",
+            order: 30,
+            required: true,
+            description: "Indique si la cita es para imágenes diagnósticas.",
+          },
+          {
+            name: "Resultado de creatinina",
+            code: "field_creatinine_result",
+            type: "File",
+            order: 40,
+            required: false,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF del resultado de creatinina (requerido para imágenes diagnósticas).",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Resumen de historia clínica",
+            code: "field_appt_clinical_summary",
+            type: "File",
+            order: 50,
+            required: false,
+            multiple: true,
+            description: "Cargue foto, imagen o PDF del resumen de historia clínica (opcional).",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
+      },
+
+      // ===================== NOTARIALES =====================
+      {
+        name: "Solicitud de Registros Civiles",
         code: "civil_registry_request",
-        description: "Datos del registro civil",
+        category: "notarial",
+        description: "Solicitud de registros civiles",
         price: 40000,
         hasPriority: true,
-        priorityPrice: 80000,
+        priorityPrice: 100000,
         estimatedHours: 24,
         priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "con_numero_mayor_edad",
+              label: "Con número de registro — Mayor de edad",
+              rules: [
+                { fieldCode: "field_cr_has_registration_number", equals: true },
+                { fieldCode: "field_cr_is_minor", equals: false },
+              ],
+              fieldIds: [
+                "field_cr_requester_full_name",
+                "field_cr_requester_phone",
+                "field_cr_holder_first_name",
+                "field_cr_holder_last_name",
+                "field_cr_has_registration_number",
+                "field_cr_registration_number",
+                "field_cr_notary_number",
+                "field_cr_tome_number",
+                "field_cr_folio_number",
+                "field_cr_serial_number",
+                "field_cr_copy_document",
+                "field_cr_third_party_auth",
+                "field_cr_requester_id_copy",
+                "field_cr_is_minor",
+              ],
+            },
+            {
+              key: "con_numero_menor_edad",
+              label: "Con número de registro — Menor de edad",
+              rules: [
+                { fieldCode: "field_cr_has_registration_number", equals: true },
+                { fieldCode: "field_cr_is_minor", equals: true },
+              ],
+              fieldIds: [
+                "field_cr_requester_full_name",
+                "field_cr_requester_phone",
+                "field_cr_holder_first_name",
+                "field_cr_holder_last_name",
+                "field_cr_has_registration_number",
+                "field_cr_registration_number",
+                "field_cr_notary_number",
+                "field_cr_tome_number",
+                "field_cr_folio_number",
+                "field_cr_serial_number",
+                "field_cr_copy_document",
+                "field_cr_third_party_auth",
+                "field_cr_requester_id_copy",
+                "field_cr_minor_id_copy",
+                "field_cr_parent_id_copy",
+                "field_cr_is_minor",
+              ],
+            },
+            {
+              key: "sin_numero_mayor_edad",
+              label: "Sin número de registro — Mayor de edad",
+              rules: [
+                { fieldCode: "field_cr_has_registration_number", equals: false },
+                { fieldCode: "field_cr_is_minor", equals: false },
+              ],
+              fieldIds: [
+                "field_cr_requester_full_name",
+                "field_cr_requester_phone",
+                "field_cr_holder_first_name",
+                "field_cr_holder_last_name",
+                "field_cr_has_registration_number",
+                "field_cr_notary_number",
+                "field_cr_copy_document",
+                "field_cr_third_party_auth",
+                "field_cr_requester_id_copy",
+                "field_cr_is_minor",
+              ],
+            },
+            {
+              key: "sin_numero_menor_edad",
+              label: "Sin número de registro — Menor de edad",
+              rules: [
+                { fieldCode: "field_cr_has_registration_number", equals: false },
+                { fieldCode: "field_cr_is_minor", equals: true },
+              ],
+              fieldIds: [
+                "field_cr_requester_full_name",
+                "field_cr_requester_phone",
+                "field_cr_holder_first_name",
+                "field_cr_holder_last_name",
+                "field_cr_has_registration_number",
+                "field_cr_notary_number",
+                "field_cr_copy_document",
+                "field_cr_third_party_auth",
+                "field_cr_requester_id_copy",
+                "field_cr_minor_id_copy",
+                "field_cr_parent_id_copy",
+                "field_cr_is_minor",
+              ],
+            },
+          ],
+        },
         fields: [
-          { name: "Nombre y apellidos (Inscrito)", code: "field_registrant_full_name", type: "Text", order: 10, description: "Nombre completo de la persona inscrita." },
-          { name: "¿Tiene número de registro?", code: "field_has_registration_number", type: "Boolean", order: 20, description: "¿Cuenta con el número de registro civil?" },
-          { name: "Número de serial", code: "field_registry_serial_number", type: "Text", order: 30, description: "Número de serial del registro." },
-          { name: "Nombre de la notaría", code: "field_deed_notary_name", type: "Text", order: 40, description: "Nombre de la notaría de registro." },
-          { name: "Tomo", code: "field_registry_tome_number", type: "Text", order: 50, description: "Número de tomo del registro." },
-          { name: "Folio", code: "field_registry_folio_number", type: "Text", order: 60, description: "Número de folio del registro." }
-        ]
+          {
+            name: "Nombre y apellidos del solicitante",
+            code: "field_cr_requester_full_name",
+            type: "Text",
+            order: 10,
+            required: true,
+            description: "Nombre y apellidos de la persona que escribe.",
+          },
+          {
+            name: "Teléfono del solicitante",
+            code: "field_cr_requester_phone",
+            type: "Text",
+            order: 20,
+            required: true,
+            description: "Número de teléfono para comunicación.",
+          },
+          {
+            name: "Nombre del titular del registro",
+            code: "field_cr_holder_first_name",
+            type: "Text",
+            order: 30,
+            required: true,
+            description: "Nombre de la persona a quien pertenece el registro civil.",
+          },
+          {
+            name: "Apellido del titular del registro",
+            code: "field_cr_holder_last_name",
+            type: "Text",
+            order: 40,
+            required: true,
+            description: "Apellido de la persona a quien pertenece el registro civil.",
+          },
+          {
+            name: "¿Tiene número de registro?",
+            code: "field_cr_has_registration_number",
+            type: "Boolean",
+            order: 50,
+            required: true,
+            description: "Indique si cuenta con el número de registro civil.",
+          },
+          {
+            name: "Número de registro",
+            code: "field_cr_registration_number",
+            type: "Text",
+            order: 60,
+            required: false,
+            description: "Número del registro civil.",
+          },
+          {
+            name: "Número de la notaría",
+            code: "field_cr_notary_number",
+            type: "Text",
+            order: 70,
+            required: false,
+            description: "Número de la notaría donde se encuentra inscrito el registro.",
+          },
+          {
+            name: "Número de tomo",
+            code: "field_cr_tome_number",
+            type: "Text",
+            order: 80,
+            required: false,
+            description: "Número de tomo del registro (opcional).",
+          },
+          {
+            name: "Número de folio",
+            code: "field_cr_folio_number",
+            type: "Text",
+            order: 90,
+            required: false,
+            description: "Número de folio del registro (opcional).",
+          },
+          {
+            name: "Número de serial",
+            code: "field_cr_serial_number",
+            type: "Text",
+            order: 100,
+            required: false,
+            description: "Número de serial del registro (opcional).",
+          },
+          {
+            name: "Copia del registro civil",
+            code: "field_cr_copy_document",
+            type: "File",
+            order: 110,
+            required: true,
+            multiple: true,
+            description: "Cargue copia del registro civil en PDF, PNG o foto.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Autorización a terceros",
+            code: "field_cr_third_party_auth",
+            type: "File",
+            order: 120,
+            required: true,
+            multiple: true,
+            description: "Cargue la carta de autorización a terceros.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Copia de cédula del solicitante",
+            code: "field_cr_requester_id_copy",
+            type: "File",
+            order: 130,
+            required: true,
+            multiple: true,
+            description: "Cargue copia de la cédula de quien solicita el registro.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "¿El titular es menor de edad?",
+            code: "field_cr_is_minor",
+            type: "Boolean",
+            order: 140,
+            required: true,
+            description: "Indique si la persona a quien se solicita el registro es menor de edad.",
+          },
+          {
+            name: "Copia de tarjeta de identidad del menor",
+            code: "field_cr_minor_id_copy",
+            type: "File",
+            order: 150,
+            required: false,
+            multiple: true,
+            description: "Cargue copia de la tarjeta de identidad del menor (requerido si es menor de edad).",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Copia de cédula del padre o madre",
+            code: "field_cr_parent_id_copy",
+            type: "File",
+            order: 160,
+            required: false,
+            multiple: true,
+            description: "Cargue copia de la cédula del padre o madre (requerido si es menor de edad).",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
       },
       {
-        name: "Alquila Pere Tantico",
-        code: "rent_service",
-        description: "Servicio de alquiler Pere Tantico",
-        price: 100000,
+        name: "Partida de Matrimonio",
+        code: "marriage_certificate_request",
+        category: "notarial",
+        description: "Solicitud de partida de matrimonio",
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 100000,
+        estimatedHours: 24,
+        priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "civil",
+              label: "Partida civil",
+              rules: [{ fieldCode: "field_mc_type", equals: "civil" }],
+              fieldIds: [
+                "field_mc_requester_full_name",
+                "field_mc_requester_phone",
+                "field_mc_type",
+                "field_mc_id_copy",
+                "field_mc_registry_status",
+                "field_mc_reason",
+                "field_mc_certificate_copy",
+                "field_mc_third_party_auth",
+              ],
+            },
+            {
+              key: "catolica",
+              label: "Partida católica",
+              rules: [{ fieldCode: "field_mc_type", equals: "catolica" }],
+              fieldIds: [
+                "field_mc_requester_full_name",
+                "field_mc_requester_phone",
+                "field_mc_type",
+                "field_mc_registry_status",
+                "field_mc_reason",
+                "field_mc_certificate_copy",
+                "field_mc_third_party_auth",
+              ],
+            },
+          ],
+        },
         fields: [
-          { name: "Tipo de cliente", code: "field_client_type", type: "Select", order: 10, options: { items: [{ value: "persona_natural", label: "Persona Natural" }, { value: "empresa", label: "Empresa" }] }, description: "Tipo de cliente (Persona Natural o Empresa)." },
-          { name: "Nombre y apellidos", code: "field_full_name", type: "Text", order: 20, description: "Nombre completo del solicitante." },
-          { name: "Teléfono de contacto", code: "field_phone_number", type: "Text", order: 30, description: "Número de teléfono de contacto." },
-          { name: "Dirección de recogida / inicio", code: "field_pickup_address", type: "Text", order: 40, description: "Dirección donde inicia el servicio." },
-          { name: "¿Qué debe realizar el repartidor?", code: "field_observations", type: "Text", order: 50, description: "Instrucciones de lo que debe realizar el repartidor." },
-          { name: "Tiempo solicitado (minutos)", code: "field_time_requested", type: "Number", order: 60, description: "Tiempo estimado del servicio en minutos." }
-        ]
+          {
+            name: "Nombre y apellidos del solicitante",
+            code: "field_mc_requester_full_name",
+            type: "Text",
+            order: 10,
+            required: true,
+            description: "Nombre y apellidos de quien solicita.",
+          },
+          {
+            name: "Teléfono del solicitante",
+            code: "field_mc_requester_phone",
+            type: "Text",
+            order: 20,
+            required: true,
+            description: "Número de teléfono de contacto.",
+          },
+          {
+            name: "Tipo de partida de matrimonio",
+            code: "field_mc_type",
+            type: "Select",
+            order: 30,
+            required: true,
+            options: {
+              items: [
+                { value: "civil", label: "Civil" },
+                { value: "catolica", label: "Católica" },
+              ],
+            },
+            description: "Seleccione el tipo de partida de matrimonio requerida.",
+          },
+          {
+            name: "Fotocopia de cédula (ambas caras)",
+            code: "field_mc_id_copy",
+            type: "File",
+            order: 40,
+            required: false,
+            multiple: true,
+            description: "Cargue fotocopia de cédula por ambas caras (requerido para partida civil).",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Estado del registro en Registraduría",
+            code: "field_mc_registry_status",
+            type: "Select",
+            order: 50,
+            required: true,
+            options: {
+              items: [
+                { value: "registrado", label: "Sí, ya está registrado (partida registrada)" },
+                { value: "no_registrado", label: "No, solo fue ceremonia religiosa" },
+                { value: "civil_automatico", label: "Fue matrimonio civil (se registró automáticamente)" },
+              ],
+            },
+            description: "Indique si el matrimonio está registrado en la Registraduría.",
+          },
+          {
+            name: "Motivo de la solicitud",
+            code: "field_mc_reason",
+            type: "Select",
+            order: 60,
+            required: true,
+            options: {
+              items: [
+                { value: "divorcio", label: "Divorcio" },
+                { value: "sucesion", label: "Sucesión" },
+                { value: "volver_casar", label: "Volverse a casar" },
+              ],
+            },
+            description: "Seleccione el motivo de la solicitud.",
+          },
+          {
+            name: "Copia de partida de matrimonio o registro serial",
+            code: "field_mc_certificate_copy",
+            type: "File",
+            order: 70,
+            required: false,
+            multiple: true,
+            description: "Cargue copia de la partida de matrimonio o registro serial en foto, PDF o imagen.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Autorización a terceros",
+            code: "field_mc_third_party_auth",
+            type: "File",
+            order: 80,
+            required: true,
+            multiple: true,
+            description: "Cargue la carta de autorización a terceros.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
       },
       {
-        name: "Copia de Escrituras",
+        name: "Partida de Defunción",
+        code: "death_certificate_request",
+        category: "notarial",
+        description: "Solicitud de partida de defunción",
+        price: 40000,
+        hasPriority: true,
+        priorityPrice: 100000,
+        estimatedHours: 24,
+        priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "estandar",
+              label: "Solicitud estándar",
+              rules: [],
+              fieldIds: [
+                "field_dc_requester_full_name",
+                "field_dc_requester_phone",
+                "field_dc_reason",
+                "field_dc_certificate_copy",
+                "field_dc_requester_id_copy",
+                "field_dc_third_party_auth",
+              ],
+            },
+          ],
+        },
+        fields: [
+          {
+            name: "Nombre y apellidos del solicitante",
+            code: "field_dc_requester_full_name",
+            type: "Text",
+            order: 10,
+            required: true,
+            description: "Nombre y apellidos de quien solicita.",
+          },
+          {
+            name: "Teléfono del solicitante",
+            code: "field_dc_requester_phone",
+            type: "Text",
+            order: 20,
+            required: true,
+            description: "Número de teléfono de contacto.",
+          },
+          {
+            name: "Motivo de la solicitud",
+            code: "field_dc_reason",
+            type: "Text",
+            order: 30,
+            required: true,
+            description: "Descripción de para qué requiere la partida de defunción.",
+          },
+          {
+            name: "Copia de partida de defunción",
+            code: "field_dc_certificate_copy",
+            type: "File",
+            order: 40,
+            required: true,
+            multiple: true,
+            description: "Cargue copia de la partida de defunción en PDF, PNG o imagen.",
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Copia de cédula del solicitante",
+            code: "field_dc_requester_id_copy",
+            type: "File",
+            order: 50,
+            required: true,
+            multiple: true,
+            description: "Cargue copia de la cédula de quien solicita la partida.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Autorización a terceros",
+            code: "field_dc_third_party_auth",
+            type: "File",
+            order: 60,
+            required: true,
+            multiple: true,
+            description: "Cargue la carta de autorización a terceros.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
+      },
+      {
+        name: "Copias de Escrituras",
         code: "deed_copy_request",
-        description: "Solicitud de copia de escrituras",
+        category: "notarial",
+        description: "Solicitud de copias de escrituras",
         price: 40000,
         hasPriority: true,
-        priorityPrice: 80000,
+        priorityPrice: 100000,
         estimatedHours: 24,
         priorityHours: 8,
+        workflowMode: "deterministic",
+        workflowConfig: {
+          branches: [
+            {
+              key: "persona_juridica",
+              label: "Persona jurídica",
+              rules: [{ fieldCode: "field_deed_person_type", equals: "juridica" }],
+              fieldIds: [
+                "field_deed_requester_full_name",
+                "field_deed_requester_phone",
+                "field_deed_person_type",
+                "field_deed_chamber_certificate",
+                "field_deed_legal_rep_id_copy",
+                "field_deed_number",
+                "field_deed_year",
+                "field_deed_city",
+                "field_deed_notary_name",
+                "field_deed_requester_id_copy",
+                "field_deed_third_party_auth",
+              ],
+            },
+            {
+              key: "persona_natural",
+              label: "Persona natural",
+              rules: [{ fieldCode: "field_deed_person_type", equals: "natural" }],
+              fieldIds: [
+                "field_deed_requester_full_name",
+                "field_deed_requester_phone",
+                "field_deed_person_type",
+                "field_deed_number",
+                "field_deed_year",
+                "field_deed_city",
+                "field_deed_notary_name",
+                "field_deed_requester_id_copy",
+                "field_deed_third_party_auth",
+              ],
+            },
+          ],
+        },
         fields: [
-          { name: "Ciudad de la escritura", code: "field_deed_city", type: "Text", order: 10, description: "Ciudad donde está registrada la escritura." },
-          { name: "URL documento", code: "field_path", type: "File", order: 20, description: "Documento de referencia o soporte." },
-          { name: "Observaciones", code: "field_observations", type: "Text", order: 30, description: "Observaciones sobre la escritura solicitada." }
-        ]
+          {
+            name: "Nombre y apellidos del solicitante",
+            code: "field_deed_requester_full_name",
+            type: "Text",
+            order: 10,
+            required: true,
+            description: "Nombre y apellidos de quien solicita.",
+          },
+          {
+            name: "Teléfono del solicitante",
+            code: "field_deed_requester_phone",
+            type: "Text",
+            order: 20,
+            required: true,
+            description: "Número de teléfono de contacto.",
+          },
+          {
+            name: "Tipo de persona",
+            code: "field_deed_person_type",
+            type: "Select",
+            order: 30,
+            required: true,
+            options: {
+              items: [
+                { value: "natural", label: "Natural" },
+                { value: "juridica", label: "Jurídica" },
+              ],
+            },
+            description: "Seleccione el tipo de persona solicitante.",
+          },
+          {
+            name: "Certificado de representación legal",
+            code: "field_deed_chamber_certificate",
+            type: "File",
+            order: 40,
+            required: false,
+            multiple: true,
+            description: "Cargue certificado de representación legal vigente (Cámara de Comercio). Requerido para persona jurídica.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Copia cédula representante legal",
+            code: "field_deed_legal_rep_id_copy",
+            type: "File",
+            order: 50,
+            required: false,
+            multiple: true,
+            description: "Cargue copia de la cédula del representante legal. Requerido para persona jurídica.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Número de la escritura",
+            code: "field_deed_number",
+            type: "Text",
+            order: 60,
+            required: true,
+            description: "Número de la escritura.",
+          },
+          {
+            name: "Año de la escritura",
+            code: "field_deed_year",
+            type: "Text",
+            order: 70,
+            required: true,
+            description: "Año de la escritura.",
+          },
+          {
+            name: "Ciudad donde se registró",
+            code: "field_deed_city",
+            type: "Text",
+            order: 80,
+            required: true,
+            description: "Ciudad donde está registrada la escritura.",
+          },
+          {
+            name: "Nombre de la notaría",
+            code: "field_deed_notary_name",
+            type: "Text",
+            order: 90,
+            required: true,
+            description: "Nombre de la notaría donde se otorgó la escritura.",
+          },
+          {
+            name: "Copia de cédula del solicitante",
+            code: "field_deed_requester_id_copy",
+            type: "File",
+            order: 100,
+            required: true,
+            multiple: true,
+            description: "Cargue copia de la cédula del solicitante en PDF, PNG o imagen.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+          {
+            name: "Autorización a terceros",
+            code: "field_deed_third_party_auth",
+            type: "File",
+            order: 110,
+            required: true,
+            multiple: true,
+            description: "Cargue la carta de autorización a terceros.",
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+          },
+        ],
       },
-      {
-        name: "Certificado Libertad y Tradición",
-        code: "tradition_certificate_request",
-        description: "Solicitud de certificado de libertad y tradición",
-        price: 48000,
-        fields: [
-          { name: "Número de matrícula inmobiliaria", code: "field_property_number", type: "Text", order: 10, description: "Número de matrícula inmobiliaria." },
-          { name: "Certificado de libertad y tradición", code: "field_tradition_certificate", type: "File", order: 20, description: "Archivo de referencia si se tiene." }
-        ]
-      },
-      {
-        name: "Certificado Representación Legal",
-        code: "legal_representation_certificate",
-        description: "Solicitud certificado de representación legal",
-        price: 42000,
-        fields: [{ name: "Certificado de representación legal", code: "field_legal_representation_certi", type: "File", order: 10, description: "Documento o datos del certificado solicitado." }]
-      },
-      {
-        name: "Plano de Predio",
-        code: "property_plan_request",
-        description: "Solicitud de plano de predio",
-        price: 40000,
-        hasPriority: true,
-        priorityPrice: 80000,
-        estimatedHours: 24,
-        priorityHours: 8,
-        fields: [{ name: "Plano del predio", code: "field_property_plan", type: "File", order: 10, description: "Información o archivo del plano del predio." }]
-      },
-      {
-        name: "Poder Notarial",
-        code: "notarial_power_request",
-        description: "Solicitud de poder notarial",
-        price: 55000,
-        fields: [{ name: "Poder notarial", code: "field_notarial_power", type: "File", order: 10, description: "Documento o datos del poder notarial." }]
-      }
     ];
 
+    // Two-pass insertion for services with deterministic workflow
     for (const s of services) {
         const existingService = await ctx.db
             .query("services")
@@ -281,6 +1120,7 @@ export const seed = internalMutation({
             serviceId = existingService._id;
             await ctx.db.patch(serviceId, {
                 name: s.name,
+                category: s.category,
                 description: s.description ?? undefined,
                 price: s.price,
                 hasPriority: s.hasPriority ?? false,
@@ -289,19 +1129,11 @@ export const seed = internalMutation({
                 priorityHours: s.priorityHours,
                 status: true,
             });
-            
-            // Delete existing fields to re-seed them
-            const existingFields = await ctx.db
-                .query("serviceFields")
-                .withIndex("by_service", (q) => q.eq("serviceId", serviceId))
-                .collect();
-            for (const f of existingFields) {
-                await ctx.db.delete(f._id);
-            }
         } else {
             serviceId = await ctx.db.insert("services", {
                 name: s.name,
                 code: s.code,
+                category: s.category,
                 description: s.description ?? undefined,
                 price: s.price,
                 hasPriority: s.hasPriority ?? false,
@@ -312,19 +1144,30 @@ export const seed = internalMutation({
             });
         }
 
-        for (const f of s.fields) {
-            await ctx.db.insert("serviceFields", {
-                serviceId,
-                name: f.name,
-                code: f.code,
-                description: f.description ?? undefined,
-                type: f.type,
-                required: false,
-                multiple: false,
-                order: f.order,
-                options: f.options,
-                status: true,
-            });
+        // Pass 1: Insert all fields and collect code→ID map
+        const codeToId = await insertServiceFields(ctx, serviceId, s.fields);
+
+        // Pass 2: Patch service with resolved workflowConfig if deterministic
+        if (s.workflowMode === "deterministic" && s.workflowConfig) {
+            await patchServiceWorkflow(ctx, serviceId, codeToId, s.workflowConfig);
+        }
+    }
+
+    // Delete services that are no longer in the seed list
+    const allowedCodes = new Set(services.map((s) => s.code));
+    const allServices = await ctx.db.query("services").collect();
+    for (const svc of allServices) {
+        if (svc.code && !allowedCodes.has(svc.code)) {
+            // Delete all fields first
+            const svcFields = await ctx.db
+                .query("serviceFields")
+                .withIndex("by_service", (q: any) => q.eq("serviceId", svc._id))
+                .collect();
+            for (const f of svcFields) {
+                await ctx.db.delete(f._id);
+            }
+            // Delete the service
+            await ctx.db.delete(svc._id);
         }
     }
     

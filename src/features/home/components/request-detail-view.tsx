@@ -4,7 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Image } from "lucide-react";
+import { CheckCircle2, Image, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RequestHeader } from "./request-header";
 import { PatientDataCard } from "./patient-data-card";
@@ -27,6 +27,7 @@ import { useRequestDetail } from "../hooks/use-request-detail";
 import { useMutation, useQuery } from "convex/react";
 import { api as convexApi } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { AttachmentsCard } from "./attachments-card";
 
 interface RequestDetailViewModalProps {
   isOpen: boolean;
@@ -52,6 +53,7 @@ export function RequestDetailViewModal({
 
   const updateRequestMutation = useMutation(convexApi.requests.update);
   const assignDistributorMutation = useMutation(convexApi.requests.assignDistributor);
+  const setAdminValidationMutation = useMutation(convexApi.requests.setAdminValidation);
   
   // Fetch distributors directly from Convex
   const distributorsData = useQuery(convexApi.distributors.listAll, {});
@@ -187,6 +189,48 @@ export function RequestDetailViewModal({
   };
 
   const statusLabel = mapRequestStatusToLabel(request.requestStatus);
+  const adminValidationStatusLabel =
+    request.adminValidationStatus === "approved"
+      ? "Aprobado"
+      : request.adminValidationStatus === "rejected"
+        ? "Rechazado"
+        : request.adminValidationStatus === "pending"
+          ? "Pendiente"
+          : "No requerida";
+  const paymentMethodLabel =
+    request.paymentMethod === "transfer"
+      ? "Transferencia"
+      : request.paymentMethod === "cash"
+        ? "Efectivo"
+        : request.paymentMethod === "card"
+          ? "Tarjeta"
+          : "Sin método de pago";
+
+  const handleAdminValidation = async (status: "approved" | "rejected") => {
+    if (!request?.id) return;
+
+    const reason =
+      status === "rejected"
+        ? window.prompt("Motivo del rechazo del comprobante", request.adminValidationReason ?? "")?.trim()
+        : undefined;
+
+    if (status === "rejected" && !reason) {
+      toast.error("Para rechazar el comprobante debes indicar un motivo.");
+      return;
+    }
+
+    try {
+      await setAdminValidationMutation({
+        id: request.id as Id<"requests">,
+        status,
+        reason,
+      });
+      toast.success(status === "approved" ? "Comprobante aprobado" : "Comprobante rechazado");
+    } catch (error) {
+      console.error("Error validando comprobante:", error);
+      toast.error("No se pudo actualizar la validación administrativa");
+    }
+  };
 
   const getEps = (): string => {
     const info = request.infoService as any;
@@ -414,8 +458,74 @@ export function RequestDetailViewModal({
             ) : null}
           </div>
 
-          {/* Evidencia de Entrega */}
-          {request.evidenceUrl && (
+            {(request.addressSnapshot || (request.attachmentGroups?.length ?? 0) > 0 || request.adminValidationStatus) && (
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] border-b">
+                {request.addressSnapshot && (
+                  <div className="bg-white overflow-hidden px-6 py-7 border-r">
+                    <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold pb-4">
+                      Dirección confirmada
+                    </div>
+                    <div className="space-y-2 text-sm text-slate-700">
+                      <p className="font-medium text-slate-900">{request.addressSnapshot.raw}</p>
+                      <p>
+                        Fuente: {request.addressSnapshot.source === "user_edit" ? "Editada por el usuario" : "Perfil del cliente"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {(request.attachmentGroups?.length ?? 0) > 0 && (
+                  <AttachmentsCard
+                    type={request.infoService?.type || "node--request"}
+                    groups={request.attachmentGroups?.map((group) => ({
+                      key: group.key,
+                      title: group.title,
+                      items: group.items.map((item) => ({
+                        id: item.id,
+                        url: item.url,
+                        label: item.label,
+                        alt: item.label,
+                        kind: item.kind,
+                        fieldId: item.fieldId,
+                        fieldName: item.fieldName,
+                      })),
+                    }))}
+                  />
+                )}
+
+                {request.adminValidationStatus && (
+                  <div className="bg-white overflow-hidden px-6 py-7">
+                    <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold pb-4">
+                      Validación administrativa
+                    </div>
+                    <div className="space-y-3 text-sm text-slate-700">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p><span className="font-semibold">Estado:</span> {adminValidationStatusLabel}</p>
+                        <p><span className="font-semibold">Flujo:</span> {request.flowStatus || "Sin etapa"}</p>
+                        <p><span className="font-semibold">Pago:</span> {request.paymentFlowStatus || paymentMethodLabel}</p>
+                        {request.adminValidationReason && (
+                          <p><span className="font-semibold">Motivo:</span> {request.adminValidationReason}</p>
+                        )}
+                      </div>
+
+                      {!isDistributor && request.adminValidationStatus === "pending" && request.paymentMethod === "transfer" && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" onClick={() => handleAdminValidation("approved")}>
+                            <CheckCircle2 className="h-4 w-4" /> Aprobar comprobante
+                          </Button>
+                          <Button type="button" variant="destructive" onClick={() => handleAdminValidation("rejected")}>
+                            <XCircle className="h-4 w-4" /> Rechazar comprobante
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Evidencia de Entrega */}
+            {request.evidenceUrl && (
             <div className="bg-white overflow-hidden px-6 py-7 border-b">
               <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold flex items-center gap-2.5 pb-4">
                 <Image className="size-5 text-blue-600" />
@@ -444,9 +554,7 @@ export function RequestDetailViewModal({
               priority={
                 request.infoService?.priority ? "prioritario" : "normal"
               }
-              paymentMethod={
-                request.paymentInfo ? "Pago registrado" : "Sin método de pago"
-              }
+              paymentMethod={paymentMethodLabel}
             />
 
             {!isDistributor && (

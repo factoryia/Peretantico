@@ -2,7 +2,22 @@ import { anyApi } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { isDeterministicWorkflowEnabled, isGlobalDeterministicRequestsEnabled } from "./system/requestFlow";
 // import { paginationOptsValidator } from "convex/server";
+
+function getNormalizedRequestReadState(request: Doc<"requests">) {
+  const receiptAttachmentIds = Array.isArray(request.receiptAttachmentIds) ? request.receiptAttachmentIds : [];
+
+  return {
+    addressSnapshot: request.addressSnapshot ?? null,
+    flowStatus: request.flowStatus ?? null,
+    paymentStatus:
+      request.paymentStatus ?? (request.paymentMethod === "transfer" && receiptAttachmentIds.length > 0 ? "pending_admin_validation" : null),
+    receiptAttachmentIds,
+    adminValidationStatus: request.adminValidationStatus ?? "not_required",
+  };
+}
 
 export const list = query({
   args: {
@@ -69,10 +84,11 @@ export const list = query({
           .withIndex("by_request", (q) => q.eq("requestId", request._id))
           .first();
         
-        const paymentStatus = payment ? "Pagado" : "Pendiente";
+        const paymentStatus = request.paymentStatus || (payment ? "Pagado" : "Pendiente");
         
         return {
           ...request,
+          ...getNormalizedRequestReadState(request),
           applicant,
           service,
           distributor,
@@ -135,6 +151,9 @@ export const get = query({
       })
     );
 
+    const receiptAttachments = attachmentsWithUrls.filter((attachment) => attachment.kind === "payment_receipt");
+    const requestAttachments = attachmentsWithUrls.filter((attachment) => attachment.kind !== "payment_receipt");
+
     const dataWithFields = await Promise.all(
       requestData.map(async (data) => {
         const field = await ctx.db.get(data.fieldId);
@@ -166,11 +185,13 @@ export const get = query({
 
     return {
       ...request,
+      ...getNormalizedRequestReadState(request),
       applicant,
       service,
       distributor,
       data: dataWithFields,
-      attachments: attachmentsWithUrls,
+      attachments: requestAttachments,
+      receiptAttachments,
       evidenceUrl,
     };
   },
@@ -200,10 +221,11 @@ export const getByApplicationNumber = query({
         .first(),
     ]);
 
-    const paymentStatus = payment ? "Pagado" : "Pendiente";
+    const paymentStatus = request.paymentStatus || (payment ? "Pagado" : "Pendiente");
 
     return {
       ...request,
+      ...getNormalizedRequestReadState(request),
       applicant,
       service,
       distributor,
@@ -229,9 +251,20 @@ export const create = mutation({
         fileName: v.string(),
         url: v.string(),
         storageId: v.optional(v.string()),
+        fieldId: v.optional(v.id("serviceFields")),
+        kind: v.optional(v.string()),
       })
     ),
     paymentMethod: v.optional(v.string()),
+    addressSnapshot: v.optional(v.object({
+      raw: v.string(),
+      source: v.union(v.literal("profile"), v.literal("user_edit")),
+      confirmedAt: v.number(),
+    })),
+    flowStatus: v.optional(v.string()),
+    paymentStatus: v.optional(v.string()),
+    receiptAttachmentIds: v.optional(v.array(v.id("attachments"))),
+    adminValidationStatus: v.optional(v.string()),
     isPrioritized: v.optional(v.boolean()),
     requestStatus: v.optional(v.string()),
     
@@ -273,6 +306,11 @@ export const create = mutation({
       title: args.title,
       
       paymentMethod: args.paymentMethod,
+      addressSnapshot: args.addressSnapshot,
+      flowStatus: args.flowStatus,
+      paymentStatus: args.paymentStatus,
+      receiptAttachmentIds: args.receiptAttachmentIds,
+      adminValidationStatus: args.adminValidationStatus,
       logisticsCosts: args.logisticsCosts,
       serviceValue: args.serviceValue,
       prioritizedValue: args.prioritizedValue,
@@ -281,7 +319,7 @@ export const create = mutation({
       applicationScore: args.applicationScore,
     });
 
-    await Promise.all([
+    const attachmentIds = await Promise.all([
       ...args.data.map((item) =>
         ctx.db.insert("requestData", {
           requestId,
@@ -292,12 +330,22 @@ export const create = mutation({
       ...args.attachments.map((item) =>
         ctx.db.insert("attachments", {
           requestId,
+          fieldId: item.fieldId,
+          kind: item.kind,
           fileName: item.fileName,
           url: item.url,
           storageId: item.storageId as Id<"_storage"> | undefined,
         })
       ),
     ]);
+
+    if ((!args.receiptAttachmentIds || args.receiptAttachmentIds.length === 0) && args.paymentMethod === "transfer") {
+      const inferredReceiptIds = attachmentIds.filter(Boolean) as Id<"attachments">[];
+      const receiptIds = inferredReceiptIds.slice(Math.max(0, inferredReceiptIds.length - 1));
+      if (receiptIds.length > 0) {
+        await ctx.db.patch(requestId, { receiptAttachmentIds: receiptIds });
+      }
+    }
 
     // Notify admins about new request (non-blocking)
     ctx.scheduler.runAfter(0, anyApi.emails.notifyNewRequest, {
@@ -331,6 +379,18 @@ export const update = mutation({
     isRecurring: v.optional(v.boolean()),
     
     paymentMethod: v.optional(v.string()),
+    addressSnapshot: v.optional(v.object({
+      raw: v.string(),
+      source: v.union(v.literal("profile"), v.literal("user_edit")),
+      confirmedAt: v.number(),
+    })),
+    flowStatus: v.optional(v.string()),
+    paymentStatus: v.optional(v.string()),
+    receiptAttachmentIds: v.optional(v.array(v.id("attachments"))),
+    adminValidationStatus: v.optional(v.string()),
+    adminValidationAt: v.optional(v.number()),
+    adminValidationBy: v.optional(v.id("users")),
+    adminValidationReason: v.optional(v.string()),
     logisticsCosts: v.optional(v.number()),
     serviceValue: v.optional(v.number()),
     prioritizedValue: v.optional(v.number()),
@@ -438,6 +498,62 @@ export const assignDistributor = mutation({
         distributorId: args.distributorId,
       });
     }
+  },
+});
+
+export const setAdminValidation = mutation({
+  args: {
+    id: v.id("requests"),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    const request = await ctx.db.get(args.id);
+    if (!request) throw new Error("Request not found");
+    const service = await ctx.db.get(request.serviceId);
+    if (!service || !isDeterministicWorkflowEnabled(service)) {
+      throw new Error("La validación administrativa está deshabilitada para este servicio.");
+    }
+
+    await ctx.db.patch(args.id, {
+      adminValidationStatus: args.status,
+      adminValidationAt: Date.now(),
+      adminValidationBy: userId ?? undefined,
+      adminValidationReason: args.reason,
+      paymentStatus:
+        args.status === "approved"
+          ? "approved"
+          : args.status === "rejected"
+            ? "rejected"
+            : "pending_admin_validation",
+      flowStatus: args.status === "approved" ? "complete" : "admin_review",
+    });
+
+    return { ok: true };
+  },
+});
+
+export const getPendingAdminValidations = query({
+  args: {},
+  handler: async (ctx) => {
+    if (!isGlobalDeterministicRequestsEnabled()) return [];
+
+    const requests = await ctx.db
+      .query("requests")
+      .filter((q) => q.eq(q.field("adminValidationStatus"), "pending"))
+      .collect();
+
+    const hydrated = await Promise.all(
+      requests.map(async (request) => ({
+        ...request,
+        ...getNormalizedRequestReadState(request),
+        applicant: await ctx.db.get(request.applicantId),
+        service: await ctx.db.get(request.serviceId),
+      }))
+    );
+
+    return hydrated.filter((request) => request.service && isDeterministicWorkflowEnabled(request.service));
   },
 });
 
