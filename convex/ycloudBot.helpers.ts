@@ -363,8 +363,7 @@ export function buildInboundContextPrompt(args: {
   resolvedProfileId?: string | null;
   resolvedProfileName?: string | null;
   mediaType?: string | null;
-  mediaUrl?: string | null;
-  mediaFilename?: string | null;
+  mediaStorageId?: string | null;
   sessionState?: string | null;
   serviceId?: string | null;
   currentFieldIndex?: number | null;
@@ -375,8 +374,7 @@ export function buildInboundContextPrompt(args: {
     args.resolvedProfileId ? `profileId=${args.resolvedProfileId}` : undefined,
     args.resolvedProfileName ? `profileName=${args.resolvedProfileName}` : undefined,
     args.mediaType ? `mediaType=${args.mediaType}` : undefined,
-    args.mediaUrl ? `mediaUrl=${args.mediaUrl}` : undefined,
-    args.mediaFilename ? `mediaFilename=${args.mediaFilename}` : undefined,
+    args.mediaStorageId ? `mediaStorageId=${args.mediaStorageId}` : undefined,
     args.sessionState ? `sessionState=${args.sessionState}` : undefined,
     args.serviceId ? `serviceId=${args.serviceId}` : undefined,
     typeof args.currentFieldIndex === "number" ? `fieldIndex=${args.currentFieldIndex}` : undefined,

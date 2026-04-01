@@ -215,7 +215,10 @@ function extractTextFromMessageContent(content: unknown): string {
 async function sendWhatsAppText(args: { contactId: string; content: string }): Promise<string | null> {
   const apiKey = process.env.YCLOUD_API_KEY;
   const fromNumber = process.env.YCLOUD_PHONE_NUMBER;
-  if (!apiKey || !fromNumber) return null;
+  if (!apiKey || !fromNumber) {
+    console.warn("[sendWhatsAppText] Missing YCLOUD_API_KEY or YCLOUD_PHONE_NUMBER");
+    return null;
+  }
 
   const toRaw = args.contactId.replace(/^whatsapp:/, "").trim().replace(/\s/g, "");
   const to = toRaw.startsWith("+") ? toRaw : `+${toRaw}`;
@@ -240,6 +243,7 @@ async function sendWhatsAppText(args: { contactId: string; content: string }): P
     });
 
     const data = (await res.json()) as { id?: string; status?: string; message?: string };
+    
     if (res.ok) return data.id ?? null;
 
     const shouldRetry = res.status === 429 || res.status >= 500;
@@ -247,6 +251,7 @@ async function sendWhatsAppText(args: { contactId: string; content: string }): P
       await sleep(500);
       continue;
     }
+    console.error("[sendWhatsAppText] Failed to=${to} status=${res.status} error=${data.message ?? data.status ?? res.statusText}");
     throw new Error(data.message ?? data.status ?? res.statusText);
   }
 
@@ -319,6 +324,7 @@ export const processInboundMessage = internalAction({
     customerName: v.optional(v.string()),
     text: v.string(),
     mediaUrl: v.optional(v.string()),
+    mediaId: v.optional(v.string()),
     mediaType: v.optional(
       v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
     ),
@@ -366,8 +372,53 @@ export const processInboundMessage = internalAction({
 
       const sessionId = await ctx.runMutation(internalAny.whatsappBotState.ensureSession, {
         contactId,
-        profileId: applicantProfileId ? (applicantProfileId as unknown as Id<"profiles">) : undefined,
       });
+
+      // IMMEDIATE MEDIA DOWNLOAD: Try to download media right now while URL is fresh
+      let mediaStorageId: Id<"_storage"> | undefined;
+      if (args.mediaUrl) {
+        const apiKey = process.env.YCLOUD_API_KEY;
+        const headers: Record<string, string> = {};
+        if (apiKey) headers["X-API-Key"] = apiKey;
+
+        try {
+          console.log("Attempting immediate media download from webhook URL...");
+          const res = await fetch(args.mediaUrl, { headers });
+          console.log("Immediate download response:", res.status);
+
+          if (res.ok) {
+            const contentType = res.headers.get("content-type") ?? undefined;
+            const arrayBuffer = await res.arrayBuffer();
+            const blob = new Blob([arrayBuffer], contentType ? { type: contentType } : undefined);
+            mediaStorageId = await ctx.storage.store(blob);
+            console.log("Media downloaded immediately, storageId:", mediaStorageId);
+          } else {
+            console.warn("Immediate download failed with status:", res.status);
+          }
+        } catch (downloadError) {
+          console.warn("Error in immediate media download:", downloadError);
+        }
+      }
+
+      // Store pending media info in session for later use if immediate download failed
+      if (!mediaStorageId && args.mediaUrl) {
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          pendingMediaUrl: args.mediaUrl,
+          pendingMediaId: args.mediaId,
+          pendingMediaType: args.mediaType,
+          pendingMediaFilename: args.mediaFilename,
+        });
+      } else if (mediaStorageId) {
+        // Clear any pending media since we downloaded successfully
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          pendingMediaUrl: null,
+          pendingMediaId: null,
+          pendingMediaType: null,
+          pendingMediaFilename: null,
+        });
+      }
       const session = await ctx.runQuery(internalAny.whatsappBotState.getSessionByContact, {
         contactId,
       });
@@ -429,7 +480,9 @@ export const processInboundMessage = internalAction({
         contactId,
         customerName: args.customerName,
         content: args.text,
-        mediaUrl: args.mediaUrl,
+        mediaUrl: mediaStorageId ? undefined : args.mediaUrl, // Only store URL if we couldn't download
+        mediaId: args.mediaId,
+        mediaStorageId: mediaStorageId,
         mediaType: args.mediaType as MediaType | undefined,
       });
 
@@ -636,14 +689,14 @@ export const processInboundMessage = internalAction({
         getRequestStatus,
       } satisfies ToolSet;
 
+      // Get media info - only pass mediaStorageId to context (no YCloud URLs)
       const contextPrompt = buildInboundContextPrompt({
         contactId,
         effectiveText,
         resolvedProfileId,
         resolvedProfileName: resolvedProfile?.fullName ? String(resolvedProfile.fullName) : null,
         mediaType: args.mediaType,
-        mediaUrl: args.mediaUrl,
-        mediaFilename: args.mediaFilename,
+        mediaStorageId: mediaStorageId ? String(mediaStorageId) : undefined,
         sessionState: session.state ? String(session.state) : null,
         serviceId: session.serviceId ? String(session.serviceId) : null,
         currentFieldIndex: typeof session.currentFieldIndex === "number" ? session.currentFieldIndex : null,
@@ -652,6 +705,13 @@ export const processInboundMessage = internalAction({
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
         prompt: contextPrompt,
         tools,
+      });
+
+      console.log("[processInboundMessage] Agent response:", {
+        textLength: response.text?.length ?? 0,
+        textPreview: (response.text ?? "").substring(0, 200),
+        toolResultsCount: response.toolResults?.length ?? 0,
+        toolNames: response.toolResults?.map((r) => r?.toolName).filter(Boolean),
       });
 
       await syncDeterministicSessionFlow({
@@ -681,6 +741,10 @@ export const processInboundMessage = internalAction({
       }
 
       let replyText = (response.text ?? "").trim();
+      console.log("[processInboundMessage] Initial replyText from response.text:", {
+        length: replyText.length,
+        preview: replyText.substring(0, 200),
+      });
 
       // NEW POLICY: Soft reset instead of thread rotation
       // - No new thread creation
@@ -707,6 +771,18 @@ export const processInboundMessage = internalAction({
       }
         
       if (!replyText) {
+        console.log("[processInboundMessage] replyText is empty, trying listMessages...");
+        const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
+        console.log("[processInboundMessage] listMessages result:", { count: messages.page.length });
+        const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
+        if (lastAssistant) {
+          const content = lastAssistant.message?.content;
+          replyText = extractTextFromMessageContent(content).trim();
+          console.log("[processInboundMessage] Got replyText from listMessages:", { length: replyText.length, preview: replyText.substring(0, 200) });
+        }
+      }
+        
+      if (!replyText) {
         const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
         const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
         if (lastAssistant) {
@@ -723,6 +799,12 @@ export const processInboundMessage = internalAction({
         assistantText: replyText,
         toolResults: response.toolResults,
         lastOutboundContent,
+      });
+
+      console.log("[processInboundMessage] Final replyText:", {
+        length: replyText?.length ?? 0,
+        preview: (replyText ?? "").substring(0, 300),
+        hasContent: Boolean(replyText),
       });
 
       if (replyText) {
