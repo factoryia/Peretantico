@@ -1,6 +1,5 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
 
 /**
  * Looks up a user by email.

@@ -62,6 +62,8 @@ describe("createRequest tool", () => {
       applicantId: "profile_1",
       serviceId: testServiceId,
       data: [], // Missing required field
+      paymentMethod: "efectivo",
+      address: "Calle 123",
     })) as { ok: boolean; message?: string; missingFields?: string[] };
 
     expect(result.ok).toBe(false);
@@ -111,6 +113,8 @@ describe("createRequest tool", () => {
       serviceId,
       isPrioritized: true,
       data: [{ fieldId, value: "Nueva EPS" }],
+      paymentMethod: "efectivo",
+      address: "Calle 123",
     })) as { ok: boolean; applicationNumber?: string };
 
     expect(result.ok).toBe(true);
@@ -248,6 +252,8 @@ describe("createRequest tool", () => {
         applicantId,
         serviceId,
         data: [{ fieldId, value: "test value" }],
+        paymentMethod: "efectivo",
+        address: "Calle 123",
       })) as {
         ok: boolean;
         completion?: {
@@ -340,7 +346,9 @@ describe("createRequest tool", () => {
         applicantId,
         serviceId,
         data: [{ fieldId, value: "test value" }],
-      })) as { 
+        paymentMethod: "efectivo",
+        address: "Calle 123",
+      })) as {
         ok: boolean; 
         applicationNumber?: string;
         completion?: {
@@ -424,6 +432,8 @@ describe("createRequest tool", () => {
         applicantId,
         serviceId,
         data: [{ fieldId, value: "test value" }],
+        paymentMethod: "efectivo",
+        address: "Calle 123",
       })) as {
         ok: boolean;
         completion?: {
@@ -491,6 +501,8 @@ describe("createRequest tool", () => {
         applicantId,
         serviceId,
         data: [{ fieldId, value: "test value" }],
+        paymentMethod: "efectivo",
+        address: "Calle 123",
       })) as {
         ok: boolean;
         completion?: {
@@ -543,7 +555,9 @@ describe("createRequest tool", () => {
         contactId,
         applicantId,
         serviceId,
-        data: [{ fieldId, value: "my value" }],
+        data: [{ fieldId, value: "test value" }],
+        paymentMethod: "efectivo",
+        address: "Calle 123",
       })) as {
         ok: boolean;
         completion?: {
