@@ -413,7 +413,7 @@ export function RequestsTable({
                         variant="ghost"
                         size="icon"
                         onClick={() => handleViewDetail(requestData)}
-                        className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50"
+                        className="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
                         title="Ver detalle"
                         disabled={isFetching}
                       >

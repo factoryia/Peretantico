@@ -718,7 +718,7 @@ export function Reports() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50"
+                                className="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
                                 onClick={() => {
                                   setSelectedFullRequest(request);
                                   setIsDetailOpen(true);
