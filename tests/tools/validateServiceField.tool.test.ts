@@ -236,4 +236,58 @@ describe("validateServiceField tool", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("temporalmente no disponible");
   });
+
+  it("accepts multiple files when field is configured as multi-file", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/pdf" }),
+      arrayBuffer: async () => new TextEncoder().encode("pdf").buffer,
+    } as unknown as Response);
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        fields: [{ _id: "field_file", name: "Soporte PDF", type: "File", required: true, multiple: true, settings: { maxFiles: 2 } }],
+      }),
+      storage: {
+        store: vi.fn().mockResolvedValue("storage_123"),
+        getUrl: vi.fn().mockResolvedValue("https://storage.local/storage_123"),
+      },
+    };
+
+    const result = (await invokeValidate(ctx, {
+      serviceId: "service_docs",
+      fieldId: "field_file",
+      value: "",
+      mediaUrls: ["https://example.com/a.pdf", "https://example.com/b.pdf"],
+      fileNames: ["a.pdf", "b.pdf"],
+    } as any)) as { ok: boolean; normalizedValue?: string[]; files?: Array<{ fileName?: string }> };
+
+    expect(result.ok).toBe(true);
+    expect(result.normalizedValue).toHaveLength(2);
+    expect(result.files?.map((item) => item.fileName)).toEqual(["a.pdf", "b.pdf"]);
+  });
+
+  it("rejects too many files for a constrained multi-file field", async () => {
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        fields: [{ _id: "field_file", name: "Soporte PDF", type: "File", required: true, multiple: true, settings: { maxFiles: 1 } }],
+      }),
+      storage: {
+        store: vi.fn(),
+        getUrl: vi.fn(),
+      },
+    };
+
+    const result = (await invokeValidate(ctx, {
+      serviceId: "service_docs",
+      fieldId: "field_file",
+      value: "",
+      mediaUrls: ["https://example.com/a.pdf", "https://example.com/b.pdf"],
+    } as any)) as { ok: boolean; message?: string };
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("máximo 1 archivo");
+  });
 });

@@ -124,6 +124,67 @@ describe("createRequest tool", () => {
     });
   });
 
+  it("stores address snapshot and transfer validation metadata", async () => {
+    const serviceId = "service_transfer";
+    const fieldId = "field_required";
+    let createdPayload: Record<string, unknown> | null = null;
+
+    const ctx = {
+      runQuery: vi.fn().mockImplementation((_: unknown, queryArgs: { id?: string; contactId?: string }) => {
+        if (queryArgs?.id === serviceId) {
+          return Promise.resolve({
+            workflowMode: "deterministic",
+            workflowConfig: { requirePaymentMethod: true },
+            price: 10000,
+            fields: [{ _id: fieldId, name: "Documento", type: "Text", required: true, status: true }],
+          });
+        }
+        if (queryArgs?.id === "profile_1") {
+          return Promise.resolve({ _id: "profile_1", address: "Calle 1" });
+        }
+        if (queryArgs?.contactId) {
+          return Promise.resolve({ _id: "session_1", data: { flow: {} } });
+        }
+        if (queryArgs?.id === "request_transfer_created") {
+          return Promise.resolve({ applicationNumber: "REQ-111111" });
+        }
+        return Promise.resolve(null);
+      }),
+      runMutation: vi.fn().mockImplementation((_: unknown, mutationArgs: Record<string, unknown>) => {
+        if (mutationArgs?.applicationNumber) {
+          createdPayload = mutationArgs;
+          return Promise.resolve({ requestId: "request_transfer_created", applicationNumber: "REQ-111111" });
+        }
+        return Promise.resolve({});
+      }),
+      storage: {
+        store: async () => "storage_x",
+        getUrl: async () => "https://storage.local/storage_x",
+      },
+    };
+
+    const result = (await invokeCreateRequest(ctx, {
+      contactId: "whatsapp:+573001234567",
+      applicantId: "profile_1",
+      serviceId,
+      data: [{ fieldId, value: "ok" }],
+      paymentMethod: "transfer",
+      address: "Carrera 10 # 20-30",
+      attachments: [{ fileName: "comprobante.pdf", url: "https://example.com/comprobante.pdf", storageId: "receipt_1" }],
+    })) as { ok: boolean };
+
+    expect(result.ok).toBe(true);
+    expect(createdPayload).toMatchObject({
+      paymentMethod: "transfer",
+      paymentStatus: "pending_admin_validation",
+      adminValidationStatus: "pending",
+      addressSnapshot: {
+        raw: "Carrera 10 # 20-30",
+        source: "user_edit",
+      },
+    });
+  });
+
   describe("thread closure and rotation on request creation", () => {
     const serviceId = "service_test";
     const contactId = "whatsapp:+573001234567";
