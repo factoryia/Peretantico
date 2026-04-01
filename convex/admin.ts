@@ -39,6 +39,28 @@ export const getAccount = internalQuery({
 });
 
 /**
+ * Gets ALL auth accounts for a user/provider (including duplicates).
+ */
+export const getAllAccountsForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    provider: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const accounts = await ctx.db
+      .query("authAccounts")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("userId"), args.userId),
+          q.eq(q.field("provider"), args.provider)
+        )
+      )
+      .collect();
+    return accounts;
+  },
+});
+
+/**
  * Creates a new user in the users table.
  */
 export const createUser = internalMutation({
