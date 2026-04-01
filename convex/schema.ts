@@ -246,6 +246,8 @@ export default defineSchema({
     customerName: v.optional(v.string()),
     content: v.string(),
     mediaUrl: v.optional(v.string()),
+    mediaId: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
     mediaType: v.optional(
       v.union(
         v.literal("image"),
@@ -310,6 +312,11 @@ export default defineSchema({
     currentFieldIndex: v.optional(v.number()),
     data: v.any(),
     attachments: v.any(),
+    pendingMediaStorageId: v.optional(v.id("_storage")),
+    pendingMediaUrl: v.optional(v.string()),
+    pendingMediaId: v.optional(v.string()),
+    pendingMediaType: v.optional(v.string()),
+    pendingMediaFilename: v.optional(v.string()),
     state: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),

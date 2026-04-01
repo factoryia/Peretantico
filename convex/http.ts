@@ -137,11 +137,11 @@ const webhookYCloud = httpAction(async (ctx, request) => {
         customerProfile?: { name?: string };
         type?: string;
         text?: { body?: string };
-        image?: { link?: string; caption?: string };
-        video?: { link?: string; caption?: string };
-        audio?: { link?: string };
-        document?: { link?: string; filename?: string; caption?: string };
-        sticker?: { link?: string };
+        image?: { id?: string; link?: string; caption?: string };
+        video?: { id?: string; link?: string; caption?: string };
+        audio?: { id?: string; link?: string };
+        document?: { id?: string; link?: string; filename?: string; caption?: string };
+        sticker?: { id?: string; link?: string };
         location?: unknown;
       }
     | undefined;
@@ -150,6 +150,7 @@ const webhookYCloud = httpAction(async (ctx, request) => {
   let customerName: string | undefined;
   let text: string;
   let mediaUrl: string | undefined;
+  let mediaId: string | undefined;
   let mediaType: "image" | "video" | "audio" | "document" | undefined;
   let mediaFilename: string | undefined;
 
@@ -173,23 +174,28 @@ const webhookYCloud = httpAction(async (ctx, request) => {
       text = wim.text.body;
     } else if (wim.type === "image") {
       mediaUrl = wim.image?.link;
+      mediaId = wim.image?.id;
       mediaType = "image";
       text = wim.image?.caption?.trim() ? wim.image.caption : "Imagen";
     } else if (wim.type === "video") {
       mediaUrl = wim.video?.link;
+      mediaId = wim.video?.id;
       mediaType = "video";
       text = wim.video?.caption?.trim() ? wim.video.caption : "Video";
     } else if (wim.type === "audio") {
       mediaUrl = wim.audio?.link;
+      mediaId = wim.audio?.id;
       mediaType = "audio";
       text = "Audio";
     } else if (wim.type === "document") {
       mediaUrl = wim.document?.link;
+      mediaId = wim.document?.id;
       mediaType = "document";
       mediaFilename = wim.document?.filename?.trim() || undefined;
       text = wim.document?.caption?.trim() || wim.document?.filename || "Documento";
     } else if (wim.type === "sticker") {
       mediaUrl = wim.sticker?.link;
+      mediaId = wim.sticker?.id;
       mediaType = "image";
       text = "Sticker";
     } else if (wim.type === "location") {
@@ -230,6 +236,7 @@ const webhookYCloud = httpAction(async (ctx, request) => {
       customerName,
       text,
       mediaUrl,
+      mediaId,
       mediaType,
       mediaFilename,
       attempt: 0,
