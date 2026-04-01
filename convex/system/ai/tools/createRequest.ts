@@ -24,31 +24,6 @@ function hasMeaningfulValue(value: unknown): boolean {
   return true;
 }
 
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value.trim());
-}
-
-async function downloadAndStoreUrl(
-  ctx: { storage: { store: (blob: Blob) => Promise<Id<"_storage">>; getUrl: (id: Id<"_storage">) => Promise<string | null> } },
-  url: string,
-  fileName?: string
-): Promise<{ storageId: Id<"_storage">; url: string; fileName?: string } | null> {
-  const headers: Record<string, string> = {};
-  const apiKey = process.env.YCLOUD_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-
-  const res = await fetch(url, { headers });
-  if (!res.ok) return null;
-
-  const contentType = res.headers.get("content-type") ?? undefined;
-  const arrayBuffer = await res.arrayBuffer();
-  const blob = new Blob([arrayBuffer], contentType ? { type: contentType } : undefined);
-  const storageId = await ctx.storage.store(blob);
-  const storedUrl = await ctx.storage.getUrl(storageId);
-  if (!storedUrl) return null;
-  return { storageId, url: storedUrl, fileName };
-}
-
 export const createRequest = createTool({
   description: "Crea una solicitud para un servicio con los datos validados y confirmados",
   args: jsonSchema<{
@@ -107,6 +82,27 @@ export const createRequest = createTool({
     additionalProperties: false,
   }),
   handler: async (ctx, args) => {
+    // Validate required fields before processing
+    const paymentMethod = (args.paymentMethod ?? "").trim().toLowerCase();
+    const validPaymentMethods = ["efectivo", "transferencia", "contraentrega", "cash", "transfer", "card", "delivery"];
+    if (!paymentMethod || !validPaymentMethods.includes(paymentMethod)) {
+      return {
+        ok: false,
+        message: "Antes de crear la solicitud, debes indicar el método de pago: efectivo, transferencia o contraentrega.",
+        missingPaymentMethod: true,
+      };
+    }
+
+    // Validate address is provided
+    const address = (args.address ?? "").trim();
+    if (!address) {
+      return {
+        ok: false,
+        message: "Antes de crear la solicitud, necesito confirmar tu dirección de entrega. ¿Cuál es tu dirección y municipio?",
+        missingAddress: true,
+      };
+    }
+
     const contactId = (args.contactId ?? "").trim();
     const phoneNumber = (args.phoneNumber ?? "").trim();
 
@@ -355,20 +351,9 @@ export const createRequest = createTool({
     for (const item of args.data || []) {
       const fieldId = String(item.fieldId ?? "").trim();
       const value = item.value;
-      const type = fieldTypeById.get(fieldId) ?? "Text";
 
-      if (type === "File" && typeof value === "string" && isHttpUrl(value)) {
-        const stored = await downloadAndStoreUrl(storageCtx, value);
-        if (stored) {
-          normalizedData.push({ fieldId, value: stored.storageId });
-          continue;
-        }
-        return {
-          ok: false,
-          message: `No pude guardar el archivo para "${fieldNameById.get(fieldId) || "Archivo"}". Por favor reenvía el archivo.`,
-        };
-      }
-
+      // For File fields, the storageId should already be provided from validateServiceField
+      // No need to download - just use the value as-is
       normalizedData.push({ fieldId, value });
     }
 
@@ -390,38 +375,27 @@ export const createRequest = createTool({
       }
     }
 
-    const paymentMethod = args.paymentMethod ?? flowState?.paymentDraft?.method ?? undefined;
+    const resolvedPaymentMethod = paymentMethod || flowState?.paymentDraft?.method || undefined;
 
     for (const a of args.attachments || []) {
       const url = String(a.url ?? "").trim();
       const fileName = String(a.fileName ?? "").trim();
-        if (a.storageId) {
-          normalizedAttachments.push({
-            fileName: fileName || "Adjunto",
-            url,
-            storageId: a.storageId,
-            kind: deterministicEnabled && paymentMethod === "transfer" ? "payment_receipt" : "evidence",
-          });
-          continue;
-        }
-      if (url && isHttpUrl(url)) {
-        const stored = await downloadAndStoreUrl(storageCtx, url, fileName || undefined);
-        if (stored) {
-          normalizedAttachments.push({
-            fileName: stored.fileName ?? (fileName || "Adjunto"),
-            url: stored.url,
-            storageId: String(stored.storageId),
-            kind: deterministicEnabled && paymentMethod === "transfer" ? "payment_receipt" : "evidence",
-          });
-          continue;
-        }
-        return { ok: false, message: `No pude guardar el adjunto "${fileName || "Adjunto"}". Por favor reenvíalo.` };
+      // Use storageId directly if provided - the file was already downloaded when message arrived
+      if (a.storageId) {
+        normalizedAttachments.push({
+          fileName: fileName || "Adjunto",
+          url: url || "",
+          storageId: a.storageId,
+          kind: deterministicEnabled && resolvedPaymentMethod === "transfer" ? "payment_receipt" : "evidence",
+        });
+        continue;
       }
+      // No storageId and no URL - skip or error
       normalizedAttachments.push({
         fileName: fileName || "Adjunto",
-        url,
-        storageId: a.storageId,
-        kind: deterministicEnabled && paymentMethod === "transfer" ? "payment_receipt" : "evidence",
+        url: url || "",
+        storageId: "",
+        kind: deterministicEnabled && resolvedPaymentMethod === "transfer" ? "payment_receipt" : "evidence",
       });
     }
 
@@ -437,9 +411,9 @@ export const createRequest = createTool({
       branchKey: flowState?.branchKey ?? null,
       profileAddress: profile?.address ?? null,
       addressConfirmed: Boolean(chosenAddress),
-      paymentMethod,
+      paymentMethod: resolvedPaymentMethod,
       receiptAttachmentIds: normalizedAttachments.filter((item) => item.kind === "payment_receipt").map((item) => item.storageId).filter(Boolean) as string[],
-      adminValidationStatus: deterministicEnabled && paymentMethod === "transfer" ? "pending" : "not_required",
+      adminValidationStatus: deterministicEnabled && resolvedPaymentMethod === "transfer" ? "pending" : "not_required",
     });
 
     if (flow.stage === "payment") {
@@ -481,7 +455,7 @@ export const createRequest = createTool({
       entryDate: Date.now(),
       data: normalizedData.map((d) => ({ fieldId: d.fieldId as Id<"serviceFields">, value: d.value })),
       attachments: normalizedAttachments,
-      paymentMethod,
+      paymentMethod: resolvedPaymentMethod,
       addressSnapshot: deterministicEnabled && chosenAddress
         ? {
             raw: chosenAddress,
@@ -539,7 +513,7 @@ export const createRequest = createTool({
                 branchKey: flow.branchKey,
                 pendingFieldIds: flow.pendingFieldIds,
                 draftAddress: chosenAddress || undefined,
-                paymentDraft: { method: paymentMethod },
+                paymentDraft: { method: resolvedPaymentMethod },
               }
             : undefined,
         },
@@ -553,6 +527,8 @@ export const createRequest = createTool({
         message: buildRequestCompletionMessage({
           applicationNumber,
           contextRestarted: false,
+          paymentMethod: resolvedPaymentMethod,
+          address: chosenAddress || undefined,
         }),
         closureApplied: false,
         contextRestarted: false,

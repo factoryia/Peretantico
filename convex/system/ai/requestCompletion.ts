@@ -16,26 +16,36 @@ export type RawCreateRequestCompletion = {
 export function buildRequestCompletionMessage(args: {
   applicationNumber?: string;
   contextRestarted: boolean;
+  paymentMethod?: string;
+  address?: string;
 }): string {
   const confirmation = args.applicationNumber
-    ? `Tu solicitud quedó registrada con el número ${args.applicationNumber}.`
+    ? `Tu solicitud quedó registrada con el número *${args.applicationNumber}*.`
     : "Tu solicitud quedó registrada correctamente.";
 
-  if (!args.contextRestarted) {
-    return [
-      confirmation,
-      "",
-      "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat.",
-    ].join("\n");
+  const details: string[] = [];
+  if (args.paymentMethod) {
+    const methodLabel = args.paymentMethod === "cash" ? "Efectivo"
+      : args.paymentMethod === "transfer" ? "Transferencia"
+      : args.paymentMethod === "delivery" ? "Contraentrega"
+      : args.paymentMethod;
+    details.push(`- *Método de pago:* ${methodLabel}`);
+  }
+  if (args.address) {
+    details.push(`- *Dirección:* ${args.address}`);
   }
 
-  return [
-    confirmation,
-    "",
-    "He cerrado esta conversación y tu próximo mensaje usará un contexto nuevo para ayudarte.",
-    "",
-    "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo.",
-  ].join("\n");
+  const footer = !args.contextRestarted
+    ? "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat."
+    : "He cerrado esta conversación y tu próximo mensaje usará un contexto nuevo para ayudarte.";
+
+  const parts = [confirmation];
+  if (details.length > 0) {
+    parts.push("", details.join("\n"));
+  }
+  parts.push("", footer);
+
+  return parts.join("\n");
 }
 
 export function resolveRequestCompletionMessage(args: {
