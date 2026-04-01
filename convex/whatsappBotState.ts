@@ -299,6 +299,10 @@ export const patchSession = internalMutation({
     data: v.optional(v.any()),
     attachments: v.optional(v.any()),
     state: v.optional(v.union(v.string(), v.null())),
+    pendingMediaUrl: v.optional(v.union(v.string(), v.null())),
+    pendingMediaId: v.optional(v.union(v.string(), v.null())),
+    pendingMediaType: v.optional(v.union(v.string(), v.null())),
+    pendingMediaFilename: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const updates = buildPatchSessionUpdates(args);
@@ -317,6 +321,10 @@ export function buildPatchSessionUpdates(args: {
   data?: unknown;
   attachments?: unknown;
   state?: string | null;
+  pendingMediaUrl?: string | null;
+  pendingMediaId?: string | null;
+  pendingMediaType?: string | null;
+  pendingMediaFilename?: string | null;
 }): Record<string, unknown> {
   const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
@@ -343,6 +351,18 @@ export function buildPatchSessionUpdates(args: {
     }
     if (Object.prototype.hasOwnProperty.call(args, "state")) {
       updates.state = args.state ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "pendingMediaUrl")) {
+      updates.pendingMediaUrl = args.pendingMediaUrl ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "pendingMediaId")) {
+      updates.pendingMediaId = args.pendingMediaId ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "pendingMediaType")) {
+      updates.pendingMediaType = args.pendingMediaType ?? undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "pendingMediaFilename")) {
+      updates.pendingMediaFilename = args.pendingMediaFilename ?? undefined;
     }
 
   return updates;

@@ -90,6 +90,8 @@ export const addInboundMessage = internalMutation({
     customerName: v.optional(v.string()),
     content: v.string(),
     mediaUrl: v.optional(v.string()),
+    mediaId: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
     mediaType: v.optional(
       v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
     ),
@@ -102,6 +104,8 @@ export const addInboundMessage = internalMutation({
       customerName: args.customerName,
       content: args.content,
       mediaUrl: args.mediaUrl,
+      mediaId: args.mediaId,
+      mediaStorageId: args.mediaStorageId,
       mediaType: args.mediaType,
       createdAt,
     });
