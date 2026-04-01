@@ -2,82 +2,6 @@ import { createTool } from "@convex-dev/agent";
 import { jsonSchema } from "ai";
 import { anyApi } from "convex/server";
 import type { Id } from "../../../_generated/dataModel";
-import { getFieldFileConstraints } from "../../requestFlow";
-
-function isHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value.trim());
-}
-
-function looksTruncatedUrl(value: string): boolean {
-  const t = value.trim();
-  return isHttpUrl(t) && t.includes("...");
-}
-
-function inferFileName(url: string): string | undefined {
-  try {
-    const u = new URL(url);
-    const base = u.pathname.split("/").filter(Boolean).pop();
-    return base ? decodeURIComponent(base) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function downloadAndStoreUrl(
-  ctx: { storage: { store: (blob: Blob) => Promise<Id<"_storage">>; getUrl: (id: Id<"_storage">) => Promise<string | null> } },
-  url: string
-): Promise<
-  | { ok: true; storageId: Id<"_storage">; url: string }
-  | { ok: false; reason: "expired" | "not_found" | "provider_unavailable" | "download_failed"; status?: number | null }
-> {
-  const headers: Record<string, string> = {};
-  const apiKey = process.env.YCLOUD_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-
-  let lastStatus: number | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await fetch(url, { headers });
-    lastStatus = res.status;
-    if (res.ok) {
-      const contentType = res.headers.get("content-type") ?? undefined;
-      const arrayBuffer = await res.arrayBuffer();
-      const blob = new Blob([arrayBuffer], contentType ? { type: contentType } : undefined);
-      const storageId = await ctx.storage.store(blob);
-      const storedUrl = await ctx.storage.getUrl(storageId);
-      if (!storedUrl) return { ok: false, reason: "download_failed" };
-      return { ok: true, storageId, url: storedUrl };
-    }
-
-    const shouldRetry = res.status === 429 || res.status >= 500;
-    if (!shouldRetry || attempt === 1) {
-      break;
-    }
-  }
-
-  if (lastStatus === 401 || lastStatus === 403 || lastStatus === 410) {
-    return { ok: false, reason: "expired", status: lastStatus };
-  }
-
-  if (lastStatus === 404) {
-    return { ok: false, reason: "not_found", status: lastStatus };
-  }
-
-  if (lastStatus === 429 || (typeof lastStatus === "number" && lastStatus >= 500)) {
-    return { ok: false, reason: "provider_unavailable", status: lastStatus };
-  }
-
-  return { ok: false, reason: "download_failed", status: lastStatus };
-}
-
-function extractMediaIdFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const match = parsed.pathname.match(/\/download\/([^/?]+)/i);
-    return match?.[1] ?? null;
-  } catch {
-    return null;
-  }
-}
 
 function normalizeForMatch(input: string): string {
   return input
@@ -142,17 +66,15 @@ function parseOptions(rawOptions: unknown): string[] {
 
 export const validateServiceField = createTool({
   description: "Valida y normaliza el valor de un campo de un servicio",
-  args: jsonSchema<{ serviceId: string; fieldId: string; value: string; mediaUrl?: string; fileName?: string; mediaFilename?: string; mediaUrls?: string[]; fileNames?: string[] }>({
+  args: jsonSchema<{ serviceId: string; fieldId: string; value: string; mediaStorageId?: string; fileName?: string; mediaFilename?: string }>({
     type: "object",
     properties: {
       serviceId: { type: "string", description: "ID del servicio" },
       fieldId: { type: "string", description: "ID del campo del servicio" },
       value: { type: "string", description: "Valor en texto enviado por el usuario" },
-      mediaUrl: { type: "string", description: "URL del archivo adjunto (si aplica)" },
-      fileName: { type: "string", description: "Nombre del archivo adjunto (si aplica)" },
-      mediaFilename: { type: "string", description: "Alias de nombre de archivo desde canal de entrada" },
-      mediaUrls: { type: "array", items: { type: "string" }, description: "Varias URLs de adjuntos cuando el campo acepta múltiples archivos" },
-      fileNames: { type: "array", items: { type: "string" }, description: "Nombres de archivo alineados con mediaUrls" },
+      mediaStorageId: { type: "string", description: "ID del archivo en Convex Storage (ya descargado)" },
+      fileName: { type: "string", description: "Nombre del archivo" },
+      mediaFilename: { type: "string", description: "Nombre original del archivo" },
     },
     required: ["serviceId", "fieldId", "value"],
     additionalProperties: false,
@@ -161,10 +83,19 @@ export const validateServiceField = createTool({
     const serviceId = args.serviceId.trim();
     const fieldId = args.fieldId.trim();
     const raw = (args.value ?? "").trim();
-    const mediaUrl = (args.mediaUrl ?? "").trim();
+    const mediaStorageId = (args.mediaStorageId ?? "").trim();
     const fileName = (args.fileName ?? args.mediaFilename ?? "").trim();
-    const mediaUrls = (args.mediaUrls ?? []).map((item) => String(item).trim()).filter(Boolean);
-    const fileNames = (args.fileNames ?? []).map((item) => String(item).trim());
+    
+    // CRITICAL: Only accept mediaStorageId for files - reject mediaUrl completely
+    // This forces the agent to use the correct parameter
+    const hasMediaUrl = 'mediaUrl' in args;
+    if (hasMediaUrl && (args as { mediaUrl?: string }).mediaUrl) {
+      return { 
+        ok: false, 
+        message: `ERROR: Estás usando mediaUrl que ya no funciona. Para archivos, DEBES usar SOLO mediaStorageId del contexto (formato: kg2xxxxx). El contexto tiene mediaStorageId=XXXXX - úsalo.` 
+      };
+    }
+    
     if (!serviceId || !fieldId) return { ok: false, message: "Falta serviceId o fieldId." };
 
     const service = (await ctx.runQuery(anyApi.services.get, {
@@ -187,87 +118,37 @@ export const validateServiceField = createTool({
 
     const type = String(field.type ?? "Text");
     const required = Boolean(field.required);
-    const fileConstraints = getFieldFileConstraints(field.settings);
 
     if (type === "File") {
-      const explicitUrls = mediaUrls.length > 0 ? mediaUrls : [mediaUrl || (isHttpUrl(raw) ? raw : "")].filter(Boolean);
-      if (explicitUrls.length === 0) {
-        if (required) return { ok: false, message: `Para "${field.name}", necesito que envíe el archivo.` };
-        return { ok: true, normalizedValue: "" };
-      }
-      if (fileConstraints.maxFiles && explicitUrls.length > fileConstraints.maxFiles) {
-        return {
-          ok: false,
-          message: `Para "${field.name}", puedes enviar máximo ${fileConstraints.maxFiles} archivo(s).`,
+      // Simply use the mediaStorageId directly - file was already downloaded when message arrived
+      // No need for mediaUrl, mediaId, contactId - just use storageId
+      let effectiveStorageId = mediaStorageId;
+
+      if (effectiveStorageId) {
+        console.log("Using mediaStorageId:", effectiveStorageId);
+        const storageCtx = ctx as unknown as {
+          storage: { getUrl: (id: Id<"_storage">) => Promise<string | null> };
         };
-      }
-
-      const storageCtx = ctx as unknown as {
-        storage: { store: (blob: Blob) => Promise<Id<"_storage">>; getUrl: (id: Id<"_storage">) => Promise<string | null> };
-      };
-      const storedFiles: Array<{ storageId: string; url: string; fileName?: string }> = [];
-
-      for (const [index, sourceUrl] of explicitUrls.entries()) {
-        if (looksTruncatedUrl(sourceUrl)) {
-          return { ok: false, message: `El enlace del archivo llegó incompleto. Por favor reenvía el archivo.` };
-        }
-
-        const stored = await downloadAndStoreUrl(storageCtx, sourceUrl);
-        if (!stored.ok) {
-          const mediaId = extractMediaIdFromUrl(sourceUrl);
-          console.warn("validateServiceField file download failed", {
-            reason: stored.reason,
-            status: stored.status ?? null,
-            mediaId,
-          });
-
-          if (stored.reason === "expired") {
-            return { ok: false, message: `El enlace del archivo venció. Por favor reenvía el archivo.` };
-          }
-          if (stored.reason === "not_found") {
-            return { ok: false, message: `No encontré ese archivo en el proveedor. Por favor reenvía el archivo.` };
-          }
-          if (stored.reason === "provider_unavailable") {
-            return { ok: false, message: `El proveedor de archivos está temporalmente no disponible. Por favor reenvía el archivo en unos segundos.` };
-          }
-          return { ok: false, message: `No pude descargar el archivo. Por favor reenvía el archivo.` };
-        }
-
-        storedFiles.push({
-          storageId: String(stored.storageId),
-          url: stored.url,
-          fileName: fileNames[index] || fileName || inferFileName(sourceUrl),
-        });
-      }
-
-      const acceptedMimeTypes = fileConstraints.acceptedMimeTypes ?? [];
-      if (acceptedMimeTypes.length > 0) {
-        const invalidFile = storedFiles.find((item) => {
-          const detectedMime = item.fileName?.split(".").pop()?.toLowerCase();
-          return detectedMime ? !acceptedMimeTypes.some((mime) => mime.toLowerCase().includes(detectedMime)) : false;
-        });
-        if (invalidFile) {
+        const storedUrl = await storageCtx.storage.getUrl(effectiveStorageId as Id<"_storage">);
+        if (storedUrl || !required) {
           return {
-            ok: false,
-            message: `Para "${field.name}", el formato del archivo no es válido.`,
+            ok: true,
+            normalizedValue: effectiveStorageId,
+            file: {
+              storageId: effectiveStorageId,
+              url: storedUrl || "",
+              fileName: fileName || "archivo",
+              contentType: undefined,
+            },
           };
         }
+        if (required) return { ok: false, message: `No pude acceder al archivo. Por favor reenvía el archivo.` };
+        return { ok: true, normalizedValue: "" };
       }
 
-      if (field.multiple) {
-        return {
-          ok: true,
-          normalizedValue: storedFiles.map((item) => item.storageId),
-          files: storedFiles,
-        };
-      }
-
-      const firstFile = storedFiles[0];
-      return {
-        ok: true,
-        normalizedValue: firstFile.storageId,
-        file: firstFile,
-      };
+      // No mediaStorageId - error
+      if (required) return { ok: false, message: `No encontré el archivo. Por favor reenvía el archivo.` };
+      return { ok: true, normalizedValue: "" };
     }
 
     if (!raw) {
