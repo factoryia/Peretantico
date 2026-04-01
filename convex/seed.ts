@@ -1,6 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import type { WorkflowBranch, WorkflowConfig } from "./system/requestFlow";
+import type { WorkflowConfig } from "./system/requestFlow";
 
 // ============================================
 // RESET DATABASE - Borra todos los datos
@@ -105,13 +105,15 @@ type ServiceSeedConfig = {
   workflowMode?: "deterministic";
   workflowConfig?: {
     branches: BranchConfig[];
+    requirePaymentMethod?: boolean;
+    addressStrategy?: "profile_confirm" | "always_prompt";
   };
 };
 
 // Helper: resolve field codes to field IDs in branch config
 function resolveFieldIds(
   codeToId: Map<string, string>,
-  config: { branches: BranchConfig[] }
+  config: { branches: BranchConfig[]; requirePaymentMethod?: boolean; addressStrategy?: "profile_confirm" | "always_prompt" }
 ): WorkflowConfig {
   return {
     branches: config.branches.map((branch) => ({
@@ -131,6 +133,8 @@ function resolveFieldIds(
         .map((code) => codeToId.get(code))
         .filter((id): id is string => id !== undefined),
     })),
+    requirePaymentMethod: config.requirePaymentMethod,
+    addressStrategy: config.addressStrategy,
   };
 }
 
@@ -246,6 +250,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -280,7 +286,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue foto, imagen o PDF de la orden médica, MIPRES o autorización.",
-            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "MIPRES",
@@ -290,7 +296,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue foto, imagen o PDF del MIPRES si aplica.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Autorización EPS",
@@ -300,7 +306,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue foto, imagen o PDF de la autorización de la EPS si aplica.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
@@ -341,6 +347,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -359,7 +367,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue foto, imagen o PDF de la orden médica.",
-            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Resumen de historia clínica",
@@ -369,7 +377,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue foto, imagen o PDF del resumen de historia clínica.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "¿Tiene MIPRES?",
@@ -387,7 +395,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue foto, imagen o PDF del MIPRES si aplica.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
@@ -428,6 +436,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -438,7 +448,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue foto, imagen o PDF de la orden médica.",
-            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 5, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Autorización",
@@ -448,7 +458,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue foto, imagen o PDF de la autorización.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "¿Es cita de imágenes diagnósticas?",
@@ -466,7 +476,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue foto, imagen o PDF del resultado de creatinina (requerido para imágenes diagnósticas).",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Resumen de historia clínica",
@@ -476,7 +486,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue foto, imagen o PDF del resumen de historia clínica (opcional).",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
@@ -588,6 +598,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -678,7 +690,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue copia del registro civil en PDF, PNG o foto.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Autorización a terceros",
@@ -688,7 +700,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue la carta de autorización a terceros.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Copia de cédula del solicitante",
@@ -698,7 +710,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue copia de la cédula de quien solicita el registro.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "¿El titular es menor de edad?",
@@ -716,7 +728,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue copia de la tarjeta de identidad del menor (requerido si es menor de edad).",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Copia de cédula del padre o madre",
@@ -726,7 +738,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue copia de la cédula del padre o madre (requerido si es menor de edad).",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
@@ -773,6 +785,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -813,7 +827,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue fotocopia de cédula por ambas caras (requerido para partida civil).",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Estado del registro en Registraduría",
@@ -853,7 +867,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue copia de la partida de matrimonio o registro serial en foto, PDF o imagen.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Autorización a terceros",
@@ -863,7 +877,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue la carta de autorización a terceros.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
@@ -894,6 +908,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -928,7 +944,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue copia de la partida de defunción en PDF, PNG o imagen.",
-            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 3, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Copia de cédula del solicitante",
@@ -938,7 +954,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue copia de la cédula de quien solicita la partida.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Autorización a terceros",
@@ -948,7 +964,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue la carta de autorización a terceros.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
@@ -1000,6 +1016,8 @@ export const seed = internalMutation({
               ],
             },
           ],
+          requirePaymentMethod: true,
+          addressStrategy: "profile_confirm",
         },
         fields: [
           {
@@ -1040,7 +1058,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue certificado de representación legal vigente (Cámara de Comercio). Requerido para persona jurídica.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Copia cédula representante legal",
@@ -1050,7 +1068,7 @@ export const seed = internalMutation({
             required: false,
             multiple: true,
             description: "Cargue copia de la cédula del representante legal. Requerido para persona jurídica.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Número de la escritura",
@@ -1092,7 +1110,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue copia de la cédula del solicitante en PDF, PNG o imagen.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
           {
             name: "Autorización a terceros",
@@ -1102,7 +1120,7 @@ export const seed = internalMutation({
             required: true,
             multiple: true,
             description: "Cargue la carta de autorización a terceros.",
-            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg"] },
+            settings: { maxFiles: 2, acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"] },
           },
         ],
       },
