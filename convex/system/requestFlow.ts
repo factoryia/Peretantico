@@ -1,6 +1,6 @@
 export type WorkflowMode = "legacy" | "deterministic";
 export type FlowStage = "service" | "branch" | "address" | "fields" | "payment" | "receipt" | "admin_review" | "complete";
-export type PaymentMethod = "cash" | "transfer" | "card";
+export type PaymentMethod = "cash" | "transfer" | "card" | "delivery";
 export type PaymentStatus = "not_started" | "pending_method" | "pending_receipt" | "pending_admin_validation" | "approved" | "rejected" | "completed";
 export type AdminValidationStatus = "not_required" | "pending" | "approved" | "rejected";
 
@@ -149,7 +149,12 @@ export function resolveRequestFlow(input: RequestFlowInput): RequestFlowResult {
   });
   const pendingFieldIds = applicableFieldIds.filter((fieldId) => !isMeaningful(input.collectedData?.[fieldId]));
   const adminValidationStatus = (input.adminValidationStatus ?? "not_required") as AdminValidationStatus;
-  const paymentMethod = normalizeText(input.paymentMethod);
+  const paymentMethodRaw = normalizeText(input.paymentMethod);
+  // Normalize Spanish payment method names to internal codes
+  const paymentMethod = paymentMethodRaw === "transferencia" ? "transfer"
+    : paymentMethodRaw === "efectivo" ? "cash"
+    : paymentMethodRaw === "contraentrega" ? "delivery"
+    : paymentMethodRaw;
   const receiptCount = input.receiptAttachmentIds?.length ?? 0;
   const requirePaymentMethod = input.workflowConfig?.requirePaymentMethod !== false;
   const requireAddressConfirmation = input.workflowConfig?.addressStrategy !== "always_prompt";

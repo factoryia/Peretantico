@@ -23,7 +23,7 @@ export interface WorkflowBranch {
 export interface WorkflowConfig {
   addressStrategy?: "profile_confirm" | "always_prompt";
   requirePaymentMethod?: boolean;
-  paymentMethods?: Array<"cash" | "transfer" | "card">;
+  paymentMethods?: Array<"cash" | "transfer" | "card" | "delivery">;
   branches?: WorkflowBranch[];
 }
 

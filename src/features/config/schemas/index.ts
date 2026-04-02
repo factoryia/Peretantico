@@ -1,7 +1,7 @@
 import * as z from "zod";
 
 const fieldTypeEnum = z.enum(["Text", "Number", "Date", "Boolean", "Select", "File"]);
-const paymentMethodEnum = z.enum(["cash", "transfer", "card"]);
+const paymentMethodEnum = z.enum(["cash", "transfer", "card", "delivery"]);
 
 const workflowBranchRuleSchema = z.object({
   fieldId: z.string().min(1, "El campo condicionante es obligatorio"),
