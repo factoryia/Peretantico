@@ -36,8 +36,8 @@ export function buildRequestCompletionMessage(args: {
   }
 
   const footer = !args.contextRestarted
-    ? "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat."
-    : "He cerrado esta conversación y tu próximo mensaje usará un contexto nuevo para ayudarte.";
+    ? "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat. Adicional, si tenemos algún inconveniente con los documentos, nos estaremos comunicando directamente a su celular dentro de las próximas 2 horas."
+    : "He cerrado esta conversación y tu próximo mensaje usará un contexto nuevo para ayudarte. Adicional, si tenemos algún inconveniente con los documentos, nos estaremos comunicando directamente a su celular dentro de las próximas 2 horas.";
 
   const parts = [confirmation];
   if (details.length > 0) {
