@@ -35,27 +35,21 @@ const seedAdminHandler = async (ctx: any): Promise<any> => {
   if (existingUser) {
     userId = existingUser._id;
 
-    // Clean up ANY duplicate authAccounts BEFORE proceeding
-    const allAccounts = await ctx.runQuery(
-      internal.admin.getAllAccountsForUser,
+    // Check if there's already a valid auth account
+    const existingAccount = await ctx.runQuery(
+      internal.admin.getAccount,
       { userId, provider: "password" }
     );
 
-    // If there are duplicates, delete all and recreate fresh
-    if (allAccounts.length > 0) {
-      for (const account of allAccounts) {
-        await ctx.db.delete(account._id);
-      }
-      // Now create a fresh account
-      await ctx.runMutation(internal.admin.createAccount, {
-        userId,
-        provider: "password",
-        accountId: email,
+    if (existingAccount) {
+      // Account exists — just update the password (idempotent)
+      await ctx.runMutation(internal.admin.updateAccountSecret, {
+        accountId: existingAccount._id,
         secret: await new Scrypt().hash(password),
       });
-      accountCreated = true;
+      accountCreated = false; // updated, not created
     } else {
-      // No existing account - create one
+      // No account — create one
       await ctx.runMutation(internal.admin.createAccount, {
         userId,
         provider: "password",
