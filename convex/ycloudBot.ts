@@ -212,6 +212,31 @@ function extractTextFromMessageContent(content: unknown): string {
   return out;
 }
 
+async function enqueueOutboundMessage(
+  ctx: Pick<ActionCtx, "runMutation">,
+  args: {
+    contactId: string;
+    content: string;
+    inboundQueueId?: Id<"inboundQueue">;
+  }
+): Promise<void> {
+  try {
+    await ctx.runMutation(internal.queue.enqueueOutbound, {
+      contactId: args.contactId,
+      content: args.content,
+      inboundQueueId: args.inboundQueueId,
+    });
+  } catch (err) {
+    console.error("[enqueueOutboundMessage] Failed to enqueue:", err);
+    // Fallback: try direct send if enqueue fails
+    try {
+      await sendWhatsAppText({ contactId: args.contactId, content: args.content });
+    } catch (sendErr) {
+      console.error("[enqueueOutboundMessage] Fallback send also failed:", sendErr);
+    }
+  }
+}
+
 async function sendWhatsAppText(args: { contactId: string; content: string }): Promise<string | null> {
   const apiKey = process.env.YCLOUD_API_KEY;
   const fromNumber = process.env.YCLOUD_PHONE_NUMBER;
@@ -329,6 +354,7 @@ export const processInboundMessage = internalAction({
       v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
     ),
     mediaFilename: v.optional(v.string()),
+    mediaStorageIds: v.optional(v.array(v.string())),
     attempt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -374,9 +400,17 @@ export const processInboundMessage = internalAction({
         contactId,
       });
 
-      // IMMEDIATE MEDIA DOWNLOAD: Try to download media right now while URL is fresh
+      // MEDIA HANDLING: Use pre-downloaded IDs from queue worker, or download now
       let mediaStorageId: Id<"_storage"> | undefined;
-      if (args.mediaUrl) {
+      let mediaStorageIds: Id<"_storage">[] = [];
+
+      if (args.mediaStorageIds && args.mediaStorageIds.length > 0) {
+        // Queue worker already downloaded all media — use them directly
+        mediaStorageIds = args.mediaStorageIds.map((id) => id as Id<"_storage">);
+        mediaStorageId = mediaStorageIds[0];
+        console.log(`[processInboundMessage] Using ${mediaStorageIds.length} pre-downloaded media files from queue`);
+      } else if (args.mediaUrl) {
+        // IMMEDIATE MEDIA DOWNLOAD: Try to download media right now while URL is fresh
         const apiKey = process.env.YCLOUD_API_KEY;
         const headers: Record<string, string> = {};
         if (apiKey) headers["X-API-Key"] = apiKey;
@@ -391,6 +425,7 @@ export const processInboundMessage = internalAction({
             const arrayBuffer = await res.arrayBuffer();
             const blob = new Blob([arrayBuffer], contentType ? { type: contentType } : undefined);
             mediaStorageId = await ctx.storage.store(blob);
+            mediaStorageIds = [mediaStorageId];
             console.log("Media downloaded immediately, storageId:", mediaStorageId);
           } else {
             console.warn("Immediate download failed with status:", res.status);
@@ -400,17 +435,8 @@ export const processInboundMessage = internalAction({
         }
       }
 
-      // Store pending media info in session for later use if immediate download failed
-      if (!mediaStorageId && args.mediaUrl) {
-        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
-          id: sessionId,
-          pendingMediaUrl: args.mediaUrl,
-          pendingMediaId: args.mediaId,
-          pendingMediaType: args.mediaType,
-          pendingMediaFilename: args.mediaFilename,
-        });
-      } else if (mediaStorageId) {
-        // Clear any pending media since we downloaded successfully
+      // Clear any pending media since we downloaded successfully
+      if (mediaStorageId) {
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
           id: sessionId,
           pendingMediaUrl: null,
@@ -419,11 +445,72 @@ export const processInboundMessage = internalAction({
           pendingMediaFilename: null,
         });
       }
+
       const session = await ctx.runQuery(internalAny.whatsappBotState.getSessionByContact, {
         contactId,
       });
 
       if (!session) return;
+
+      // MEDIA DEBOUNCE: When there's an active flow and ONLY media arrives (no text),
+      // queue it and wait 3 seconds for more files before processing.
+      // This prevents multiple parallel AI calls when user sends multiple files at once.
+      // SKIP if queue worker already pre-downloaded all media (debounce handled at queue level)
+      const hasActiveFlow = Boolean(session.serviceId && session.fieldIds && session.fieldIds.length > 0);
+      const isMediaOnly = !args.text.trim() && args.mediaType;
+      const hasPreDownloadedMedia = args.mediaStorageIds && args.mediaStorageIds.length > 0;
+
+      if (isMediaOnly && hasActiveFlow && mediaStorageId && !hasPreDownloadedMedia) {
+        const existingIds = (session.pendingMediaStorageIds as Id<"_storage">[] | undefined) ?? [];
+        const newIds = [...existingIds, mediaStorageId];
+        const debounceUntil = Date.now() + 3000; // 3 second debounce window
+
+        await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+          id: sessionId,
+          pendingMediaStorageIds: newIds,
+          mediaDebounceUntil: debounceUntil,
+        });
+
+        // Re-schedule processing after debounce window
+        await ctx.scheduler.runAfter(3500, internalAny.ycloudBot.processInboundMessage, {
+          ...args,
+          text: "", // Empty text - we're processing queued media
+          mediaUrl: undefined, // Already downloaded
+          mediaId: undefined,
+          mediaType: undefined,
+          attempt: 0,
+        });
+
+        // Send immediate acknowledgment so user knows files are being received
+        if (existingIds.length === 0) {
+          const ackText = "Recibiendo tus archivos, por favor espera un momento...";
+          await enqueueOutboundMessage(ctx, { contactId, content: ackText });
+        }
+
+        return; // Don't process yet — wait for debounce
+      }
+
+      // If we're past the debounce window and have queued media, process all together
+      let batchedMediaIds: Id<"_storage">[] = [];
+
+      // Priority: use pre-downloaded IDs from queue worker
+      if (mediaStorageIds.length > 0) {
+        batchedMediaIds = [...mediaStorageIds];
+      } else if (session.pendingMediaStorageIds && session.pendingMediaStorageIds.length > 0) {
+        const debounceUntil = session.mediaDebounceUntil ?? 0;
+        if (Date.now() >= debounceUntil) {
+          // Debounce window expired — process all queued media
+          batchedMediaIds = [...session.pendingMediaStorageIds];
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            pendingMediaStorageIds: null,
+            mediaDebounceUntil: null,
+          });
+        } else {
+          // Still within debounce window — wait more
+          return;
+        }
+      }
 
       if (session.state === "INIT" && session.serviceId) {
         await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
@@ -547,20 +634,13 @@ export const processInboundMessage = internalAction({
         });
 
         const replyText = ["Listo. Reinicié la conversación.", "¿Qué servicio necesitas hoy?"].join("\n");
-        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-        if (providerMessageId) {
-          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-            contactId,
-            content: replyText,
-            providerMessageId,
-          });
-          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
-            contactId,
-            direction: "OUTBOUND",
-            content: replyText,
-            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
-          });
-        }
+        await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+        await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+          contactId,
+          direction: "OUTBOUND",
+          content: replyText,
+          createdAt: Date.now(),
+        });
         return;
       }
 
@@ -607,20 +687,13 @@ export const processInboundMessage = internalAction({
           .filter((s) => s.status !== false)
           .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? ""), "es"));
         const replyText = buildServicesListReply(services);
-        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-        if (providerMessageId) {
-          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-            contactId,
-            content: replyText,
-            providerMessageId,
-          });
-          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
-            contactId,
-            direction: "OUTBOUND",
-            content: replyText,
-            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
-          });
-        }
+        await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+        await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+          contactId,
+          direction: "OUTBOUND",
+          content: replyText,
+          createdAt: Date.now(),
+        });
         return;
       }
 
@@ -661,20 +734,13 @@ export const processInboundMessage = internalAction({
 
       if (flowDecision.shouldBlock) {
         const replyText = getUnsupportedIntentReply();
-        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-        if (providerMessageId) {
-          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-            contactId,
-            content: replyText,
-            providerMessageId,
-          });
-          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
-            contactId,
-            direction: "OUTBOUND",
-            content: replyText,
-            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
-          });
-        }
+        await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+        await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+          contactId,
+          direction: "OUTBOUND",
+          content: replyText,
+          createdAt: Date.now(),
+        });
         return;
       }
 
@@ -696,7 +762,8 @@ export const processInboundMessage = internalAction({
         resolvedProfileId,
         resolvedProfileName: resolvedProfile?.fullName ? String(resolvedProfile.fullName) : null,
         mediaType: args.mediaType,
-        mediaStorageId: mediaStorageId ? String(mediaStorageId) : undefined,
+        mediaStorageId: batchedMediaIds.length > 0 ? String(batchedMediaIds[0]) : (mediaStorageId ? String(mediaStorageId) : undefined),
+        mediaStorageIds: batchedMediaIds.length > 0 ? batchedMediaIds.map(String) : (mediaStorageId ? [String(mediaStorageId)] : undefined),
         sessionState: session.state ? String(session.state) : null,
         serviceId: session.serviceId ? String(session.serviceId) : null,
         currentFieldIndex: typeof session.currentFieldIndex === "number" ? session.currentFieldIndex : null,
@@ -772,17 +839,21 @@ export const processInboundMessage = internalAction({
         
       if (!replyText) {
         console.log("[processInboundMessage] replyText is empty, trying listMessages...");
-        const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
-        console.log("[processInboundMessage] listMessages result:", { count: messages.page.length });
-        const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
-        if (lastAssistant) {
-          const content = lastAssistant.message?.content;
-          replyText = extractTextFromMessageContent(content).trim();
-          console.log("[processInboundMessage] Got replyText from listMessages:", { length: replyText.length, preview: replyText.substring(0, 200) });
+        if (!threadId) {
+          console.error("[processInboundMessage] No threadId available, cannot listMessages");
+        } else {
+          const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
+          console.log("[processInboundMessage] listMessages result:", { count: messages.page.length });
+          const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
+          if (lastAssistant) {
+            const content = lastAssistant.message?.content;
+            replyText = extractTextFromMessageContent(content).trim();
+            console.log("[processInboundMessage] Got replyText from listMessages:", { length: replyText.length, preview: replyText.substring(0, 200) });
+          }
         }
       }
         
-      if (!replyText) {
+      if (!replyText && threadId) {
         const messages = await tanticoAgent.listMessages(ctx, { threadId, paginationOpts: { numItems: 10, cursor: null } });
         const lastAssistant = [...messages.page].reverse().find((m) => m.message?.role === "assistant");
         if (lastAssistant) {
@@ -808,39 +879,25 @@ export const processInboundMessage = internalAction({
       });
 
       if (replyText) {
-        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-        if (providerMessageId) {
-          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-            contactId,
-            content: replyText,
-            providerMessageId,
-          });
-          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
-            contactId,
-            direction: "OUTBOUND",
-            content: replyText,
-            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
-          });
-        }
+        await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+        await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+          contactId,
+          direction: "OUTBOUND",
+          content: replyText,
+          createdAt: Date.now(),
+        });
       }
     } catch (error) {
       console.error("Bot error:", error);
       const replyText = "Tuve un problema procesando tu mensaje. Por favor intenta de nuevo en unos segundos.";
       try {
-        const providerMessageId = await sendWhatsAppText({ contactId, content: replyText });
-        if (providerMessageId) {
-          const outbound = await ctx.runMutation(internalAny.ycloudState.addOutboundMessage, {
-            contactId,
-            content: replyText,
-            providerMessageId,
-          });
-          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
-            contactId,
-            direction: "OUTBOUND",
-            content: replyText,
-            createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
-          });
-        }
+        await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+        await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+          contactId,
+          direction: "OUTBOUND",
+          content: replyText,
+          createdAt: Date.now(),
+        });
       } catch (sendError) {
         console.error("Bot send error:", sendError);
       }

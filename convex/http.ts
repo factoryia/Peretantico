@@ -230,7 +230,8 @@ const webhookYCloud = httpAction(async (ctx, request) => {
   const eventId = providedId || `evt_${(await sha256Hex(rawBody)).slice(0, 24)}_${contactId}`;
 
   try {
-    await ctx.scheduler.runAfter(0, anyApi.ycloudBot.processInboundMessage, {
+    // Enqueue inbound message for reliable processing
+    const enqueueResult = await ctx.runMutation(anyApi.queue.enqueueInbound, {
       eventId,
       contactId,
       customerName,
@@ -239,8 +240,12 @@ const webhookYCloud = httpAction(async (ctx, request) => {
       mediaId,
       mediaType,
       mediaFilename,
-      attempt: 0,
     });
+
+    // Trigger the worker immediately
+    if (!enqueueResult?.duplicate) {
+      await ctx.scheduler.runAfter(0, anyApi.queueWorkers.processInboundQueue);
+    }
   } catch {
     return new Response(JSON.stringify({ ok: true, received: true, scheduled: false }), {
       status: 200,

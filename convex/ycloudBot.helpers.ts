@@ -139,7 +139,7 @@ export function isOnTopicMessage(normalized: string, raw: string): boolean {
 
   if (/^\s*(hola|buenas|buenos dias|buenas tardes|buenas noches|buen dia)\b/.test(normalized)) return true;
   if (/\S+@\S+\.\S+/.test(raw)) return true;
-  if (/\b(calle|carrera|cra|cll|avenida|av|apto|apartamento|barrio|km|transversal|diagonal)\b/.test(normalized)) return true;
+  if (/\b(calle|carrera|cra|cll|avenida|av|apto|apartamento|barrio|km|transversal|diagonal|mz|manzana|casa|lote|conjunto|etapa|torre|bloque|interior|nr|nro|numero|piso|oficina|consultorio|vereda|corregimiento|centro)\b/.test(normalized)) return true;
 
   return false;
 }
@@ -242,18 +242,12 @@ export function shouldBlockMessage(args: {
   if (!text && !args.hasMedia) return false;
   if (args.hasMedia) return false;
 
-  if (isStronglyOffTopic(args.normalized, args.rawText)) return true;
-
-  if (
-    (args.hasActiveFlow || args.applicantNeedsProfile) &&
-    isAllowedFlowReply({
-      normalized: args.normalized,
-      rawText: args.rawText,
-      normalizedLastOutbound: args.normalizedLastOutbound,
-      rawLastOutbound: args.rawLastOutbound,
-    })
-  ) {
-    return false;
+  // CRITICAL: When there's an active flow, ONLY block truly off-topic content
+  // (math, programming, jokes, weather, etc.). Let the AI handle everything else
+  // via its system prompt (MODO A / MODO B). The pre-filter should NOT block
+  // legitimate field values like addresses, names, or any other user input.
+  if (args.hasActiveFlow || args.applicantNeedsProfile) {
+    return isStronglyOffTopic(args.normalized, args.rawText);
   }
 
   if (referencesKnownService(args.normalized, args.services)) return false;
@@ -364,6 +358,7 @@ export function buildInboundContextPrompt(args: {
   resolvedProfileName?: string | null;
   mediaType?: string | null;
   mediaStorageId?: string | null;
+  mediaStorageIds?: string[] | null;
   sessionState?: string | null;
   serviceId?: string | null;
   currentFieldIndex?: number | null;
@@ -375,6 +370,9 @@ export function buildInboundContextPrompt(args: {
     args.resolvedProfileName ? `profileName=${args.resolvedProfileName}` : undefined,
     args.mediaType ? `mediaType=${args.mediaType}` : undefined,
     args.mediaStorageId ? `mediaStorageId=${args.mediaStorageId}` : undefined,
+    args.mediaStorageIds && args.mediaStorageIds.length > 0
+      ? `mediaStorageIds=[${args.mediaStorageIds.join(",")}]`
+      : undefined,
     args.sessionState ? `sessionState=${args.sessionState}` : undefined,
     args.serviceId ? `serviceId=${args.serviceId}` : undefined,
     typeof args.currentFieldIndex === "number" ? `fieldIndex=${args.currentFieldIndex}` : undefined,

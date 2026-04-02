@@ -303,6 +303,8 @@ export const patchSession = internalMutation({
     pendingMediaId: v.optional(v.union(v.string(), v.null())),
     pendingMediaType: v.optional(v.union(v.string(), v.null())),
     pendingMediaFilename: v.optional(v.union(v.string(), v.null())),
+    pendingMediaStorageIds: v.optional(v.union(v.array(v.id("_storage")), v.null())),
+    mediaDebounceUntil: v.optional(v.union(v.number(), v.null())),
   },
   handler: async (ctx, args) => {
     const updates = buildPatchSessionUpdates(args);
@@ -321,10 +323,12 @@ export function buildPatchSessionUpdates(args: {
   data?: unknown;
   attachments?: unknown;
   state?: string | null;
-  pendingMediaUrl?: string | null;
-  pendingMediaId?: string | null;
-  pendingMediaType?: string | null;
-  pendingMediaFilename?: string | null;
+    pendingMediaUrl?: string | null;
+    pendingMediaId?: string | null;
+    pendingMediaType?: string | null;
+    pendingMediaFilename?: string | null;
+    pendingMediaStorageIds?: Id<"_storage">[] | null;
+    mediaDebounceUntil?: number | null;
 }): Record<string, unknown> {
   const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
