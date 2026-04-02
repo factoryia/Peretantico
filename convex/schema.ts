@@ -313,10 +313,12 @@ export default defineSchema({
     data: v.any(),
     attachments: v.any(),
     pendingMediaStorageId: v.optional(v.id("_storage")),
+    pendingMediaStorageIds: v.optional(v.array(v.id("_storage"))),
     pendingMediaUrl: v.optional(v.string()),
     pendingMediaId: v.optional(v.string()),
     pendingMediaType: v.optional(v.string()),
     pendingMediaFilename: v.optional(v.string()),
+    mediaDebounceUntil: v.optional(v.number()),
     state: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -332,4 +334,108 @@ export default defineSchema({
   })
     .index("by_token", ["token"])
     .index("by_request", ["requestId"]),
+
+  // ─── Queue System ─────────────────────────────────────────────
+  // Inbound queue: webhooks encolados para procesamiento asíncrono
+  inboundQueue: defineTable({
+    eventId: v.string(),
+    contactId: v.string(),
+    customerName: v.optional(v.string()),
+    text: v.string(),
+    mediaUrl: v.optional(v.string()),
+    mediaId: v.optional(v.string()),
+    mediaType: v.optional(
+      v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
+    ),
+    mediaFilename: v.optional(v.string()),
+    // Debounce/batching fields
+    debounceUntil: v.optional(v.number()), // timestamp until which to wait
+    batchedText: v.optional(v.string()), // accumulated text from multiple messages
+    batchedMediaIds: v.optional(v.array(v.string())), // accumulated YCloud media IDs
+    batchedMediaUrls: v.optional(v.array(v.string())), // accumulated YCloud media URLs for download
+    batchedMediaTypes: v.optional(v.array(v.string())), // accumulated media types
+    hasMedia: v.optional(v.boolean()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("done"),
+      v.literal("error"),
+      v.literal("dead")
+    ),
+    attempts: v.number(),
+    maxAttempts: v.number(),
+    priority: v.union(v.literal("high"), v.literal("normal"), v.literal("low")),
+    error: v.optional(v.string()),
+    enqueuedAt: v.number(),
+    startedAt: v.optional(v.number()),
+    finishedAt: v.optional(v.number()),
+    nextRetryAt: v.optional(v.number()),
+  })
+    .index("by_status", ["status"])
+    .index("by_status_priority", ["status", "priority"])
+    .index("by_eventId", ["eventId"])
+    .index("by_contactId_status", ["contactId", "status"])
+    .index("by_nextRetryAt", ["nextRetryAt"]),
+
+  // Outbound queue: respuestas salientes a WhatsApp
+  outboundQueue: defineTable({
+    contactId: v.string(),
+    customerName: v.optional(v.string()),
+    content: v.string(),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaType: v.optional(
+      v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("document"))
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("done"),
+      v.literal("error"),
+      v.literal("dead")
+    ),
+    attempts: v.number(),
+    maxAttempts: v.number(),
+    error: v.optional(v.string()),
+    enqueuedAt: v.number(),
+    startedAt: v.optional(v.number()),
+    finishedAt: v.optional(v.number()),
+    nextRetryAt: v.optional(v.number()),
+    providerMessageId: v.optional(v.string()),
+    // Reference to the inbound event that triggered this reply
+    inboundQueueId: v.optional(v.id("inboundQueue")),
+  })
+    .index("by_status", ["status"])
+    .index("by_contactId_status", ["contactId", "status"])
+    .index("by_nextRetryAt", ["nextRetryAt"]),
+
+  // Dead letter queue: mensajes irrecuperables para revisión manual
+  deadLetterQueue: defineTable({
+    sourceTable: v.union(v.literal("inboundQueue"), v.literal("outboundQueue")),
+    sourceId: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    contactId: v.optional(v.string()),
+    payload: v.any(),
+    error: v.string(),
+    attempts: v.number(),
+    firstEnqueuedAt: v.number(),
+    deadAt: v.number(),
+  })
+    .index("by_sourceTable", ["sourceTable"])
+    .index("by_contactId", ["contactId"])
+    .index("by_deadAt", ["deadAt"]),
+
+  // Queue metrics: contadores para observabilidad
+  queueMetrics: defineTable({
+    period: v.string(), // "YYYY-MM-DD-HH" for hourly buckets
+    inboundEnqueued: v.number(),
+    inboundProcessed: v.number(),
+    inboundErrored: v.number(),
+    inboundDead: v.number(),
+    outboundEnqueued: v.number(),
+    outboundProcessed: v.number(),
+    outboundErrored: v.number(),
+    outboundDead: v.number(),
+    avgProcessingMs: v.optional(v.number()),
+  })
+    .index("by_period", ["period"]),
 });
