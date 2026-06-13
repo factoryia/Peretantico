@@ -96,6 +96,7 @@ export const processInboundQueue = internalAction({
         mediaFilename: item.mediaFilename,
         mediaStorageIds: mediaStorageIds.length > 0 ? mediaStorageIds : undefined,
         attempt: 0,
+        skipInboundPersist: true,
       });
 
       // 6. Mark done

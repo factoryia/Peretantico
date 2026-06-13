@@ -1,11 +1,42 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 // ─── Inbound Queue ────────────────────────────────────────────────
 
-// Debounce windows: 5s for text, 15s for media
-const TEXT_DEBOUNCE_MS = 5000;
-const MEDIA_DEBOUNCE_MS = 15000;
+// Debounce windows: batch rapid messages before calling the bot (UI persists immediately).
+const TEXT_DEBOUNCE_MS = 2000;
+const MEDIA_DEBOUNCE_MS = 8000;
+
+async function persistInboundForUi(
+  ctx: MutationCtx,
+  args: {
+    contactId: string;
+    customerName?: string;
+    text: string;
+    mediaUrl?: string;
+    mediaId?: string;
+    mediaType?: "image" | "video" | "audio" | "document";
+  }
+) {
+  const inbound = (await ctx.runMutation(internal.ycloudState.addInboundMessage, {
+    contactId: args.contactId,
+    customerName: args.customerName,
+    content: args.text,
+    mediaUrl: args.mediaUrl,
+    mediaId: args.mediaId,
+    mediaType: args.mediaType,
+  })) as { createdAt?: number };
+
+  await ctx.runMutation(internal.conversationState.updateLastMessage, {
+    contactId: args.contactId,
+    customerName: args.customerName,
+    direction: "INBOUND",
+    content: args.text,
+    mediaType: args.mediaType,
+    createdAt: inbound.createdAt ?? Date.now(),
+  });
+}
 
 export const enqueueInbound = internalMutation({
   args: {
@@ -32,6 +63,16 @@ export const enqueueInbound = internalMutation({
     const hasMedia = Boolean(args.mediaType);
     const debounceMs = hasMedia ? MEDIA_DEBOUNCE_MS : TEXT_DEBOUNCE_MS;
     const now = Date.now();
+
+    // Show message in inbox immediately (bot processing still debounced below).
+    await persistInboundForUi(ctx, {
+      contactId: args.contactId,
+      customerName: args.customerName,
+      text: args.text,
+      mediaUrl: args.mediaUrl,
+      mediaId: args.mediaId,
+      mediaType: args.mediaType,
+    });
 
     // Check if there's already a pending item for this contact (within debounce window)
     const existingPending = await ctx.db

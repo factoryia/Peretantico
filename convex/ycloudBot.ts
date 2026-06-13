@@ -409,6 +409,7 @@ export const processInboundMessage = internalAction({
     mediaFilename: v.optional(v.string()),
     mediaStorageIds: v.optional(v.array(v.string())),
     attempt: v.optional(v.number()),
+    skipInboundPersist: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const internalAny = anyApi;
@@ -616,24 +617,26 @@ export const processInboundMessage = internalAction({
         });
       }
 
-      const inbound = await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
-        contactId,
-        customerName: args.customerName,
-        content: args.text,
-        mediaUrl: mediaStorageId ? undefined : args.mediaUrl, // Only store URL if we couldn't download
-        mediaId: args.mediaId,
-        mediaStorageId: mediaStorageId,
-        mediaType: args.mediaType as MediaType | undefined,
-      });
+      if (!args.skipInboundPersist) {
+        const inbound = await ctx.runMutation(internalAny.ycloudState.addInboundMessage, {
+          contactId,
+          customerName: args.customerName,
+          content: args.text,
+          mediaUrl: mediaStorageId ? undefined : args.mediaUrl, // Only store URL if we couldn't download
+          mediaId: args.mediaId,
+          mediaStorageId: mediaStorageId,
+          mediaType: args.mediaType as MediaType | undefined,
+        });
 
-      await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
-        contactId,
-        customerName: args.customerName,
-        direction: "INBOUND",
-        content: args.text,
-        mediaType: args.mediaType as MediaType | undefined,
-        createdAt: (inbound as { createdAt?: number }).createdAt ?? Date.now(),
-      });
+        await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+          contactId,
+          customerName: args.customerName,
+          direction: "INBOUND",
+          content: args.text,
+          mediaType: args.mediaType as MediaType | undefined,
+          createdAt: (inbound as { createdAt?: number }).createdAt ?? Date.now(),
+        });
+      }
 
       const botMuted = await ctx.runQuery(internalAny.ycloudState.getEffectiveMute, { contactId });
       if (botMuted) return;
