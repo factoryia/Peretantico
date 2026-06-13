@@ -148,3 +148,56 @@ export const assignAdminRole = internalMutation({
     return "assigned";
   },
 });
+
+/**
+ * Ensures the admin has a linked profile with a display name.
+ */
+export const ensureAdminProfile = internalMutation({
+  args: {
+    userId: v.id("users"),
+    email: v.string(),
+    fullName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("profiles")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (existing) {
+      const updates: { fullName?: string; email?: string } = {};
+      if (!existing.fullName?.trim()) {
+        updates.fullName = args.fullName;
+      }
+      if (!existing.email) {
+        updates.email = args.email;
+      }
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(existing._id, updates);
+      }
+      return existing._id;
+    }
+
+    return await ctx.db.insert("profiles", {
+      userId: args.userId,
+      fullName: args.fullName,
+      documentType: "CC",
+      documentNumber: `ADMIN-${args.userId}`,
+      phoneNumber: "0000000000",
+      email: args.email,
+    });
+  },
+});
+
+/**
+ * Updates the auth user's display name.
+ */
+export const updateUserName = internalMutation({
+  args: {
+    userId: v.id("users"),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { name: args.name });
+  },
+});

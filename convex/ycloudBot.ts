@@ -237,6 +237,59 @@ async function enqueueOutboundMessage(
   }
 }
 
+type OutboundMediaType = "image" | "video" | "audio" | "document";
+
+async function sendWhatsAppMedia(args: {
+  contactId: string;
+  mediaType: OutboundMediaType;
+  mediaLink: string;
+  caption?: string;
+  filename?: string;
+}): Promise<string | null> {
+  const apiKey = process.env.YCLOUD_API_KEY;
+  const fromNumber = process.env.YCLOUD_PHONE_NUMBER;
+  if (!apiKey || !fromNumber) {
+    console.warn("[sendWhatsAppMedia] Missing YCLOUD_API_KEY or YCLOUD_PHONE_NUMBER");
+    return null;
+  }
+
+  const toRaw = args.contactId.replace(/^whatsapp:/, "").trim().replace(/\s/g, "");
+  const to = toRaw.startsWith("+") ? toRaw : `+${toRaw}`;
+  const fromRaw = fromNumber.trim().replace(/\s/g, "");
+  const from = fromRaw.startsWith("+") ? fromRaw : `+${fromRaw}`;
+
+  const mediaPayload: Record<string, unknown> = { link: args.mediaLink };
+  if (args.caption?.trim()) mediaPayload.caption = args.caption.trim();
+  if (args.mediaType === "document" && args.filename?.trim()) {
+    mediaPayload.filename = args.filename.trim();
+  }
+
+  const payload = JSON.stringify({
+    from,
+    to,
+    type: args.mediaType,
+    [args.mediaType]: mediaPayload,
+  });
+
+  const res = await fetch("https://api.ycloud.com/v2/whatsapp/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
+    },
+    body: payload,
+  });
+
+  const data = (await res.json()) as { id?: string; status?: string; message?: string };
+  if (!res.ok) {
+    console.error(
+      `[sendWhatsAppMedia] Failed to=${to} status=${res.status} error=${data.message ?? data.status ?? res.statusText}`
+    );
+    throw new Error(data.message ?? data.status ?? res.statusText);
+  }
+  return data.id ?? null;
+}
+
 async function sendWhatsAppText(args: { contactId: string; content: string }): Promise<string | null> {
   const apiKey = process.env.YCLOUD_API_KEY;
   const fromNumber = process.env.YCLOUD_PHONE_NUMBER;
@@ -917,28 +970,68 @@ export const processInboundMessage = internalAction({
 });
 
 export const sendManualMessage = action({
-  args: { contactId: v.string(), content: v.string() },
+  args: {
+    contactId: v.string(),
+    content: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaType: v.optional(
+      v.union(
+        v.literal("image"),
+        v.literal("video"),
+        v.literal("audio"),
+        v.literal("document")
+      )
+    ),
+    filename: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("No autorizado");
 
     const contactId = normalizeWhatsAppContactId(args.contactId);
-    const content = args.content.trim();
-    if (!content) throw new Error("Mensaje vacío");
+    const content = (args.content ?? "").trim();
+    const mediaType = args.mediaType as OutboundMediaType | undefined;
 
-    const providerMessageId = await sendWhatsAppText({ contactId, content });
+    if (!content && !mediaType) throw new Error("Mensaje vacío");
+
+    let providerMessageId: string | null = null;
+    let mediaStorageId: Id<"_storage"> | undefined;
+    let persistedMediaUrl: string | undefined;
+
+    if (mediaType && args.mediaStorageId) {
+      mediaStorageId = args.mediaStorageId;
+      const mediaLink = await ctx.storage.getUrl(mediaStorageId);
+      if (!mediaLink) throw new Error("No se pudo obtener el archivo adjunto");
+
+      providerMessageId = await sendWhatsAppMedia({
+        contactId,
+        mediaType,
+        mediaLink,
+        caption: content || undefined,
+        filename: args.filename,
+      });
+      persistedMediaUrl = mediaLink;
+    } else {
+      if (!content) throw new Error("Mensaje vacío");
+      providerMessageId = await sendWhatsAppText({ contactId, content });
+    }
+
     if (!providerMessageId) throw new Error("YCLOUD no está configurado");
 
     const outbound = await ctx.runMutation(internal.ycloudState.addOutboundMessage, {
       contactId,
-      content,
+      content: content || (mediaType === "image" ? "Imagen" : mediaType === "audio" ? "Audio" : mediaType === "document" ? "Documento" : "Archivo"),
       providerMessageId,
+      mediaUrl: persistedMediaUrl,
+      mediaStorageId,
+      mediaType,
     });
 
     await ctx.runMutation(internal.conversationState.updateLastMessage, {
       contactId,
       direction: "OUTBOUND",
-      content,
+      content: content || "",
+      mediaType,
       createdAt: (outbound as { createdAt?: number }).createdAt ?? Date.now(),
     });
 

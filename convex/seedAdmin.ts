@@ -35,6 +35,8 @@ const seedAdminHandler = async (ctx: any): Promise<any> => {
   if (existingUser) {
     userId = existingUser._id;
 
+    await ctx.runMutation(internal.admin.updateUserName, { userId, name });
+
     // Check if there's already a valid auth account
     const existingAccount = await ctx.runQuery(
       internal.admin.getAccount,
@@ -78,6 +80,12 @@ const seedAdminHandler = async (ctx: any): Promise<any> => {
     internal.admin.assignAdminRole,
     { userId }
   );
+
+  await ctx.runMutation(internal.admin.ensureAdminProfile, {
+    userId,
+    email,
+    fullName: name,
+  });
 
   return {
     status: "ok" as const,

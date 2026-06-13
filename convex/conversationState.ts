@@ -214,10 +214,10 @@ export const updateLastMessage = internalMutation({
       await ctx.db.delete(d._id);
     }
 
-    const preview =
-      args.direction === "INBOUND"
-        ? buildPreview({ content: args.content, mediaType: args.mediaType as MediaType | undefined })
-        : buildPreview({ content: args.content });
+    const preview = buildPreview({
+      content: args.content,
+      mediaType: args.mediaType as MediaType | undefined,
+    });
 
     if (primary) {
       await ctx.db.patch(primary._id, {
@@ -268,15 +268,28 @@ export const listContacts = query({
       }
     }
 
-    let list = Array.from(deduped.values()).map((c) => ({
-      contactId: c.contactId,
-      customerName: c.customerName,
-      lastMessageAt: c.lastMessageAt,
-      lastMessage: c.lastMessagePreview ?? "",
-      lastDirection: (c.lastMessageDirection ?? "INBOUND") as "INBOUND" | "OUTBOUND",
-      status: c.status,
-      threadId: c.threadId,
-    }));
+    const handoffRows = await ctx.db.query("ycloudHandoffs").collect();
+    const handoffByContact = new Map(handoffRows.map((h) => [h.contactId, h]));
+    const now = Date.now();
+
+    let list = Array.from(deduped.values()).map((c) => {
+      const handoff = handoffByContact.get(c.contactId);
+      const botMuted = handoff
+        ? handoff.mutedUntil
+          ? now < handoff.mutedUntil
+          : handoff.muted
+        : false;
+      return {
+        contactId: c.contactId,
+        customerName: c.customerName,
+        lastMessageAt: c.lastMessageAt,
+        lastMessage: c.lastMessagePreview ?? "",
+        lastDirection: (c.lastMessageDirection ?? "INBOUND") as "INBOUND" | "OUTBOUND",
+        status: c.status,
+        threadId: c.threadId,
+        botMuted,
+      };
+    });
 
     if (search) {
       list = list.filter((c) => {

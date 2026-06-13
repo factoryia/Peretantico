@@ -43,7 +43,14 @@ export default defineSchema({
   services: defineTable({
     name: v.string(),
     code: v.optional(v.string()),
-    category: v.optional(v.union(v.literal("salud"), v.literal("notarial"))),
+    category: v.optional(
+      v.union(
+        v.literal("salud"),
+        v.literal("notarial"),
+        v.literal("catastral"),
+        v.literal("logistica")
+      )
+    ),
     description: v.optional(v.string()),
     price: v.number(),
     status: v.boolean(),

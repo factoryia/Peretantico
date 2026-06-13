@@ -11,7 +11,7 @@ export const data = {
       isActive: true,
     },
     {
-      title: "Inbox",
+      title: "Conversaciones",
       url: "/inbox",
       icon: Mail,
     },

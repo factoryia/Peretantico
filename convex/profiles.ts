@@ -76,22 +76,30 @@ export const getMe = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
 
+    const authUser = await ctx.db.get(userId);
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
-    
-    // Also fetch roles
+
     const userRoles = await ctx.db
       .query("userRoles")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    
+
     const roles = await Promise.all(
       userRoles.map((ur) => ctx.db.get(ur.roleId))
     );
 
-    return { ...profile, roles: roles.filter(r => r !== null) };
+    const displayName =
+      profile?.fullName?.trim() || authUser?.name?.trim() || "";
+
+    return {
+      ...profile,
+      userId,
+      fullName: displayName,
+      roles: roles.filter((r) => r !== null),
+    };
   },
 });
 

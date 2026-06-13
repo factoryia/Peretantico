@@ -127,7 +127,14 @@ export const create = mutation({
   args: {
     name: v.string(),
     code: v.optional(v.string()),
-    category: v.optional(v.union(v.literal("salud"), v.literal("notarial"))),
+    category: v.optional(
+      v.union(
+        v.literal("salud"),
+        v.literal("notarial"),
+        v.literal("catastral"),
+        v.literal("logistica")
+      )
+    ),
     description: v.optional(v.string()),
     price: v.number(),
     status: v.boolean(),
@@ -197,7 +204,14 @@ export const update = mutation({
     id: v.id("services"),
     name: v.optional(v.string()),
     code: v.optional(v.string()),
-    category: v.optional(v.union(v.literal("salud"), v.literal("notarial"))),
+    category: v.optional(
+      v.union(
+        v.literal("salud"),
+        v.literal("notarial"),
+        v.literal("catastral"),
+        v.literal("logistica")
+      )
+    ),
     description: v.optional(v.string()),
     price: v.optional(v.number()),
     status: v.optional(v.boolean()),

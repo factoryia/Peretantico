@@ -39,7 +39,7 @@ export function AppSidebar() {
 
   const authUser = user
     ? {
-        name: user.fullName || "Usuario",
+        name: user.fullName?.trim() || "Usuario",
         roles: user.roles?.map((r: any) => r.name) || [],
       }
     : localAuthUser;
@@ -52,7 +52,7 @@ export function AppSidebar() {
        if (!localAuthUser || localAuthUser.uid !== newUid) {
          setAuthUser({
           uid: newUid,
-          name: user.fullName || "Usuario",
+          name: user.fullName?.trim() || "Usuario",
           roles: user.roles?.map((r: any) => r.name) || [],
          });
        }

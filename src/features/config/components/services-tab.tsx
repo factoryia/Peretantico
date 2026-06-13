@@ -131,42 +131,34 @@ export const ServicesTab = () => {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="w-full grid items-end gap-4 ">
-              <div className="grid gap-4 rounded-lg border bg-muted border-dashed border-border p-4">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    Crear nuevo servicio
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Define el tipo de servicio y su estado.
-                  </p>
-                </div>
-                <div className="grid items-end gap-4 md:grid-cols-2">
-                  <ServiceDialog
-                    open={isDialogOpen}
-                    editingService={editingService}
-                    onOpenChange={(open) => {
-                      setIsDialogOpen(open);
-                      if (!open && editingService) {
-                        setEditingService(null);
-                      }
-                    }}
-                    setEditingService={setEditingService}
-                    setIsDialogOpen={setIsDialogOpen}
-                  />
-                </div>
+          <CardContent className="space-y-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+              <div>
+                <h3 className="text-base font-semibold text-blue-900 border-l-4 border-blue-600 pl-3">
+                  Nuevo servicio
+                </h3>
+                <p className="text-sm text-muted-foreground mt-2 pl-3">
+                  Crea o edita tipos de servicio. El formulario se abre en un modal amplio.
+                </p>
               </div>
+              <ServiceDialog
+                open={isDialogOpen}
+                editingService={editingService}
+                onOpenChange={(open) => {
+                  setIsDialogOpen(open);
+                  if (!open && editingService) {
+                    setEditingService(null);
+                  }
+                }}
+                setEditingService={setEditingService}
+                setIsDialogOpen={setIsDialogOpen}
+              />
             </div>
-            <div>
-              <div className="flex flex-wrap flex-col sm:flex-row sm:items-center justify-between space-y-2">
-                <SearchInput
-                  placeholder="Buscar servicios..."
-                  value={searchTerm}
-                  onValueChange={(value) => setSearchTerm(value)}
-                />
-              </div>
-            </div>
+            <SearchInput
+              placeholder="Buscar servicios..."
+              value={searchTerm}
+              onValueChange={(value) => setSearchTerm(value)}
+            />
           </CardContent>
         </Card>
         <Card>

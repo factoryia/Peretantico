@@ -129,6 +129,16 @@ export const addOutboundMessage = internalMutation({
     contactId: v.string(),
     content: v.string(),
     providerMessageId: v.optional(v.string()),
+    mediaUrl: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaType: v.optional(
+      v.union(
+        v.literal("image"),
+        v.literal("video"),
+        v.literal("audio"),
+        v.literal("document")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const createdAt = Date.now();
@@ -137,6 +147,9 @@ export const addOutboundMessage = internalMutation({
       direction: "OUTBOUND",
       content: args.content,
       providerMessageId: args.providerMessageId,
+      mediaUrl: args.mediaUrl,
+      mediaStorageId: args.mediaStorageId,
+      mediaType: args.mediaType,
       createdAt,
     });
     return { messageId, createdAt };
@@ -183,7 +196,19 @@ export const listMessagesByContact = query({
       .withIndex("by_contact_created", (q) => q.eq("contactId", args.contactId))
       .order("desc")
       .take(limit);
-    return rows.reverse();
+
+    const resolved = await Promise.all(
+      rows.map(async (row) => {
+        const storageUrl = row.mediaStorageId
+          ? await ctx.storage.getUrl(row.mediaStorageId)
+          : null;
+        return {
+          ...row,
+          mediaUrl: storageUrl ?? row.mediaUrl,
+        };
+      })
+    );
+    return resolved.reverse();
   },
 });
 

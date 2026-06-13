@@ -43,6 +43,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import { AlertModal } from "@/components/common/alert-modal";
 import { Switch } from "@/components/ui/switch";
 import { isDeterministicRequestsUiEnabled } from "../../../../lib/deterministic-requests";
+import { DialogSectionTitle } from "@/components/common/dialog-section-title";
 
 type ServiceFormInputValues = z.input<typeof serviceSchema>;
 
@@ -490,7 +491,7 @@ export const ServiceDialog = ({
           Nuevo Servicio
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto p-6 sm:p-8">
         <AlertModal
           description="Esta acción eliminará permanentemente el servicio y sus campos. No se puede deshacer."
           isSubmitting={isDeleting}
@@ -509,8 +510,11 @@ export const ServiceDialog = ({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Sin categoría: el servicio ya no depende de categorías */}
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <section className="space-y-4">
+              <DialogSectionTitle description="Datos principales del tipo de servicio.">
+                Información general
+              </DialogSectionTitle>
 
             <FormField
               control={form.control}
@@ -609,15 +613,12 @@ export const ServiceDialog = ({
                 </FormItem>
               )}
             />
+            </section>
 
-            {/* Priority Support Fields */}
-            <div className="space-y-4 border rounded-md p-4 bg-gray-50/50">
-              <h3 className="text-sm font-medium border-b pb-2">
-                Configuración de Prioridad
-              </h3>
-              <p className="text-xs text-muted-foreground">
-                Habilita opciones de servicio prioritario si aplica.
-              </p>
+            <section className="space-y-4 rounded-lg border bg-slate-50/60 p-5">
+              <DialogSectionTitle description="Habilita opciones de servicio prioritario si aplica.">
+                Configuración de prioridad
+              </DialogSectionTitle>
 
               <FormField
                 control={form.control}
@@ -716,10 +717,12 @@ export const ServiceDialog = ({
                   )}
                 />
               </div>
-            </div>
+            </section>
 
-            <div className="space-y-4 border rounded-md p-4 bg-gray-50/50">
-              <h3 className="text-sm font-medium border-b pb-2">Flujo determinístico</h3>
+            <section className="space-y-4 rounded-lg border bg-slate-50/60 p-5">
+              <DialogSectionTitle description="Ramas, dirección y pago guiado para el flujo del bot.">
+                Flujo determinístico
+              </DialogSectionTitle>
               <FormField
                 control={form.control}
                 name="workflowMode"
@@ -823,17 +826,13 @@ export const ServiceDialog = ({
                   )}
                 </div>
               )}
-            </div>
+            </section>
 
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <FormLabel>Campos del servicio</FormLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Define qué datos adicionales se solicitarán para este
-                    servicio.
-                  </p>
-                </div>
+            <section className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <DialogSectionTitle description="Define qué datos adicionales se solicitarán para este servicio.">
+                  Campos del servicio
+                </DialogSectionTitle>
                 <Button
                   type="button"
                   variant="outline"
@@ -874,7 +873,7 @@ export const ServiceDialog = ({
                     return (
                       <div
                         key={fieldItem.id ?? index}
-                        className="border rounded-lg bg-muted/40 p-3 space-y-3 shadow-xs"
+                        className="border rounded-lg bg-white p-4 space-y-4 shadow-sm"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1138,7 +1137,7 @@ export const ServiceDialog = ({
                   })}
                 </div>
               )}
-            </div>
+            </section>
 
             <RequiredFormMessage />
 

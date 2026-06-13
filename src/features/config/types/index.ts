@@ -62,7 +62,7 @@ export interface Service {
   workflowMode?: "legacy" | "deterministic";
   workflowConfig?: WorkflowConfig | null;
   // Service category for workflow routing
-  category?: "salud" | "notarial";
+  category?: "salud" | "notarial" | "catastral" | "logistica";
 }
 
 export interface Subservice {
