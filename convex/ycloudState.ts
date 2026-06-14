@@ -288,6 +288,19 @@ export const setHandoff = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("No autorizado");
 
+    // Si el asesor reactiva el bot, limpia la alerta de "requiere atención humana".
+    if (!args.muted) {
+      const convs = await ctx.db
+        .query("conversations")
+        .withIndex("by_contact", (q) => q.eq("contactId", args.contactId))
+        .collect();
+      for (const c of convs) {
+        if (c.needsHuman) {
+          await ctx.db.patch(c._id, { needsHuman: false, escalationReason: undefined, updatedAt: Date.now() });
+        }
+      }
+    }
+
     const now = Date.now();
     const durationMs = Math.max(0, Math.min(args.durationMs ?? 0, 1000 * 60 * 60 * 24 * 30));
     const mutedUntil = args.muted && durationMs > 0 ? now + durationMs : undefined;

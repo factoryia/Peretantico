@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  AlertTriangle,
   ArrowLeft,
   Bot,
   MessageSquare,
@@ -64,6 +65,8 @@ type ContactRow = {
   lastMessage: string;
   lastDirection: "INBOUND" | "OUTBOUND";
   botMuted?: boolean;
+  needsHuman?: boolean;
+  escalationReason?: string | null;
 };
 
 function contactTitle(c: ContactRow) {
@@ -145,6 +148,12 @@ function ContactItem({
         <div className="flex items-center gap-2 mt-0.5 min-w-0">
           <p className="flex-1 min-w-0 truncate text-[13px] text-[#667781]">{contact.lastMessage}</p>
           <div className="flex shrink-0 items-center gap-1">
+            {contact.needsHuman && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                Atención
+              </span>
+            )}
             {isUnread && !isActive && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground" />
             )}
@@ -473,6 +482,20 @@ function ChatArea({
           </Button>
         </div>
       </header>
+
+      {/* Alerta: requiere atención humana */}
+      {activeContact.needsHuman && (
+        <div className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold">Requiere atención humana</p>
+            <p className="text-[13px] text-red-600">
+              El bot no pudo continuar el flujo.
+              {activeContact.escalationReason ? ` ${activeContact.escalationReason}` : ""} Reactiva el bot cuando termines de atender.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0 bg-muted/30">

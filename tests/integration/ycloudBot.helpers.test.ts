@@ -261,7 +261,8 @@ describe("request completion closure", () => {
       },
       pass: message.includes("REQ-1002") && message.includes("escríbeme de nuevo por este chat"),
     });
-    expect(message).toContain("Tu solicitud quedó registrada con el número REQ-1002.");
+    expect(message).toContain("Hemos recibido la información y los documentos de tu solicitud.");
+    expect(message).toContain("Tu solicitud ha entrado en proceso de revisión.");
     expect(message).toContain("Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat.");
     recorder.flush();
   });

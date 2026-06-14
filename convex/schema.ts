@@ -286,6 +286,10 @@ export default defineSchema({
     lastMessageAt: v.number(),
     lastMessagePreview: v.optional(v.string()),
     lastMessageDirection: v.optional(v.union(v.literal("INBOUND"), v.literal("OUTBOUND"))),
+    // Escalamiento: el bot no pudo continuar y la conversación requiere un asesor humano.
+    needsHuman: v.optional(v.boolean()),
+    escalationReason: v.optional(v.string()),
+    escalatedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

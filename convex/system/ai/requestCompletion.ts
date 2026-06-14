@@ -19,9 +19,10 @@ export function buildRequestCompletionMessage(args: {
   paymentMethod?: string;
   address?: string;
 }): string {
-  const confirmation = args.applicationNumber
-    ? `Tu solicitud quedó registrada con el número *${args.applicationNumber}*.`
-    : "Tu solicitud quedó registrada correctamente.";
+  const confirmation = "✅ Hemos recibido la información y los documentos de tu solicitud.";
+  const radicado = args.applicationNumber
+    ? `Número de radicado: *${args.applicationNumber}*.`
+    : "";
 
   const details: string[] = [];
   if (args.paymentMethod) {
@@ -35,15 +36,18 @@ export function buildRequestCompletionMessage(args: {
     details.push(`- *Dirección:* ${args.address}`);
   }
 
-  const footer = !args.contextRestarted
-    ? "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat. Adicional, si tenemos algún inconveniente con los documentos, nos estaremos comunicando directamente a su celular dentro de las próximas 2 horas."
-    : "He cerrado esta conversación y tu próximo mensaje usará un contexto nuevo para ayudarte. Adicional, si tenemos algún inconveniente con los documentos, nos estaremos comunicando directamente a su celular dentro de las próximas 2 horas.";
+  const review =
+    "Tu solicitud ha entrado en proceso de revisión. Un asesor de Pere Tantico validará la información y se comunicará contigo si es necesario.";
+  const nav = !args.contextRestarted
+    ? "Si necesitas otro servicio o consultar un estado, escríbeme de nuevo por este chat."
+    : "He cerrado esta conversación y tu próximo mensaje usará un contexto nuevo para ayudarte.";
+  const followUp =
+    "Si tenemos algún inconveniente con los documentos, nos comunicaremos directamente a tu celular dentro de las próximas 2 horas.";
 
   const parts = [confirmation];
-  if (details.length > 0) {
-    parts.push("", details.join("\n"));
-  }
-  parts.push("", footer);
+  if (radicado) parts.push("", radicado);
+  if (details.length > 0) parts.push("", details.join("\n"));
+  parts.push("", review, "", nav, "", followUp);
 
   return parts.join("\n");
 }

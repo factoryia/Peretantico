@@ -97,6 +97,86 @@ export const ensureConversationForContact = internalMutation({
   },
 });
 
+// Escala la conversación a un asesor humano: marca needsHuman en la conversación
+// y silencia el bot (handoff) para que un humano continúe la atención.
+export const escalateToHumanByContact = internalMutation({
+  args: {
+    contactId: v.string(),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const contactId = args.contactId.trim();
+    if (!contactId) return { ok: false };
+    const reason = args.reason?.trim() || "El bot no pudo continuar el flujo.";
+
+    // 1) Marcar la(s) conversación(es) abierta(s) como "requiere atención humana"
+    const rows = sortByUpdatedAt(
+      await ctx.db
+        .query("conversations")
+        .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+        .collect()
+    );
+    const openRows = rows.filter((row) => row.status !== "closed");
+    if (openRows.length > 0) {
+      for (const row of openRows) {
+        await ctx.db.patch(row._id, {
+          needsHuman: true,
+          escalationReason: reason,
+          escalatedAt: now,
+          status: "pending",
+          updatedAt: now,
+        });
+      }
+    } else {
+      await ctx.db.insert("conversations", {
+        contactId,
+        channel: "whatsapp",
+        status: "pending",
+        needsHuman: true,
+        escalationReason: reason,
+        escalatedAt: now,
+        lastMessageAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // 2) Silenciar el bot (handoff) por 2 horas para que un asesor tome la conversación
+    const mutedUntil = now + 1000 * 60 * 60 * 2;
+    const existingHandoff = await ctx.db
+      .query("ycloudHandoffs")
+      .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+      .first();
+    if (existingHandoff) {
+      await ctx.db.patch(existingHandoff._id, { muted: true, mutedUntil, updatedAt: now });
+    } else {
+      await ctx.db.insert("ycloudHandoffs", { contactId, muted: true, mutedUntil, updatedAt: now });
+    }
+
+    return { ok: true };
+  },
+});
+
+// Limpia la bandera de "requiere atención humana" (cuando un asesor ya atendió).
+export const clearHumanFlagByContact = internalMutation({
+  args: { contactId: v.string() },
+  handler: async (ctx, args) => {
+    const contactId = args.contactId.trim();
+    if (!contactId) return { ok: false };
+    const rows = await ctx.db
+      .query("conversations")
+      .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+      .collect();
+    for (const row of rows) {
+      if (row.needsHuman) {
+        await ctx.db.patch(row._id, { needsHuman: false, escalationReason: undefined, updatedAt: Date.now() });
+      }
+    }
+    return { ok: true };
+  },
+});
+
 export const setThreadIdForContact = internalMutation({
   args: {
     contactId: v.string(),
@@ -288,6 +368,8 @@ export const listContacts = query({
         status: c.status,
         threadId: c.threadId,
         botMuted,
+        needsHuman: c.needsHuman === true,
+        escalationReason: c.escalationReason,
       };
     });
 

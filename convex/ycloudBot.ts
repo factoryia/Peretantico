@@ -1045,6 +1045,9 @@ export const sendManualMessage = action({
       updatedBy: userId,
     });
 
+    // El asesor ya respondió: limpia la alerta de "requiere atención humana".
+    await ctx.runMutation(internal.conversationState.clearHumanFlagByContact, { contactId });
+
     return { providerMessageId };
   },
 });
