@@ -15,6 +15,8 @@ import { validateServiceField } from "./system/ai/tools/validateServiceField";
 import { createApplicantProfile } from "./system/ai/tools/createApplicantProfile";
 import { createRequest } from "./system/ai/tools/createRequest";
 import { getRequestStatus } from "./system/ai/tools/getRequestStatus";
+import { escalateToHuman } from "./system/ai/tools/escalateToHuman";
+import { HUMAN_ESCALATION_REPLY } from "./system/ai/escalationReply";
 import { buildRequestCompletionMessage } from "./system/ai/requestCompletion";
 import { resolveRequestFlow } from "./system/requestFlow";
 import {
@@ -809,6 +811,7 @@ export const processInboundMessage = internalAction({
         createApplicantProfile,
         createRequest,
         getRequestStatus,
+        escalateToHuman,
       } satisfies ToolSet;
 
       // Get media info - only pass mediaStorageId to context (no YCloud URLs)
@@ -945,17 +948,22 @@ export const processInboundMessage = internalAction({
       }
     } catch (error) {
       console.error("Bot error:", error);
-      const replyText = "Tuve un problema procesando tu mensaje. Por favor intenta de nuevo en unos segundos.";
+      const reason =
+        error instanceof Error ? error.message : "Error técnico al procesar el mensaje.";
       try {
-        await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+        await ctx.runMutation(internalAny.conversationState.escalateToHumanByContact, {
+          contactId,
+          reason,
+        });
+        await enqueueOutboundMessage(ctx, { contactId, content: HUMAN_ESCALATION_REPLY });
         await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
           contactId,
           direction: "OUTBOUND",
-          content: replyText,
+          content: HUMAN_ESCALATION_REPLY,
           createdAt: Date.now(),
         });
       } catch (sendError) {
-        console.error("Bot send error:", sendError);
+        console.error("Bot escalation send error:", sendError);
       }
     } finally {
       if (hasLock) {
@@ -1041,7 +1049,6 @@ export const sendManualMessage = action({
     await ctx.runMutation(internal.ycloudState.setHandoffMutation, {
       contactId,
       muted: true,
-      durationMs: 1000 * 60 * 60 * 2,
       updatedBy: userId,
     });
 

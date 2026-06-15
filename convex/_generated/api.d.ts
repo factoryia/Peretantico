@@ -35,6 +35,7 @@ import type * as services from "../services.js";
 import type * as specialDates from "../specialDates.js";
 import type * as system_ai_agents_tanticoAgent from "../system/ai/agents/tanticoAgent.js";
 import type * as system_ai_constants from "../system/ai/constants.js";
+import type * as system_ai_escalationReply from "../system/ai/escalationReply.js";
 import type * as system_ai_kimi from "../system/ai/kimi.js";
 import type * as system_ai_requestCompletion from "../system/ai/requestCompletion.js";
 import type * as system_ai_tools_createApplicantProfile from "../system/ai/tools/createApplicantProfile.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   specialDates: typeof specialDates;
   "system/ai/agents/tanticoAgent": typeof system_ai_agents_tanticoAgent;
   "system/ai/constants": typeof system_ai_constants;
+  "system/ai/escalationReply": typeof system_ai_escalationReply;
   "system/ai/kimi": typeof system_ai_kimi;
   "system/ai/requestCompletion": typeof system_ai_requestCompletion;
   "system/ai/tools/createApplicantProfile": typeof system_ai_tools_createApplicantProfile;

@@ -142,16 +142,15 @@ export const escalateToHumanByContact = internalMutation({
       });
     }
 
-    // 2) Silenciar el bot (handoff) por 2 horas para que un asesor tome la conversación
-    const mutedUntil = now + 1000 * 60 * 60 * 2;
+    // 2) Silenciar el bot hasta que un asesor lo reactive manualmente
     const existingHandoff = await ctx.db
       .query("ycloudHandoffs")
       .withIndex("by_contact", (q) => q.eq("contactId", contactId))
       .first();
     if (existingHandoff) {
-      await ctx.db.patch(existingHandoff._id, { muted: true, mutedUntil, updatedAt: now });
+      await ctx.db.patch(existingHandoff._id, { muted: true, mutedUntil: undefined, updatedAt: now });
     } else {
-      await ctx.db.insert("ycloudHandoffs", { contactId, muted: true, mutedUntil, updatedAt: now });
+      await ctx.db.insert("ycloudHandoffs", { contactId, muted: true, updatedAt: now });
     }
 
     return { ok: true };
