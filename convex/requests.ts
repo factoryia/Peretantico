@@ -4,6 +4,10 @@ import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { isDeterministicWorkflowEnabled, isGlobalDeterministicRequestsEnabled } from "./system/requestFlow";
+import {
+  isRequestPaidToDistributor,
+  resolveDistributorPaymentStatus,
+} from "./distributorPayments.helpers";
 // import { paginationOptsValidator } from "convex/server";
 
 function getNormalizedRequestReadState(request: Doc<"requests">) {
@@ -30,6 +34,8 @@ export const list = query({
     zonaId: v.optional(v.id("coverageAreas")),
     isPrioritized: v.optional(v.boolean()),
     paymentStatus: v.optional(v.string()),
+    distributorPaymentStatus: v.optional(v.string()),
+    eligibleForDistributorPayment: v.optional(v.boolean()),
     search: v.optional(v.string()),
     applicantName: v.optional(v.string()),
     entryDateFrom: v.optional(v.number()),
@@ -82,12 +88,17 @@ export const list = query({
            evidenceUrl = await ctx.storage.getUrl(request.evidenceStorageId) || undefined;
         }
 
-        const payment = await ctx.db
-          .query("paymentRequests")
-          .withIndex("by_request", (q) => q.eq("requestId", request._id))
-          .first();
-        
-        const paymentStatus = request.paymentStatus || (payment ? "Pagado" : "Pendiente");
+        const paidToDistributor = await isRequestPaidToDistributor(ctx, request._id);
+        const distributorPaymentStatus = resolveDistributorPaymentStatus(request, paidToDistributor);
+
+        const payment = paidToDistributor
+          ? await ctx.db
+              .query("paymentRequests")
+              .withIndex("by_request", (q) => q.eq("requestId", request._id))
+              .first()
+          : null;
+
+        const applicantPaymentStatus = request.paymentStatus;
         
         return {
           ...request,
@@ -96,13 +107,36 @@ export const list = query({
           service,
           distributor,
           evidenceUrl,
-          paymentStatus,
+          paymentStatus: applicantPaymentStatus,
+          distributorPaymentStatus,
+          distributorPaymentId: payment?.paymentId,
         };
       })
     );
 
     if (args.paymentStatus && args.paymentStatus !== "all") {
       page = page.filter((req) => req.paymentStatus === args.paymentStatus);
+    }
+
+    if (args.distributorPaymentStatus && args.distributorPaymentStatus !== "all") {
+      page = page.filter(
+        (req) => req.distributorPaymentStatus === args.distributorPaymentStatus
+      );
+    }
+
+    if (args.eligibleForDistributorPayment) {
+      page = page.filter((req) => req.distributorPaymentStatus === "Pendiente");
+    }
+
+    if (args.search) {
+      const searchLower = args.search.toLowerCase();
+      page = page.filter(
+        (req) =>
+          req.applicationNumber.toLowerCase().includes(searchLower) ||
+          req.applicant?.fullName?.toLowerCase().includes(searchLower) ||
+          req.distributor?.title?.toLowerCase().includes(searchLower) ||
+          req.title?.toLowerCase().includes(searchLower)
+      );
     }
 
     if (args.applicationNumber) {

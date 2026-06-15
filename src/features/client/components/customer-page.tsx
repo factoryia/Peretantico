@@ -31,7 +31,7 @@ export default function CustomerManagementPage() {
   // Eliminado: traducción del tipo de documento por nombre para evitar inconsistencias de valor
 
   // --- Carga de clientes desde el backend ---
-  const profiles = useQuery(api.profiles.list);
+  const profiles = useQuery(api.profiles.list, { customersOnly: true });
   const isLoadingCustomers = profiles === undefined;
 
   // Filtrado y paginación en el cliente
@@ -104,7 +104,7 @@ export default function CustomerManagementPage() {
               <p className="text-sm text-gray-500 font-medium">
                 {isLoadingCustomers
                   ? "Cargando..."
-                  : `${totalCount} cliente(s) gestionados`}
+                  : `${totalCount} solicitante(s) del servicio`}
               </p>
             </div>
           </div>

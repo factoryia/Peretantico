@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { Id } from "@convex/_generated/dataModel";
 
 export const useUsersQuery = () => {
-  const profiles = useQuery(api.profiles.list);
+  const profiles = useQuery(api.profiles.list, {});
 
   const users: AuthUser[] | undefined = profiles?.map((profile: any) => ({
     id: profile._id,
@@ -26,7 +26,7 @@ export const useUsersQuery = () => {
 export const useUserQuery = (id: string) => {
   // Not implemented in convex/profiles.ts yet, but can filter list or add get query
   // For now, let's use list and find
-  const profiles = useQuery(api.profiles.list);
+  const profiles = useQuery(api.profiles.list, {});
   const profile = profiles?.find((p) => p._id === id);
 
   const user: AuthUser | undefined = profile

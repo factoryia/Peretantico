@@ -78,6 +78,7 @@ export interface CompleteRequest {
   applicationStatus?: { id: string; name: string };
   distributor?: { id: string; name: string };
   paymentStatus?: { id: string; name: string };
+  distributorPaymentStatus?: { id: string; name: string };
   subservice?: { id: string; name: string };
   infoService?: InfoService;
   paymentInfo?: PaymentDTO | null;
@@ -168,6 +169,8 @@ export interface CompleteRequestFilters {
   zonaId?: string;
   isPrioritized?: boolean;
   paymentStatus?: string;
+  distributorPaymentStatus?: string;
+  eligibleForDistributorPayment?: boolean;
   search?: string;
   entryDateFrom?: number;
   entryDateTo?: number;
@@ -196,6 +199,8 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
     zonaId,
     isPrioritized,
     paymentStatus,
+    distributorPaymentStatus,
+    eligibleForDistributorPayment,
     search,
     entryDateFrom,
     entryDateTo,
@@ -245,6 +250,14 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
 
   if (paymentStatus && paymentStatus !== "all") {
     convexArgs.paymentStatus = paymentStatus;
+  }
+
+  if (distributorPaymentStatus && distributorPaymentStatus !== "all") {
+    convexArgs.distributorPaymentStatus = distributorPaymentStatus;
+  }
+
+  if (eligibleForDistributorPayment) {
+    convexArgs.eligibleForDistributorPayment = true;
   }
 
   if (search) {
@@ -325,7 +338,12 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
 
         // Defaults
         applicationStatus: undefined, 
-        paymentStatus: req.paymentStatus ? { id: req.paymentStatus, name: req.paymentStatus } : undefined,
+        paymentStatus: req.paymentStatus
+          ? { id: req.paymentStatus, name: req.paymentStatus }
+          : undefined,
+        distributorPaymentStatus: req.distributorPaymentStatus
+          ? { id: req.distributorPaymentStatus, name: req.distributorPaymentStatus }
+          : undefined,
         infoService: undefined,
         paymentInfo: null,
         evidenceStorageId: req.evidenceStorageId,

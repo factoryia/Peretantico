@@ -157,7 +157,7 @@ export function Reports() {
       periodo: filters.period !== "all" ? filters.period : undefined,
       zonaId: filters.service !== "all" ? filters.service : undefined,
       isPrioritized: filters.billing === "priority" ? true : filters.billing === "normal" ? false : undefined,
-      paymentStatus: filters.paymentStatus !== "all" ? filters.paymentStatus : undefined,
+      distributorPaymentStatus: filters.paymentStatus !== "all" ? filters.paymentStatus : undefined,
       search: filters.search || undefined,
     }),
     [filters]
@@ -234,7 +234,8 @@ export function Reports() {
 
   const distributorDeliveryStats = useMemo(() => {
     const stats: Record<string, number> = {};
-    filteredRequests.forEach(req => {
+    filteredRequests.forEach((req) => {
+      if (req.requestStatus !== "Atendida" && req.requestStatus !== "Finalizada") return;
       const dId = req.distributor?.id;
       if (dId) {
         stats[dId] = (stats[dId] || 0) + 1;
@@ -339,7 +340,9 @@ export function Reports() {
       if (reportFilters.periodo) args.periodo = reportFilters.periodo;
       if (reportFilters.zonaId) args.zonaId = reportFilters.zonaId as any;
       if (reportFilters.isPrioritized !== undefined) args.isPrioritized = reportFilters.isPrioritized;
-      if (reportFilters.paymentStatus) args.paymentStatus = reportFilters.paymentStatus;
+      if (reportFilters.distributorPaymentStatus) {
+        args.distributorPaymentStatus = reportFilters.distributorPaymentStatus;
+      }
       if (reportFilters.search) args.search = reportFilters.search;
 
       let data = await convex.query(api.requests.list, args);
@@ -368,7 +371,8 @@ export function Reports() {
         "Valor Prioridad": Number(req.prioritizedValue) || 0,
         "Costo Logístico": Number(req.logisticsCosts) || 0,
         "Prioritaria": req.isPrioritized ? "Sí" : "No",
-        "Estado Pago": req.paymentStatus || "Pendiente",
+        "Liquidación Repartidor": req.distributorPaymentStatus || "N/A",
+        "Pago Solicitante": req.paymentStatus || "N/A",
         "Observaciones": req.observations || "",
       }));
 
@@ -405,8 +409,8 @@ export function Reports() {
       const exportData = data.map((dist: any) => ({
         "Nombre": dist.title || "N/A",
         "Tipo Transporte": dist.transportationType?.name || "N/A",
-        "Estado Pago": dist.paymentStatus || "Pendiente",
-        "Solicitudes Entregadas": distributorDeliveryStats[dist._id] || 0,
+        "Estado Liquidación": dist.paymentStatus || "Pagado",
+        "Entregas Completadas": distributorDeliveryStats[dist._id] || 0,
         "Email": dist.email || "N/A",
         "Teléfono": dist.phoneNumber || "N/A",
       }));
@@ -578,7 +582,7 @@ export function Reports() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-500 ml-1">
-                    Estado Pago
+                    Liquidación repartidor
                   </label>
                   <Select
                     value={filters.paymentStatus}
@@ -635,7 +639,7 @@ export function Reports() {
                       Facturación
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-500 uppercase text-xs text-center">
-                      Estado Pago
+                      Liquidación repartidor
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-500 uppercase text-xs text-center">
                      Estado
@@ -687,15 +691,19 @@ export function Reports() {
                             {formatCurrency((request.field_service_value || 0) + (request.field_prioritized_value || 0))}
                           </TableCell>
                           <TableCell className="text-center">
-                            {request.paymentStatus?.name === "Pagado" ? (
+                            {request.distributorPaymentStatus?.name === "Pagado" ? (
                               <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-bold text-xs uppercase">
                                 <Check className="h-3.5 w-3.5" />
                                 Pagado
                               </div>
-                            ) : (
+                            ) : request.distributorPaymentStatus?.name === "Pendiente" ? (
                               <div className="flex items-center justify-center gap-1.5 text-rose-500 font-bold text-xs uppercase">
                                 <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                                 Pendiente
+                              </div>
+                            ) : (
+                              <div className="text-slate-400 font-medium text-xs uppercase">
+                                N/A
                               </div>
                             )}
                           </TableCell>
@@ -805,7 +813,7 @@ export function Reports() {
             <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 pb-2">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-500 ml-1">
-                  Estado Pago (Finalizadas)
+                  Liquidación pendiente
                 </label>
                 <Select
                   value={distFilters.payment_status}
@@ -859,13 +867,13 @@ export function Reports() {
                       REPARTIDOR
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-400 uppercase text-[11px] tracking-wider text-center">
-                      SOLICITUDES ASIGNADAS
+                      ENTREGAS COMPLETADAS
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-400 uppercase text-[11px] tracking-wider text-center">
                       TIPO ENTREGA
                     </TableHead>
                     <TableHead className="py-4 font-bold text-slate-400 uppercase text-[11px] tracking-wider text-center">
-                      ESTADO PAGO
+                      LIQUIDACIÓN
                     </TableHead>
                   </TableRow>
                 </TableHeader>

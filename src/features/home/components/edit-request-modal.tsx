@@ -97,7 +97,7 @@ export function EditRequestModal({
 
   // Obtener datos para las opciones del formulario
   const distributorsData = useQuery(api.distributors.listAll, {});
-  const applicantsData = useQuery(api.profiles.list, {});
+  const applicantsData = useQuery(api.profiles.list, { customersOnly: true });
   const servicesData = useQuery(api.services.listAll, {});
   
   const updateRequest = useMutation(api.requests.update);

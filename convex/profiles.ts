@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { isServiceCustomerProfile } from "./profiles.helpers";
 
 function normalizePhoneDigits(input: string): string {
   return (input ?? "").replace(/[^\d+]/g, "").trim();
@@ -43,30 +44,53 @@ function phoneVariants(raw: string): string[] {
 }
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    customersOnly: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
     const profiles = await ctx.db.query("profiles").collect();
+
+    const distributorUserIds = args.customersOnly
+      ? new Set(
+          (await ctx.db.query("distributors").collect())
+            .map((row) => row.userId)
+            .filter((id): id is NonNullable<typeof id> => !!id)
+        )
+      : null;
 
     // Fetch roles for each profile
     const profilesWithRoles = await Promise.all(
       profiles.map(async (profile) => {
-        const userRoles = await ctx.db
-          .query("userRoles")
-          .withIndex("by_user", (q) => q.eq("userId", profile.userId!))
-          .collect();
+        const userRoles = profile.userId
+          ? await ctx.db
+              .query("userRoles")
+              .withIndex("by_user", (q) => q.eq("userId", profile.userId!))
+              .collect()
+          : [];
 
         const roles = await Promise.all(
           userRoles.map((ur) => ctx.db.get(ur.roleId))
         );
 
+        const roleNames = roles.filter((r) => r !== null).map((r) => r!.name);
+
         return {
           ...profile,
-          roles: roles.filter((r) => r !== null).map((r) => r!.name),
+          roles: roleNames,
         };
       })
     );
 
-    return profilesWithRoles;
+    if (!args.customersOnly) {
+      return profilesWithRoles;
+    }
+
+    return profilesWithRoles.filter((profile) =>
+      isServiceCustomerProfile({
+        roles: profile.roles,
+        linkedToDistributor: !!profile.userId && distributorUserIds!.has(profile.userId),
+      })
+    );
   },
 });
 

@@ -162,10 +162,10 @@ export default function CostManagementPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">
-                  Filtrar Solicitudes Completadas
+                  Filtrar solicitudes completadas
                 </h3>
                 <p className="text-sm font-medium text-slate-500">
-                  Seleccione un repartidor para ver sus servicios finalizados
+                  Solo aparecen entregas marcadas como completadas por el repartidor, pendientes de liquidación
                 </p>
               </div>
             </div>

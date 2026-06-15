@@ -4,6 +4,7 @@ import { action, internalQuery, mutation, query, type MutationCtx } from "./_gen
 import { internal } from "./_generated/api";
 import { paginationOptsValidator } from "convex/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { computeDistributorSettlementStatus } from "./distributorPayments.helpers";
 
 const distributorRecordArgs = {
   userId: v.optional(v.id("users")),
@@ -171,29 +172,7 @@ export const list = query({
         const coverageArea = distributor.coverageAreaId ? await ctx.db.get(distributor.coverageAreaId) : null;
         const transportationType = distributor.transportationTypeId ? await ctx.db.get(distributor.transportationTypeId) : null;
         
-        // Calculate payment status based on unpaid finalized requests
-        const finishedRequests = await ctx.db
-          .query("requests")
-          .withIndex("by_distributor", (q) => q.eq("distributorId", distributor._id))
-          .filter((q) => q.eq(q.field("requestStatus"), "Finalizada"))
-          .collect();
-
-        let paymentStatus = "Pagado";
-        
-        if (finishedRequests.length > 0) {
-          // Check if any finished request is NOT in paymentRequests
-          for (const req of finishedRequests) {
-            const payment = await ctx.db
-              .query("paymentRequests")
-              .withIndex("by_request", (q) => q.eq("requestId", req._id))
-              .first();
-            
-            if (!payment) {
-              paymentStatus = "Pendiente";
-              break;
-            }
-          }
-        }
+        const paymentStatus = await computeDistributorSettlementStatus(ctx, distributor._id);
 
         return {
           ...distributor,
@@ -205,7 +184,12 @@ export const list = query({
       })
     );
 
-    return { ...results, page };
+    const filteredPage =
+      args.paymentStatus && args.paymentStatus !== "all"
+        ? page.filter((row) => row.paymentStatus === args.paymentStatus)
+        : page;
+
+    return { ...results, page: filteredPage };
   },
 });
 
@@ -241,29 +225,7 @@ export const listAll = query({
         const coverageArea = distributor.coverageAreaId ? await ctx.db.get(distributor.coverageAreaId) : null;
         const transportationType = distributor.transportationTypeId ? await ctx.db.get(distributor.transportationTypeId) : null;
         
-        // Calculate payment status based on unpaid finalized requests
-        const finishedRequests = await ctx.db
-          .query("requests")
-          .withIndex("by_distributor", (q) => q.eq("distributorId", distributor._id))
-          .filter((q) => q.eq(q.field("requestStatus"), "Finalizada"))
-          .collect();
-
-        let paymentStatus = "Pagado";
-        
-        if (finishedRequests.length > 0) {
-          // Check if any finished request is NOT in paymentRequests
-          for (const req of finishedRequests) {
-            const payment = await ctx.db
-              .query("paymentRequests")
-              .withIndex("by_request", (q) => q.eq("requestId", req._id))
-              .first();
-            
-            if (!payment) {
-              paymentStatus = "Pendiente";
-              break;
-            }
-          }
-        }
+        const paymentStatus = await computeDistributorSettlementStatus(ctx, distributor._id);
 
         return {
           ...distributor,
@@ -274,6 +236,10 @@ export const listAll = query({
         };
       })
     );
+
+    if (args.paymentStatus && args.paymentStatus !== "all") {
+      return results.filter((row) => row.paymentStatus === args.paymentStatus);
+    }
 
     return results;
   },

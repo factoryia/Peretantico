@@ -176,7 +176,7 @@ export function NewRequestModal({
   const createRequest = useMutation(api.requests.create);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   
-  const applicantsData = useQuery(api.profiles.list) || [];
+  const applicantsData = useQuery(api.profiles.list, { customersOnly: true }) || [];
   const servicesData = useQuery(api.services.listAll) || [];
   
   const applicants: Applicant[] = applicantsData ? applicantsData.map((p: any) => ({

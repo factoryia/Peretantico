@@ -1,5 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import {
+  DISTRIBUTOR_COMPLETED_STATUS,
+  isRequestPaidToDistributor,
+} from "./distributorPayments.helpers";
 
 export const create = mutation({
   args: {
@@ -94,16 +98,11 @@ export const getPendingRequestsByDistributor = query({
     distributorId: v.id("distributors"),
   },
   handler: async (ctx, args) => {
-    // 1. Get all requests for the distributor that are Atendida or Finalizada
+    // Solo solicitudes completadas por el repartidor, pendientes de liquidación.
     const requests = await ctx.db
       .query("requests")
       .withIndex("by_distributor", (q) => q.eq("distributorId", args.distributorId))
-      .filter((q) => 
-        q.or(
-          q.eq(q.field("requestStatus"), "Atendida"),
-          q.eq(q.field("requestStatus"), "Finalizada")
-        )
-      )
+      .filter((q) => q.eq(q.field("requestStatus"), DISTRIBUTOR_COMPLETED_STATUS))
       .collect();
 
     if (requests.length === 0) return [];
@@ -111,12 +110,7 @@ export const getPendingRequestsByDistributor = query({
     // 2. Check which ones are already paid (don't have payment associated)
     const pendingRequests = await Promise.all(
       requests.map(async (request) => {
-        const paymentParams = await ctx.db
-          .query("paymentRequests")
-          .withIndex("by_request", (q) => q.eq("requestId", request._id))
-          .first();
-          
-        if (paymentParams) return null; // Already paid
+        if (await isRequestPaidToDistributor(ctx, request._id)) return null;
 
         // Enrich with service and applicant info
         const service = await ctx.db.get(request.serviceId);
