@@ -104,14 +104,14 @@ function ContactItem({
       className={cn(
         "group w-full max-w-full flex items-start gap-3 px-4 py-3.5 transition-all text-left overflow-hidden border-b border-[#f0f2f5]/80",
         "hover:bg-[#f8f9fa]",
-        isActive ? "bg-primary/[0.06] border-l-[3px] border-l-primary pl-[13px]" : "bg-white border-l-[3px] border-l-transparent"
+        isActive ? "bg-primary/6 border-l-[3px] border-l-primary pl-[13px]" : "bg-white border-l-[3px] border-l-transparent"
       )}
     >
       <Avatar className="h-12 w-12 shrink-0 ring-2 ring-white shadow-sm">
         <AvatarFallback
           className={cn(
             "text-sm font-semibold",
-            isActive ? "bg-primary text-primary-foreground" : "bg-gradient-to-br from-[#dfe5e7] to-[#c8d0d4] text-[#3b4a54]"
+            isActive ? "bg-primary text-primary-foreground" : "bg-linear-to-br from-[#dfe5e7] to-[#c8d0d4] text-[#3b4a54]"
           )}
         >
           {contactInitials(title)}
@@ -393,7 +393,7 @@ function ChatArea({
 
   if (!selectedContactId || !activeContact) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center bg-gradient-to-b from-[#f0f2f5] to-[#e7ebee] gap-5">
+      <div className="flex flex-1 flex-col items-center justify-center bg-linear-to-b from-[#f0f2f5] to-[#e7ebee] gap-5">
         <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-white shadow-md ring-1 ring-black/5">
           <img src="/logo.png" alt="Peretantico" className="h-16 w-16 object-contain" />
         </div>
