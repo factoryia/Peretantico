@@ -12,6 +12,8 @@ import {
   MoreVertical,
   PauseCircle,
   PlayCircle,
+  Plus,
+  Tag,
   UserRound,
   X,
 } from "lucide-react";
@@ -43,6 +45,7 @@ export function ChatHeader({
   botMuted,
   botMutedUntil,
   onToggleBot,
+  onAddLabel,
 }: {
   contactId: string;
   title: string;
@@ -55,11 +58,13 @@ export function ChatHeader({
   botMuted: boolean;
   botMutedUntil: string | null;
   onToggleBot: () => void;
+  onAddLabel: (name: string) => Promise<boolean>;
 }) {
   const updateContactInbox = useMutation(api.conversationState.updateContactInbox);
   const [menuOpen, setMenuOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(resolvedName ?? "");
   const [localLabels, setLocalLabels] = useState(labels);
+  const [newLabelName, setNewLabelName] = useState("");
   const [saving, setSaving] = useState(false);
 
   const stage = pipelineStage ? PIPELINE_STAGE_META[pipelineStage] : null;
@@ -98,6 +103,20 @@ export function ChatHeader({
     }
   }
 
+  async function handleCreateAndAssign() {
+    const trimmed = newLabelName.trim();
+    if (!trimmed) return;
+    const created = await onAddLabel(trimmed);
+    if (!created) {
+      toast.error("No se pudo crear la etiqueta (vacía, duplicada o reservada)");
+      return;
+    }
+    const next = [...new Set([...localLabels, trimmed])];
+    setNewLabelName("");
+    await updateLabels(next);
+    toast.success(`Etiqueta "${trimmed}" asignada`);
+  }
+
   return (
     <header className="shrink-0 border-b border-[#e9edef] bg-white px-3 py-2.5 shadow-sm md:px-4">
       <div className="flex items-center gap-3">
@@ -116,33 +135,32 @@ export function ChatHeader({
                 {stage.label}
               </span>
             ) : null}
-            {localLabels.slice(0, 2).map((label) => (
-              <span
-                key={label}
-                className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", labelChipClass(label))}
-              >
-                {label}
-              </span>
-            ))}
-            {localLabels.length > 2 ? (
-              <span className="text-[10px] text-[#8696a0]">+{localLabels.length - 2}</span>
-            ) : null}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                botMuted ? "bg-amber-50 text-amber-700" : "bg-primary/10 text-primary"
+              )}
+            >
+              {botMuted ? <UserRound className="h-2.5 w-2.5" /> : <Bot className="h-2.5 w-2.5" />}
+              {botMuted ? (botMutedUntil ? "Pausado" : "Humano") : "Bot activo"}
+            </span>
           </div>
+          {localLabels.length > 0 ? (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <Tag className="h-3 w-3 text-[#8696a0]" />
+              {localLabels.map((label) => (
+                <span
+                  key={label}
+                  className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", labelChipClass(label))}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span
-            className={cn(
-              "hidden sm:inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium",
-              botMuted
-                ? "bg-amber-50 text-amber-800 ring-1 ring-amber-100"
-                : "bg-primary/10 text-primary ring-1 ring-primary/10"
-            )}
-          >
-            {botMuted ? <UserRound className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
-            {botMuted ? (botMutedUntil ? "Pausado" : "Humano") : "Bot"}
-          </span>
-
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger asChild>
               <Button
@@ -197,11 +215,15 @@ export function ChatHeader({
               <DropdownMenuSeparator />
 
               <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-[#8696a0]">
-                Etiquetas
+                Etiquetas personalizadas
               </DropdownMenuLabel>
+              <p className="px-2 pb-1 text-[11px] text-muted-foreground">
+                Los estados del sistema (bot, solicitud, etc.) no se editan aquí.
+              </p>
+
               {catalogLabels.length === 0 ? (
                 <p className="px-2 pb-2 text-xs text-muted-foreground">
-                  Crea etiquetas en el panel lateral
+                  Aún no hay etiquetas. Crea una abajo o en el panel lateral.
                 </p>
               ) : (
                 catalogLabels.map((item) => (
@@ -216,10 +238,35 @@ export function ChatHeader({
                       void updateLabels(next);
                     }}
                   >
-                    {item.name}
+                    <span className={cn("mr-2 inline-flex rounded-full px-2 py-0.5 text-[10px]", labelChipClass(item.name, item.color))}>
+                      {item.name}
+                    </span>
                   </DropdownMenuCheckboxItem>
                 ))
               )}
+
+              <div className="px-2 py-2">
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={newLabelName}
+                    onChange={(e) => setNewLabelName(e.target.value)}
+                    placeholder="Nueva etiqueta"
+                    className="h-8 flex-1 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleCreateAndAssign();
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 text-primary"
+                    onClick={() => void handleCreateAndAssign()}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
               <DropdownMenuSeparator />
 

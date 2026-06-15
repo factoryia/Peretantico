@@ -10,7 +10,8 @@ export type ConversationFilterId =
   | "agent"
   | string;
 
-export const BUILTIN_FILTERS: Array<{ id: ConversationFilterId; label: string }> = [
+/** Filtros de estado del sistema — no son etiquetas personalizadas. */
+export const STATE_FILTERS: Array<{ id: ConversationFilterId; label: string }> = [
   { id: "all", label: "Todas" },
   { id: "visitante", label: "Sin solicitud" },
   { id: "en_proceso", label: "En proceso" },
@@ -19,6 +20,15 @@ export const BUILTIN_FILTERS: Array<{ id: ConversationFilterId; label: string }>
   { id: "bot", label: "Bot activo" },
   { id: "agent", label: "Atención humana" },
 ];
+
+/** @deprecated Use STATE_FILTERS */
+export const BUILTIN_FILTERS = STATE_FILTERS;
+
+export const RESERVED_LABEL_NAMES = new Set(
+  STATE_FILTERS.map((f) => f.label.toLowerCase()).concat(
+    STATE_FILTERS.map((f) => String(f.id).toLowerCase())
+  )
+);
 
 const READ_KEY = "peretantico.conversation-read.v1";
 
@@ -58,5 +68,9 @@ export function isPipelineFilter(
 }
 
 export function isBuiltinFilter(filter: ConversationFilterId): boolean {
-  return BUILTIN_FILTERS.some((f) => f.id === filter);
+  return STATE_FILTERS.some((f) => f.id === filter);
+}
+
+export function isStateFilter(filter: ConversationFilterId): boolean {
+  return isBuiltinFilter(filter);
 }

@@ -5,6 +5,23 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 type MediaType = "image" | "video" | "audio" | "document";
 export type ContactPipelineStage = "visitante" | "en_proceso" | "solicitud";
 
+const RESERVED_INBOX_LABEL_NAMES = new Set([
+  "todas",
+  "sin solicitud",
+  "en proceso",
+  "con solicitud",
+  "requiere atención",
+  "bot activo",
+  "atención humana",
+  "visitante",
+  "en_proceso",
+  "solicitud",
+  "needshuman",
+  "bot",
+  "agent",
+  "all",
+]);
+
 function sortByUpdatedAt<T extends { updatedAt?: number }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
@@ -515,11 +532,12 @@ export const addInboxLabel = mutation({
 
     const name = args.name.trim();
     if (!name) throw new Error("Nombre de etiqueta vacío");
+    if (RESERVED_INBOX_LABEL_NAMES.has(name.toLowerCase())) {
+      throw new Error("Ese nombre está reservado para un estado del sistema");
+    }
 
-    const existing = await ctx.db
-      .query("inboxLabels")
-      .withIndex("by_name", (q) => q.eq("name", name))
-      .first();
+    const allLabels = await ctx.db.query("inboxLabels").collect();
+    const existing = allLabels.find((row) => row.name.toLowerCase() === name.toLowerCase());
     if (existing) return existing._id;
 
     return await ctx.db.insert("inboxLabels", {

@@ -16,6 +16,7 @@ import {
   Search,
   Plus,
   SlidersHorizontal,
+  Tag,
   X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -26,9 +27,9 @@ import { ChatMessageList } from "../components/chat-message-list";
 import { ChatHeader } from "../components/chat-header";
 import {
   useReadConversations,
-  BUILTIN_FILTERS,
+  STATE_FILTERS,
   isPipelineFilter,
-  isBuiltinFilter,
+  RESERVED_LABEL_NAMES,
   type ConversationFilterId,
 } from "../hooks/use-conversation-labels";
 import {
@@ -136,39 +137,45 @@ function ContactItem({
 
         <p className="mt-0.5 truncate text-[13px] text-[#667781]">{contact.lastMessage}</p>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-          {stage ? (
-            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", stage.className)}>
-              {stage.label}
-            </span>
-          ) : null}
-          {contact.needsHuman ? (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
-              <AlertTriangle className="h-2.5 w-2.5" />
-              Atención
-            </span>
-          ) : contact.botMuted ? (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-              Agente
-            </span>
-          ) : (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-              Bot
-            </span>
-          )}
-          {labels.slice(0, 2).map((label) => (
-            <span
-              key={label}
-              className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", labelChipClass(label))}
-            >
-              {label}
-            </span>
-          ))}
-          {labels.length > 2 ? (
-            <span className="text-[10px] text-[#8696a0]">+{labels.length - 2}</span>
-          ) : null}
-          {isUnread && !isActive ? (
-            <span className="ml-auto flex h-2 w-2 rounded-full bg-primary" />
+        <div className="mt-1.5 space-y-1">
+          <div className="flex flex-wrap items-center gap-1">
+            {stage ? (
+              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", stage.className)}>
+                {stage.label}
+              </span>
+            ) : null}
+            {contact.needsHuman ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                Atención
+              </span>
+            ) : contact.botMuted ? (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                Humano
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                Bot
+              </span>
+            )}
+            {isUnread && !isActive ? (
+              <span className="ml-auto flex h-2 w-2 rounded-full bg-primary" />
+            ) : null}
+          </div>
+          {labels.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1">
+              {labels.slice(0, 3).map((label) => (
+                <span
+                  key={label}
+                  className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", labelChipClass(label))}
+                >
+                  {label}
+                </span>
+              ))}
+              {labels.length > 3 ? (
+                <span className="text-[10px] text-[#8696a0]">+{labels.length - 3}</span>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
@@ -184,8 +191,10 @@ function ConversationSidebar({
   isLoading,
   search,
   onSearchChange,
-  activeFilter,
-  onFilterChange,
+  activeStateFilter,
+  onStateFilterChange,
+  activeLabelFilter,
+  onLabelFilterChange,
   catalogLabels,
   onAddLabel,
   onSelect,
@@ -196,8 +205,10 @@ function ConversationSidebar({
   isLoading: boolean;
   search: string;
   onSearchChange: (v: string) => void;
-  activeFilter: ConversationFilterId;
-  onFilterChange: (f: ConversationFilterId) => void;
+  activeStateFilter: ConversationFilterId;
+  onStateFilterChange: (f: ConversationFilterId) => void;
+  activeLabelFilter: string;
+  onLabelFilterChange: (label: string) => void;
   catalogLabels: Array<{ _id: string; name: string; color?: string | null }>;
   onAddLabel: (name: string) => Promise<boolean>;
   onSelect: (id: string) => void;
@@ -206,12 +217,7 @@ function ConversationSidebar({
   const [newLabel, setNewLabel] = useState("");
   const [showNewLabel, setShowNewLabel] = useState(false);
 
-  const chips = [
-    ...BUILTIN_FILTERS,
-    ...catalogLabels
-      .filter((l) => !isBuiltinFilter(l.name))
-      .map((l) => ({ id: l.name, label: l.name })),
-  ];
+  const labelChips = catalogLabels.map((l) => ({ id: l.name, label: l.name, color: l.color }));
 
   return (
     <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden border-r border-[#e9edef] bg-[#f8f9fa] md:w-[400px] md:shrink-0">
@@ -241,40 +247,85 @@ function ConversationSidebar({
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-[#e9edef] bg-white px-3 pb-3">
-        <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#8696a0]">
-          <SlidersHorizontal className="h-3 w-3" />
-          Filtrar
+      <div className="shrink-0 border-b border-[#e9edef] bg-white px-3 pb-3 space-y-2.5">
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#8696a0]">
+            <SlidersHorizontal className="h-3 w-3" />
+            Estados
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {STATE_FILTERS.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => onStateFilterChange(chip.id)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                  activeStateFilter === chip.id
+                    ? "bg-[#54656f] text-white shadow-sm"
+                    : "bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]"
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {chips.map((chip) => (
+
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#8696a0]">
+              <Tag className="h-3 w-3" />
+              Etiquetas
+            </div>
             <button
-              key={chip.id}
               type="button"
-              onClick={() => onFilterChange(chip.id)}
+              onClick={() => setShowNewLabel((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium transition-colors",
+                showNewLabel
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-dashed border-[#c4ccd0] text-[#8696a0] hover:bg-[#f0f2f5]"
+              )}
+            >
+              {showNewLabel ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+              Nueva
+            </button>
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              type="button"
+              onClick={() => onLabelFilterChange("all")}
               className={cn(
                 "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-                activeFilter === chip.id
+                activeLabelFilter === "all"
                   ? "bg-primary text-white shadow-sm shadow-primary/20"
                   : "bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]"
               )}
             >
-              {chip.label}
+              Todas
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setShowNewLabel((v) => !v)}
-            className={cn(
-              "shrink-0 inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] transition-colors",
-              showNewLabel
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-dashed border-[#c4ccd0] text-[#8696a0] hover:bg-[#f0f2f5]"
-            )}
-          >
-            {showNewLabel ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-            Etiqueta
-          </button>
+            {labelChips.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => onLabelFilterChange(chip.id)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all border",
+                  activeLabelFilter === chip.id
+                    ? "bg-primary text-white border-primary shadow-sm shadow-primary/20"
+                    : cn("bg-white text-[#54656f] hover:bg-[#f0f2f5]", labelChipClass(chip.label, chip.color))
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+            {labelChips.length === 0 ? (
+              <span className="self-center text-[11px] text-[#8696a0] px-1">
+                Sin etiquetas creadas
+              </span>
+            ) : null}
+          </div>
         </div>
         {showNewLabel ? (
           <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#e9edef] bg-[#f8f9fa] p-2">
@@ -367,6 +418,7 @@ function ChatArea({
   botMutedUntil,
   onToggleBot,
   catalogLabels,
+  onAddLabel,
   onSend,
 }: {
   selectedContactId: string | null;
@@ -375,6 +427,7 @@ function ChatArea({
   botMutedUntil: string | null;
   onToggleBot: () => void;
   catalogLabels: Array<{ _id: string; name: string; color?: string | null }>;
+  onAddLabel: (name: string) => Promise<boolean>;
   onSend: (args: {
     content?: string;
     mediaStorageId?: Id<"_storage">;
@@ -419,6 +472,7 @@ function ChatArea({
         botMuted={botMuted}
         botMutedUntil={botMutedUntil}
         onToggleBot={onToggleBot}
+        onAddLabel={onAddLabel}
       />
 
       {activeContact.needsHuman ? (
@@ -446,7 +500,8 @@ export function InboxPage() {
   const [search, setSearch] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<ConversationFilterId>("all");
+  const [activeStateFilter, setActiveStateFilter] = useState<ConversationFilterId>("all");
+  const [activeLabelFilter, setActiveLabelFilter] = useState<string>("all");
 
   const { markRead } = useReadConversations();
   const addInboxLabel = useMutation(api.conversationState.addInboxLabel);
@@ -460,10 +515,10 @@ export function InboxPage() {
       label?: string;
     } = { limit: 80 };
     if (search.trim()) base.search = search.trim();
-    if (isPipelineFilter(activeFilter)) base.pipelineStage = activeFilter;
-    else if (!isBuiltinFilter(activeFilter)) base.label = activeFilter;
+    if (isPipelineFilter(activeStateFilter)) base.pipelineStage = activeStateFilter;
+    if (activeLabelFilter !== "all") base.label = activeLabelFilter;
     return base;
-  }, [search, activeFilter]);
+  }, [search, activeStateFilter, activeLabelFilter]);
 
   const contacts = useQuery(api.conversationState.listContacts, listArgs);
   const sendManualMessage = useAction(api.ycloudBot.sendManualMessage);
@@ -475,8 +530,8 @@ export function InboxPage() {
 
   const filteredContacts = useMemo(() => {
     const list = (contacts ?? []) as ContactRow[];
-    return list.filter((c) => matchesClientFilter(c, activeFilter));
-  }, [contacts, activeFilter]);
+    return list.filter((c) => matchesClientFilter(c, activeStateFilter));
+  }, [contacts, activeStateFilter]);
 
   const activeContact = useMemo(
     () => filteredContacts.find((c) => c.contactId === selectedContactId) ?? (contacts ?? []).find((c) => c.contactId === selectedContactId) ?? null,
@@ -500,7 +555,8 @@ export function InboxPage() {
   async function handleAddLabel(name: string): Promise<boolean> {
     const trimmed = name.trim();
     if (!trimmed) return false;
-    if (catalogLabels.some((l) => l.name.toLowerCase() === trimmed.toLowerCase())) return false;
+    if (RESERVED_LABEL_NAMES.has(trimmed.toLowerCase())) return false;
+    if (catalogLabels.some((l) => l.name.toLowerCase() === trimmed.toLowerCase())) return true;
     try {
       await addInboxLabel({ name: trimmed });
       return true;
@@ -552,8 +608,10 @@ export function InboxPage() {
       isLoading={contacts === undefined}
       search={search}
       onSearchChange={setSearch}
-      activeFilter={activeFilter}
-      onFilterChange={setActiveFilter}
+      activeStateFilter={activeStateFilter}
+      onStateFilterChange={setActiveStateFilter}
+      activeLabelFilter={activeLabelFilter}
+      onLabelFilterChange={setActiveLabelFilter}
       catalogLabels={catalogLabels}
       onAddLabel={handleAddLabel}
       onSelect={(id) => {
@@ -572,6 +630,7 @@ export function InboxPage() {
       botMutedUntil={botMutedUntil}
       onToggleBot={() => void handleToggleBot()}
       catalogLabels={catalogLabels}
+      onAddLabel={handleAddLabel}
       onSend={handleSend}
     />
   );
