@@ -16,6 +16,7 @@ import type * as coverageAreas from "../coverageAreas.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as debug from "../debug.js";
+import type * as distributorCredentials from "../distributorCredentials.js";
 import type * as distributors from "../distributors.js";
 import type * as emails from "../emails.js";
 import type * as files from "../files.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dashboard: typeof dashboard;
   debug: typeof debug;
+  distributorCredentials: typeof distributorCredentials;
   distributors: typeof distributors;
   emails: typeof emails;
   files: typeof files;

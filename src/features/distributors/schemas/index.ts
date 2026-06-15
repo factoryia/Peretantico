@@ -19,7 +19,11 @@ export const distributorSchema = z.object({
     .min(1)
     .max(15)
     .regex(/^\d+$/, "Solo se permiten números"),
-  email: z.string().max(100).email().optional().or(z.literal("")),
+  email: z
+    .string()
+    .min(1, "El correo es obligatorio para el acceso del repartidor")
+    .email("Correo inválido")
+    .max(100),
   coverageAreaId: z.string().min(1),
   transportationTypeId: z.string().min(1),
   vehicleId: z.string().max(10).optional().or(z.literal("")),

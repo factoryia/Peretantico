@@ -1,7 +1,99 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { action, internalQuery, mutation, query, type MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { paginationOptsValidator } from "convex/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
+
+const distributorRecordArgs = {
+  userId: v.optional(v.id("users")),
+  email: v.optional(v.string()),
+  documentNumber: v.string(),
+  coverageAreaId: v.optional(v.id("coverageAreas")),
+  transportationTypeId: v.optional(v.id("transportationTypes")),
+  title: v.string(),
+  documentType: v.string(),
+  phoneNumber: v.string(),
+  vehicleId: v.optional(v.string()),
+  observations: v.optional(v.string()),
+  status: v.boolean(),
+  currentAvailability: v.boolean(),
+  entryDate: v.string(),
+};
+
+async function ensureDistributorUser(
+  ctx: MutationCtx,
+  args: {
+    email: string;
+    title: string;
+    documentType: string;
+    documentNumber: string;
+    phoneNumber: string;
+    userId?: Id<"users">;
+  }
+): Promise<Id<"users">> {
+  let userId = args.userId;
+  const email = args.email.trim().toLowerCase();
+
+  const existingUser = await ctx.db
+    .query("users")
+    .filter((q) => q.eq(q.field("email"), email))
+    .first();
+
+  if (existingUser) {
+    userId = existingUser._id;
+  } else {
+    userId = await ctx.db.insert("users", {
+      email,
+      name: args.title,
+    });
+  }
+
+  const existingProfile = await ctx.db
+    .query("profiles")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .first();
+
+  if (!existingProfile) {
+    await ctx.db.insert("profiles", {
+      userId,
+      fullName: args.title,
+      documentType: args.documentType,
+      documentNumber: args.documentNumber,
+      phoneNumber: args.phoneNumber,
+      email,
+    });
+  } else {
+    await ctx.db.patch(existingProfile._id, {
+      fullName: args.title,
+      documentType: args.documentType,
+      documentNumber: args.documentNumber,
+      phoneNumber: args.phoneNumber,
+      email,
+    });
+  }
+
+  const role = await ctx.db
+    .query("roles")
+    .withIndex("by_name", (q) => q.eq("name", "Repartidor"))
+    .first();
+
+  if (role) {
+    const hasRole = await ctx.db
+      .query("userRoles")
+      .withIndex("by_user_role", (q) => q.eq("userId", userId!).eq("roleId", role._id))
+      .first();
+
+    if (!hasRole) {
+      await ctx.db.insert("userRoles", {
+        userId,
+        roleId: role._id,
+      });
+    }
+  }
+
+  return userId!;
+}
 
 export const getByUserId = query({
   args: { userId: v.optional(v.string()) },
@@ -188,100 +280,33 @@ export const listAll = query({
 });
 
 export const create = mutation({
-  args: {
-    userId: v.optional(v.id("users")),
-    email: v.optional(v.string()),
-    documentNumber: v.string(),
-    coverageAreaId: v.optional(v.id("coverageAreas")),
-    transportationTypeId: v.optional(v.id("transportationTypes")),
-    title: v.string(),
-    documentType: v.string(),
-    phoneNumber: v.string(),
-    vehicleId: v.optional(v.string()),
-    observations: v.optional(v.string()),
-    status: v.boolean(),
-    currentAvailability: v.boolean(),
-    entryDate: v.string(),
-  },
+  args: distributorRecordArgs,
   handler: async (ctx, args) => {
-    // Check uniqueness of documentNumber
     const existing = await ctx.db
       .query("distributors")
       .withIndex("by_documentNumber", (q) => q.eq("documentNumber", args.documentNumber))
       .first();
-    if (existing) throw new Error("Distributor with this document number already exists");
+    if (existing) throw new Error("Ya existe un repartidor con esta cédula");
 
-    let userId = args.userId;
+    const email = args.email?.trim().toLowerCase();
+    if (!email) throw new Error("El correo es obligatorio para el acceso del repartidor");
 
-    // Logic to create user and assign role if email is provided and userId is missing
-    if (!userId && args.email) {
-      // 1. Check if user exists in "users" table
-      // Note: We use filter because "users" table index depends on auth config
-      const existingUser = await ctx.db
-        .query("users")
-        .filter((q) => q.eq(q.field("email"), args.email))
-        .first();
-
-      if (existingUser) {
-        userId = existingUser._id;
-      } else {
-        // Create new user in users table
-        userId = await ctx.db.insert("users", { 
-          email: args.email,
-          name: args.title,
-          // We don't set image or other auth fields
-        });
-      }
-
-      // 2. Create Profile if it doesn't exist
-      if (userId) {
-        const existingProfile = await ctx.db
-          .query("profiles")
-          .withIndex("by_userId", (q) => q.eq("userId", userId))
-          .first();
-
-        if (!existingProfile) {
-          await ctx.db.insert("profiles", {
-            userId,
-            fullName: args.title,
-            documentType: args.documentType,
-            documentNumber: args.documentNumber,
-            phoneNumber: args.phoneNumber,
-            email: args.email,
-            // Optional fields
-            address: undefined,
-          });
-        }
-
-        // 3. Assign "Repartidor" Role
-        const role = await ctx.db
-          .query("roles")
-          .withIndex("by_name", (q) => q.eq("name", "Repartidor"))
-          .first();
-
-        if (role) {
-          const hasRole = await ctx.db
-            .query("userRoles")
-            .withIndex("by_user_role", (q) => q.eq("userId", userId!).eq("roleId", role._id))
-            .first();
-
-          if (!hasRole) {
-            await ctx.db.insert("userRoles", {
-              userId,
-              roleId: role._id,
-            });
-          }
-        }
-      }
-    }
+    const userId = await ensureDistributorUser(ctx, {
+      userId: args.userId,
+      email,
+      title: args.title,
+      documentType: args.documentType,
+      documentNumber: args.documentNumber,
+      phoneNumber: args.phoneNumber,
+    });
 
     const distributorId = await ctx.db.insert("distributors", {
-      userId, // Use the resolved or created userId
+      userId,
       title: args.title,
       documentNumber: args.documentNumber,
       documentType: args.documentType,
       phoneNumber: args.phoneNumber,
-      email: args.email,
+      email,
       entryDate: new Date(args.entryDate).getTime(),
       vehicleId: args.vehicleId,
       observations: args.observations,
@@ -289,6 +314,11 @@ export const create = mutation({
       transportationTypeId: args.transportationTypeId,
       status: args.status,
       currentAvailability: args.currentAvailability,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.distributorCredentials.provision, {
+      email,
+      documentNumber: args.documentNumber,
     });
 
     return distributorId;
@@ -314,13 +344,54 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, entryDate, ...rest } = args;
-    
+    const current = await ctx.db.get(id);
+    if (!current) throw new Error("Repartidor no encontrado");
+
     const updates: Partial<Doc<"distributors">> = { ...rest };
+    if (rest.email !== undefined) {
+      updates.email = rest.email.trim().toLowerCase() || undefined;
+    }
     if (entryDate) {
       updates.entryDate = new Date(entryDate).getTime();
     }
 
+    const nextEmail = (updates.email ?? current.email)?.trim().toLowerCase();
+    const nextDocument = updates.documentNumber ?? current.documentNumber;
+    const nextTitle = updates.title ?? current.title;
+    const nextDocumentType = updates.documentType ?? current.documentType;
+    const nextPhone = updates.phoneNumber ?? current.phoneNumber;
+
+    if (nextEmail) {
+      const userId = await ensureDistributorUser(ctx, {
+        userId: current.userId ?? undefined,
+        email: nextEmail,
+        title: nextTitle,
+        documentType: nextDocumentType,
+        documentNumber: nextDocument,
+        phoneNumber: nextPhone,
+      });
+      updates.userId = userId;
+    }
+
     await ctx.db.patch(id, updates);
+
+    if (nextEmail && nextDocument) {
+      await ctx.scheduler.runAfter(0, internal.distributorCredentials.provision, {
+        email: nextEmail,
+        documentNumber: nextDocument,
+      });
+    }
+
+    return id;
+  },
+});
+
+export const backfillCredentials = action({
+  args: {},
+  handler: async (ctx): Promise<{ total: number; synced: number; errors: string[] }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("No autorizado");
+    return await ctx.runAction(internal.distributorCredentials.backfillAll, {});
   },
 });
 

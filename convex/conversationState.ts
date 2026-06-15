@@ -407,9 +407,23 @@ export const listContacts = query({
       .take(500);
 
     const deduped = new Map<string, (typeof recent)[number]>();
+    const mergedLabelsByContact = new Map<string, string[]>();
+
     for (const conversation of recent) {
+      const prevLabels = mergedLabelsByContact.get(conversation.contactId) ?? [];
+      const merged = [...new Set([...prevLabels, ...(conversation.labels ?? [])])];
+      mergedLabelsByContact.set(conversation.contactId, merged);
+
       const existing = deduped.get(conversation.contactId);
-      if (!existing || (existing.status === "closed" && conversation.status !== "closed")) {
+      if (!existing) {
+        deduped.set(conversation.contactId, conversation);
+        continue;
+      }
+      if (existing.status === "closed" && conversation.status !== "closed") {
+        deduped.set(conversation.contactId, conversation);
+        continue;
+      }
+      if (conversation.lastMessageAt > existing.lastMessageAt) {
         deduped.set(conversation.contactId, conversation);
       }
     }
@@ -435,7 +449,7 @@ export const listContacts = query({
           customerName: c.customerName,
           displayName: c.displayName,
           resolvedName,
-          labels: c.labels ?? [],
+          labels: mergedLabelsByContact.get(c.contactId) ?? c.labels ?? [],
           pipelineStage,
           lastMessageAt: c.lastMessageAt,
           lastMessage: c.lastMessagePreview ?? "",
@@ -537,18 +551,23 @@ export const updateContactInbox = mutation({
         .withIndex("by_contact", (q) => q.eq("contactId", contactId))
         .collect()
     );
-    const primary = getOpenConversation(rows) ?? rows[0] ?? null;
 
     const nextDisplayName =
       args.displayName !== undefined ? args.displayName.trim() || undefined : undefined;
     const nextLabels = args.labels;
 
-    if (primary) {
-      await ctx.db.patch(primary._id, {
-        ...(args.displayName !== undefined ? { displayName: nextDisplayName } : {}),
-        ...(nextLabels !== undefined ? { labels: nextLabels } : {}),
-        updatedAt: now,
-      });
+    const patch: Partial<{
+      displayName: string | undefined;
+      labels: string[];
+      updatedAt: number;
+    }> = { updatedAt: now };
+    if (args.displayName !== undefined) patch.displayName = nextDisplayName;
+    if (nextLabels !== undefined) patch.labels = nextLabels;
+
+    if (rows.length > 0) {
+      for (const row of rows) {
+        await ctx.db.patch(row._id, patch);
+      }
     } else {
       const conversationId = await ctx.db.insert("conversations", {
         contactId,
@@ -598,6 +617,6 @@ export const updateContactInbox = mutation({
       }
     }
 
-    return { conversationId: primary!._id };
+    return { conversationId: rows[0]!._id };
   },
 });

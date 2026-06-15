@@ -48,7 +48,11 @@ export function Login() {
   const onSubmit = async (values: LoginSchema) => {
     try {
       console.log("Intentando iniciar sesión...");
-      const result = await signIn("password", { email: values.name.trim(), password: values.pass, flow: "signIn" }) as any;
+      const result = await signIn("password", {
+        email: values.name.trim().toLowerCase(),
+        password: values.pass,
+        flow: "signIn",
+      }) as any;
       console.log("Resultado del login:", result);
 
       // Verificar si hay tokens en localStorage
@@ -152,6 +156,11 @@ export function Login() {
             {isSubmitting && <Loader className="animate-spin" />}
             Iniciar sesión
           </Button>
+
+          <p className="text-center text-xs text-muted-foreground leading-relaxed">
+            Repartidores: ingresa con tu <strong>correo</strong> y tu{" "}
+            <strong>número de cédula</strong> como contraseña.
+          </p>
         </form>
       </Form>
     </FormWrapper>

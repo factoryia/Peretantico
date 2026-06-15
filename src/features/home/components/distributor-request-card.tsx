@@ -11,6 +11,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Eye,
   Camera,
@@ -46,7 +54,10 @@ export function DistributorRequestCard({
 
   // Convex mutations
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const updateRequest = useMutation(api.requests.update);
+  const distributorUpdateRequest = useMutation(api.requests.distributorUpdateRequest);
+
+  const [outcome, setOutcome] = useState<"Atendida" | "Incompleta" | "EnProceso">("Atendida");
+  const [observations, setObservations] = useState(request.field_observations ?? "");
 
   const mapRequestStatusToLabel = (status?: string | null) => {
     switch (status) {
@@ -88,9 +99,9 @@ export function DistributorRequestCard({
     return "bg-blue-100 text-blue-700 border-blue-200";
   };
 
-  const isCompleted =
-    statusName.toLowerCase().includes("atendida") ||
-    statusName.toLowerCase().includes("exito");
+  const isClosed =
+    statusName === "Finalizada" ||
+    statusName === "Atendida";
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -102,53 +113,65 @@ export function DistributorRequestCard({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      toast.error("Por favor selecciona una evidencia (foto/archivo)");
+
+    if (outcome === "Atendida" && !file) {
+      toast.error("Adjunta evidencia para marcar como completada");
       return;
     }
 
-    const fileExtension = file.name.split(".").pop()?.toLowerCase();
-    if (!fileExtension || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
-      toast.error(
-        `Formato no válido. Solo se permiten: ${ALLOWED_EXTENSIONS.join(", ")}`
-      );
+    if ((outcome === "Incompleta" || outcome === "EnProceso") && !observations.trim()) {
+      toast.error("Escribe qué pasó con la solicitud");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // 1. Get upload URL
-      const postUrl = await generateUploadUrl();
-      
-      // 2. Upload file
-      const result = await fetch(postUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
+      let evidenceStorageId: Id<"_storage"> | undefined;
 
-      if (!result.ok) {
-        throw new Error(`Upload failed: ${result.statusText}`);
+      if (file) {
+        const fileExtension = file.name.split(".").pop()?.toLowerCase();
+        if (!fileExtension || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
+          toast.error(`Formato no válido. Solo: ${ALLOWED_EXTENSIONS.join(", ")}`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        const postUrl = await generateUploadUrl();
+        const result = await fetch(postUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+
+        if (!result.ok) {
+          throw new Error(`Upload failed: ${result.statusText}`);
+        }
+
+        const { storageId } = await result.json();
+        evidenceStorageId = storageId;
       }
 
-      const { storageId } = await result.json();
-
-      // 3. Update request with storageId
-      await updateRequest({
-         id: request.id as Id<"requests">,
-         evidenceStorageId: storageId,
-         requestStatus: "Atendida",
-         status: true,
-         observations: "Actualizada desde evidencia",
+      await distributorUpdateRequest({
+        id: request.id as Id<"requests">,
+        requestStatus: outcome,
+        observations: observations.trim() || undefined,
+        evidenceStorageId,
       });
 
-      toast.success("¡Solicitud completada con éxito!");
+      const successMessage =
+        outcome === "Atendida"
+          ? "Solicitud completada"
+          : outcome === "Incompleta"
+            ? "Solicitud marcada como incompleta"
+            : "Solicitud quedó pendiente";
+
+      toast.success(successMessage);
       setFile(null);
       if (onSuccess) onSuccess();
     } catch (error) {
-      console.error("Error al completar la solicitud:", error);
+      console.error("Error al actualizar la solicitud:", error);
       toast.error(
-        "Hubo un error al subir la evidencia. Por favor intenta de nuevo."
+        error instanceof Error ? error.message : "No se pudo guardar el resultado"
       );
     } finally {
       setIsSubmitting(false);
@@ -250,6 +273,15 @@ export function DistributorRequestCard({
               "{request.title}"
             </p>
           </div>
+
+          {request.field_observations ? (
+            <div>
+              <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
+                Observaciones
+              </Label>
+              <p className="text-sm text-gray-600 italic">"{request.field_observations}"</p>
+            </div>
+          ) : null}
         </div>
       </CardContent>
 
@@ -294,23 +326,59 @@ export function DistributorRequestCard({
           </div>
         )}
 
-        {isCompleted ? (
+        {isClosed ? (
           <div className="w-full flex flex-col items-center justify-center py-2 text-green-600 gap-1">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5" />
-              <span className="text-sm font-semibold">Servicio Finalizado</span>
+              <span className="text-sm font-semibold">
+                {statusName === "Atendida" ? "Servicio completado" : statusName}
+              </span>
             </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="w-full space-y-3">
-            {file && (
+            <div className="space-y-1.5">
+              <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
+                Resultado de la visita
+              </Label>
+              <Select
+                value={outcome}
+                onValueChange={(value) =>
+                  setOutcome(value as "Atendida" | "Incompleta" | "EnProceso")
+                }
+              >
+                <SelectTrigger className="h-9 bg-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Atendida">Completada</SelectItem>
+                  <SelectItem value="Incompleta">Incompleta (a medias)</SelectItem>
+                  <SelectItem value="EnProceso">Pendiente / no completada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
+                Observaciones
+              </Label>
+              <Textarea
+                value={observations}
+                onChange={(e) => setObservations(e.target.value)}
+                placeholder={
+                  outcome === "Atendida"
+                    ? "Opcional: notas de la entrega"
+                    : "Ej: faltó documento, no había pago, no pudieron reclamar todo..."
+                }
+                className="min-h-[72px] resize-none bg-white text-sm"
+              />
+            </div>
+
+            {file ? (
               <div
-                className="relative rounded-lg overflow-hidden border border-blue-100 aspect-video mb-2 bg-blue-50/30 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all group"
+                className="relative rounded-lg overflow-hidden border border-blue-100 aspect-video bg-blue-50/30 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all group"
                 onClick={() =>
-                  openImageModal(
-                    URL.createObjectURL(file),
-                    "Vista previa de evidencia"
-                  )
+                  openImageModal(URL.createObjectURL(file), "Vista previa de evidencia")
                 }
               >
                 <img
@@ -318,9 +386,6 @@ export function DistributorRequestCard({
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   alt="Vista previa"
                 />
-                <div className="absolute inset-0 bg-black/5 group-hover:bg-black/10 flex items-center justify-center transition-all">
-                  <ZoomIn className="text-white opacity-0 group-hover:opacity-100 w-8 h-8 drop-shadow-lg" />
-                </div>
                 <Button
                   type="button"
                   variant="destructive"
@@ -334,57 +399,58 @@ export function DistributorRequestCard({
                   <X className="h-3 w-3" />
                 </Button>
               </div>
-            )}
-            <div className="relative group">
-              <input
-                type="file"
-                id={`evidence-${request.id}`}
-                className="hidden"
-                onChange={handleFileChange}
-                accept=".png,.gif,.jpg,.jpeg,.webp"
-                disabled={isSubmitting}
-              />
-              <label
-                htmlFor={`evidence-${request.id}`}
-                className={`flex items-center justify-center gap-2 w-full p-3 rounded-xl border-2 border-dashed transition-all cursor-pointer
-                  ${
-                    file
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-500"
-                  } ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                {file ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-xs font-medium truncate max-w-[200px]">
-                      {file.name}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-4 w-4" />
-                    <span className="text-xs font-medium">
-                      Adjuntar Evidencia
-                    </span>
-                  </>
-                )}
-              </label>
-            </div>
+            ) : null}
+
+            {outcome === "Atendida" ? (
+              <div className="relative group">
+                <input
+                  type="file"
+                  id={`evidence-${request.id}`}
+                  className="hidden"
+                  onChange={handleFileChange}
+                  accept=".png,.gif,.jpg,.jpeg,.webp"
+                  disabled={isSubmitting}
+                />
+                <label
+                  htmlFor={`evidence-${request.id}`}
+                  className={`flex items-center justify-center gap-2 w-full p-3 rounded-xl border-2 border-dashed transition-all cursor-pointer
+                    ${
+                      file
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-500"
+                    } ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {file ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="text-xs font-medium truncate max-w-[200px]">
+                        {file.name}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4" />
+                      <span className="text-xs font-medium">Adjuntar evidencia (obligatoria)</span>
+                    </>
+                  )}
+                </label>
+              </div>
+            ) : null}
 
             <Button
               type="submit"
               className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm transition-all"
-              disabled={!file || isSubmitting}
+              disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Enviando...
+                  Guardando...
                 </>
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Completar Solicitud
+                  Guardar resultado
                 </>
               )}
             </Button>

@@ -12,12 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   AlertTriangle,
   ArrowLeft,
-  Bot,
   MessageSquare,
-  PauseCircle,
-  PlayCircle,
   Search,
-  UserRound,
   Plus,
   SlidersHorizontal,
   X,
@@ -27,7 +23,7 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ChatComposer } from "../components/chat-composer";
 import { ChatMessageList } from "../components/chat-message-list";
-import { ContactMetaPanel } from "../components/contact-meta-panel";
+import { ChatHeader } from "../components/chat-header";
 import {
   useReadConversations,
   BUILTIN_FILTERS,
@@ -408,64 +404,21 @@ function ChatArea({
   }
 
   const title = contactTitle(activeContact);
-  const stage = activeContact.pipelineStage ? PIPELINE_STAGE_META[activeContact.pipelineStage] : null;
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-[#f0f2f5]">
-      <header className="flex h-[64px] shrink-0 items-center gap-3 border-b border-[#e9edef] bg-white px-4 shadow-sm">
-        <Avatar className="h-11 w-11 ring-2 ring-primary/10">
-          <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
-            {contactInitials(title)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[16px] font-semibold text-[#111b21]">{title}</p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="truncate text-xs text-[#667781]">{formatPhoneDisplay(activeContact.contactId)}</p>
-            {stage ? (
-              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", stage.className)}>
-                {stage.label}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span
-            className={cn(
-              "hidden md:inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
-              botMuted ? "bg-amber-50 text-amber-800 ring-1 ring-amber-100" : "bg-primary/10 text-primary ring-1 ring-primary/10"
-            )}
-          >
-            {botMuted ? <UserRound className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
-            {botMuted ? (botMutedUntil ? `Pausado hasta ${botMutedUntil}` : "Atención humana") : "Bot activo"}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onToggleBot}
-            className={cn(
-              "h-8 text-xs font-medium",
-              botMuted
-                ? "border-primary/30 text-primary hover:bg-primary/5"
-                : "border-amber-200 text-amber-800 hover:bg-amber-50"
-            )}
-          >
-            {botMuted ? (
-              <><PlayCircle className="h-4 w-4 mr-1.5" />Reactivar bot</>
-            ) : (
-              <><PauseCircle className="h-4 w-4 mr-1.5" />Pausar bot</>
-            )}
-          </Button>
-        </div>
-      </header>
-
-      <ContactMetaPanel
+      <ChatHeader
         contactId={selectedContactId}
-        resolvedName={activeContact.resolvedName ?? activeContact.displayName}
-        whatsappName={activeContact.customerName}
+        title={title}
         phone={formatPhoneDisplay(activeContact.contactId)}
+        whatsappName={activeContact.customerName}
+        resolvedName={activeContact.resolvedName ?? activeContact.displayName}
         labels={activeContact.labels ?? []}
         catalogLabels={catalogLabels}
+        pipelineStage={activeContact.pipelineStage}
+        botMuted={botMuted}
+        botMutedUntil={botMutedUntil}
+        onToggleBot={onToggleBot}
       />
 
       {activeContact.needsHuman ? (

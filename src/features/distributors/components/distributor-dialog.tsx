@@ -178,8 +178,8 @@ export function DistributorDialog({
 
       toast.success(
         distributor
-          ? "Repartidor actualizado correctamente"
-          : "Repartidor creado correctamente"
+          ? "Repartidor actualizado. Acceso: correo + número de cédula."
+          : "Repartidor creado. Acceso: correo + número de cédula como contraseña."
       );
       onOpenChange(false);
       form.reset();

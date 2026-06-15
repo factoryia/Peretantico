@@ -169,6 +169,16 @@ export interface CompleteRequestFilters {
   isPrioritized?: boolean;
   paymentStatus?: string;
   search?: string;
+  entryDateFrom?: number;
+  entryDateTo?: number;
+}
+
+export function getTodayDateBounds() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { entryDateFrom: start.getTime(), entryDateTo: end.getTime() };
 }
 
 // --- Main Hook Logic ---
@@ -187,6 +197,8 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
     isPrioritized,
     paymentStatus,
     search,
+    entryDateFrom,
+    entryDateTo,
   } = filters;
 
   // Transform filters to Convex args
@@ -237,6 +249,18 @@ export const useCompleteRequests = (filters: CompleteRequestFilters = {}) => {
 
   if (search) {
     convexArgs.search = search;
+  }
+
+  if (entryDateFrom !== undefined) {
+    convexArgs.entryDateFrom = entryDateFrom;
+  }
+
+  if (entryDateTo !== undefined) {
+    convexArgs.entryDateTo = entryDateTo;
+  }
+
+  if (shouldFilterByRequestStatus) {
+    convexArgs.requestStatus = status;
   }
 
   // Handle "none" or invalid ID scenarios to prevent backend validation errors

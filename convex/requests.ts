@@ -32,6 +32,9 @@ export const list = query({
     paymentStatus: v.optional(v.string()),
     search: v.optional(v.string()),
     applicantName: v.optional(v.string()),
+    entryDateFrom: v.optional(v.number()),
+    entryDateTo: v.optional(v.number()),
+    requestStatus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let q = ctx.db.query("requests");
@@ -115,6 +118,18 @@ export const list = query({
         req.applicant?.fullName?.toLowerCase().includes(searchName) ||
         req.applicant?.documentNumber?.includes(searchName)
       );
+    }
+
+    if (args.entryDateFrom !== undefined) {
+      page = page.filter((req) => req.entryDate >= args.entryDateFrom!);
+    }
+
+    if (args.entryDateTo !== undefined) {
+      page = page.filter((req) => req.entryDate <= args.entryDateTo!);
+    }
+
+    if (args.requestStatus && args.requestStatus !== "all") {
+      page = page.filter((req) => req.requestStatus === args.requestStatus);
     }
 
     return page;
@@ -473,6 +488,56 @@ export const update = mutation({
         hasObservationsChange: hasObservationsChanged,
       });
     }
+  },
+});
+
+export const distributorUpdateRequest = mutation({
+  args: {
+    id: v.id("requests"),
+    requestStatus: v.union(
+      v.literal("Atendida"),
+      v.literal("Incompleta"),
+      v.literal("EnProceso")
+    ),
+    observations: v.optional(v.string()),
+    evidenceStorageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("No autorizado");
+
+    const distributor = await ctx.db
+      .query("distributors")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    if (!distributor) throw new Error("Solo los repartidores pueden actualizar entregas");
+
+    const request = await ctx.db.get(args.id);
+    if (!request || request.distributorId !== distributor._id) {
+      throw new Error("Esta solicitud no está asignada a usted");
+    }
+
+    const observations = args.observations?.trim() ?? "";
+
+    if (args.requestStatus === "Atendida" && !args.evidenceStorageId) {
+      throw new Error("Debe adjuntar evidencia para marcar como completada");
+    }
+
+    if (
+      (args.requestStatus === "Incompleta" || args.requestStatus === "EnProceso") &&
+      !observations
+    ) {
+      throw new Error("Debe escribir observaciones cuando la solicitud queda pendiente o incompleta");
+    }
+
+    await ctx.db.patch(args.id, {
+      requestStatus: args.requestStatus,
+      observations: observations || request.observations,
+      evidenceStorageId: args.evidenceStorageId ?? request.evidenceStorageId,
+      status: args.requestStatus === "Atendida",
+    });
+
+    return { ok: true };
   },
 });
 

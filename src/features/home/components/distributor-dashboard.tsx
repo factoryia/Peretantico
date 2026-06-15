@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useDistributorId } from "../hooks/use-distributor-id";
 import {
   useCompleteRequests,
+  getTodayDateBounds,
   type CompleteRequest,
 } from "../utils/complete-request";
 import { DistributorRequestCard } from "./distributor-request-card";
@@ -23,6 +24,8 @@ export function DistributorDashboard() {
     useState<CompleteRequest | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
+  const todayBounds = getTodayDateBounds();
+
   const {
     data: requestsData,
     isLoading: isLoadingRequests,
@@ -30,7 +33,8 @@ export function DistributorDashboard() {
     refetch,
     isFetching,
   } = useCompleteRequests({
-    assignedDistributor: distributorId || "none", // Usamos "none" si no hay ID para evitar cargar todo
+    assignedDistributor: distributorId || "none",
+    ...todayBounds,
   });
 
   const isLoading = isLoadingId || isLoadingRequests;
@@ -68,10 +72,10 @@ export function DistributorDashboard() {
           <div className="flex max-sm:flex-col max-sm:text-center items-center sm:justify-between">
             <div className="max-sm:pb-3">
               <h2 className="text-2xl font-bold text-gray-900">
-                Solicitudes Asignadas
+                Entregas de hoy
               </h2>
               <p className="text-gray-500 text-sm">
-                Gestiona y completa tus entregas pendientes.
+                Solicitudes asignadas para el día de hoy. Usa tu correo y cédula para ingresar.
               </p>
             </div>
             <Button
@@ -95,8 +99,8 @@ export function DistributorDashboard() {
           ) : requests.length === 0 ? (
             <div className="mt-12">
               <EmptyState
-                title="No tienes entregas asignadas"
-                description="Cuando se te asigne una nueva solicitud, aparecerá aquí."
+                title="No tienes entregas para hoy"
+                description="Cuando el administrador te asigne solicitudes de hoy, aparecerán aquí."
                 onRefresh={refetch}
               />
             </div>
