@@ -1,11 +1,71 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query, type QueryCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 type MediaType = "image" | "video" | "audio" | "document";
+export type ContactPipelineStage = "visitante" | "en_proceso" | "solicitud";
 
 function sortByUpdatedAt<T extends { updatedAt?: number }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+}
+
+async function resolveContactPipelineStage(
+  ctx: QueryCtx,
+  contactId: string
+): Promise<ContactPipelineStage> {
+  const applicant = await ctx.db
+    .query("botApplicants")
+    .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+    .first();
+
+  const profileId = applicant?.profileId;
+  if (profileId) {
+    const request = await ctx.db
+      .query("requests")
+      .withIndex("by_applicant", (q) => q.eq("applicantId", profileId))
+      .first();
+    if (request) return "solicitud";
+  }
+
+  const session = await ctx.db
+    .query("botSessions")
+    .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+    .first();
+
+  if (
+    profileId ||
+    applicant?.fullName?.trim() ||
+    session?.serviceId ||
+    (session?.state && session.state !== "INIT")
+  ) {
+    return "en_proceso";
+  }
+
+  return "visitante";
+}
+
+async function resolveContactDisplayName(
+  ctx: QueryCtx,
+  contactId: string,
+  conversation: { displayName?: string; customerName?: string }
+): Promise<string | undefined> {
+  const saved = conversation.displayName?.trim();
+  if (saved) return saved;
+  const whatsapp = conversation.customerName?.trim();
+  if (whatsapp) return whatsapp;
+
+  const applicant = await ctx.db
+    .query("botApplicants")
+    .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+    .first();
+  if (applicant?.fullName?.trim()) return applicant.fullName.trim();
+
+  if (applicant?.profileId) {
+    const profile = await ctx.db.get(applicant.profileId);
+    if (profile?.fullName?.trim()) return profile.fullName.trim();
+  }
+
+  return undefined;
 }
 
 export function resolveThreadIdForConversation(args: {
@@ -326,7 +386,14 @@ export const updateLastMessage = internalMutation({
 });
 
 export const listContacts = query({
-  args: { limit: v.optional(v.number()), search: v.optional(v.string()) },
+  args: {
+    limit: v.optional(v.number()),
+    search: v.optional(v.string()),
+    pipelineStage: v.optional(
+      v.union(v.literal("visitante"), v.literal("en_proceso"), v.literal("solicitud"))
+    ),
+    label: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
@@ -351,35 +418,186 @@ export const listContacts = query({
     const handoffByContact = new Map(handoffRows.map((h) => [h.contactId, h]));
     const now = Date.now();
 
-    let list = Array.from(deduped.values()).map((c) => {
-      const handoff = handoffByContact.get(c.contactId);
-      const botMuted = handoff
-        ? handoff.mutedUntil
-          ? now < handoff.mutedUntil
-          : handoff.muted
-        : false;
-      return {
-        contactId: c.contactId,
-        customerName: c.customerName,
-        lastMessageAt: c.lastMessageAt,
-        lastMessage: c.lastMessagePreview ?? "",
-        lastDirection: (c.lastMessageDirection ?? "INBOUND") as "INBOUND" | "OUTBOUND",
-        status: c.status,
-        threadId: c.threadId,
-        botMuted,
-        needsHuman: c.needsHuman === true,
-        escalationReason: c.escalationReason,
-      };
-    });
+    let list = await Promise.all(
+      Array.from(deduped.values()).map(async (c) => {
+        const handoff = handoffByContact.get(c.contactId);
+        const botMuted = handoff
+          ? handoff.mutedUntil
+            ? now < handoff.mutedUntil
+            : handoff.muted
+          : false;
+        const [resolvedName, pipelineStage] = await Promise.all([
+          resolveContactDisplayName(ctx, c.contactId, c),
+          resolveContactPipelineStage(ctx, c.contactId),
+        ]);
+        return {
+          contactId: c.contactId,
+          customerName: c.customerName,
+          displayName: c.displayName,
+          resolvedName,
+          labels: c.labels ?? [],
+          pipelineStage,
+          lastMessageAt: c.lastMessageAt,
+          lastMessage: c.lastMessagePreview ?? "",
+          lastDirection: (c.lastMessageDirection ?? "INBOUND") as "INBOUND" | "OUTBOUND",
+          status: c.status,
+          threadId: c.threadId,
+          botMuted,
+          needsHuman: c.needsHuman === true,
+          escalationReason: c.escalationReason,
+        };
+      })
+    );
 
     if (search) {
       list = list.filter((c) => {
-        const name = (c.customerName ?? "").toLowerCase();
+        const name = (c.resolvedName ?? c.customerName ?? "").toLowerCase();
         const id = c.contactId.toLowerCase();
-        return name.includes(search) || id.includes(search);
+        const labels = (c.labels ?? []).join(" ").toLowerCase();
+        return name.includes(search) || id.includes(search) || labels.includes(search);
       });
     }
 
+    if (args.pipelineStage) {
+      list = list.filter((c) => c.pipelineStage === args.pipelineStage);
+    }
+
+    if (args.label) {
+      const label = args.label.trim().toLowerCase();
+      list = list.filter((c) =>
+        (c.labels ?? []).some((l) => l.toLowerCase() === label)
+      );
+    }
+
     return list.slice(0, limit);
+  },
+});
+
+export const listInboxLabels = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const rows = await ctx.db.query("inboxLabels").collect();
+    return rows
+      .sort((a, b) => a.name.localeCompare(b.name, "es"))
+      .map((row) => ({
+        _id: row._id,
+        name: row.name,
+        color: row.color,
+      }));
+  },
+});
+
+export const addInboxLabel = mutation({
+  args: {
+    name: v.string(),
+    color: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("No autorizado");
+
+    const name = args.name.trim();
+    if (!name) throw new Error("Nombre de etiqueta vacío");
+
+    const existing = await ctx.db
+      .query("inboxLabels")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .first();
+    if (existing) return existing._id;
+
+    return await ctx.db.insert("inboxLabels", {
+      name,
+      color: args.color,
+      createdAt: Date.now(),
+      createdBy: userId,
+    });
+  },
+});
+
+export const updateContactInbox = mutation({
+  args: {
+    contactId: v.string(),
+    displayName: v.optional(v.string()),
+    labels: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("No autorizado");
+
+    const contactId = args.contactId.trim();
+    if (!contactId) throw new Error("Contacto inválido");
+
+    const now = Date.now();
+    const rows = sortByUpdatedAt(
+      await ctx.db
+        .query("conversations")
+        .withIndex("by_contact", (q) => q.eq("contactId", contactId))
+        .collect()
+    );
+    const primary = getOpenConversation(rows) ?? rows[0] ?? null;
+
+    const nextDisplayName =
+      args.displayName !== undefined ? args.displayName.trim() || undefined : undefined;
+    const nextLabels = args.labels;
+
+    if (primary) {
+      await ctx.db.patch(primary._id, {
+        ...(args.displayName !== undefined ? { displayName: nextDisplayName } : {}),
+        ...(nextLabels !== undefined ? { labels: nextLabels } : {}),
+        updatedAt: now,
+      });
+    } else {
+      const conversationId = await ctx.db.insert("conversations", {
+        contactId,
+        channel: "whatsapp",
+        displayName: nextDisplayName,
+        labels: nextLabels ?? [],
+        status: "open",
+        lastMessageAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (nextLabels) {
+        for (const label of nextLabels) {
+          const trimmed = label.trim();
+          if (!trimmed) continue;
+          const existingLabel = await ctx.db
+            .query("inboxLabels")
+            .withIndex("by_name", (q) => q.eq("name", trimmed))
+            .first();
+          if (!existingLabel) {
+            await ctx.db.insert("inboxLabels", {
+              name: trimmed,
+              createdAt: now,
+              createdBy: userId,
+            });
+          }
+        }
+      }
+      return { conversationId };
+    }
+
+    if (nextLabels) {
+      for (const label of nextLabels) {
+        const trimmed = label.trim();
+        if (!trimmed) continue;
+        const existingLabel = await ctx.db
+          .query("inboxLabels")
+          .withIndex("by_name", (q) => q.eq("name", trimmed))
+          .first();
+        if (!existingLabel) {
+          await ctx.db.insert("inboxLabels", {
+            name: trimmed,
+            createdAt: now,
+            createdBy: userId,
+          });
+        }
+      }
+    }
+
+    return { conversationId: primary!._id };
   },
 });

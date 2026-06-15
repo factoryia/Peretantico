@@ -190,7 +190,7 @@ export const listMessagesByContact = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
 
-    const limit = Math.max(1, Math.min(args.limit ?? 50, 200));
+    const limit = Math.max(1, Math.min(args.limit ?? 50, 500));
     const rows = await ctx.db
       .query("ycloudMessages")
       .withIndex("by_contact_created", (q) => q.eq("contactId", args.contactId))

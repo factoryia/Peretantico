@@ -281,6 +281,8 @@ export default defineSchema({
     contactId: v.string(),
     channel: v.union(v.literal("whatsapp")),
     customerName: v.optional(v.string()),
+    displayName: v.optional(v.string()),
+    labels: v.optional(v.array(v.string())),
     status: v.union(v.literal("open"), v.literal("pending"), v.literal("closed")),
     threadId: v.optional(v.string()),
     lastMessageAt: v.number(),
@@ -296,6 +298,13 @@ export default defineSchema({
     .index("by_contact", ["contactId"])
     .index("by_thread", ["threadId"])
     .index("by_last_message_at", ["lastMessageAt"]),
+
+  inboxLabels: defineTable({
+    name: v.string(),
+    color: v.optional(v.string()),
+    createdAt: v.number(),
+    createdBy: v.optional(v.id("users")),
+  }).index("by_name", ["name"]),
 
   botApplicants: defineTable({
     contactId: v.string(),

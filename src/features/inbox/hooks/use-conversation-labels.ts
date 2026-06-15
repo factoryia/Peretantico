@@ -1,100 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "peretantico.conversation-labels.v1";
-
 export type ConversationFilterId =
   | "all"
-  | "read"
+  | "visitante"
+  | "en_proceso"
+  | "solicitud"
+  | "needsHuman"
   | "bot"
-  | "both"
+  | "agent"
   | string;
 
-type StoredLabels = {
-  customLabels: string[];
-  contactLabels: Record<string, string[]>;
-};
-
-const DEFAULT_STORED: StoredLabels = {
-  customLabels: [],
-  contactLabels: {},
-};
-
-function readStore(): StoredLabels {
-  if (typeof window === "undefined") return DEFAULT_STORED;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_STORED;
-    const parsed = JSON.parse(raw) as StoredLabels;
-    return {
-      customLabels: Array.isArray(parsed.customLabels) ? parsed.customLabels : [],
-      contactLabels:
-        parsed.contactLabels && typeof parsed.contactLabels === "object"
-          ? parsed.contactLabels
-          : {},
-    };
-  } catch {
-    return DEFAULT_STORED;
-  }
-}
-
-function writeStore(data: StoredLabels) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-export function useConversationLabels() {
-  const [stored, setStored] = useState<StoredLabels>(DEFAULT_STORED);
-
-  useEffect(() => {
-    setStored(readStore());
-  }, []);
-
-  const persist = useCallback((next: StoredLabels) => {
-    setStored(next);
-    writeStore(next);
-  }, []);
-
-  const addCustomLabel = useCallback(
-    (name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return false;
-      const exists = stored.customLabels.some(
-        (label) => label.toLowerCase() === trimmed.toLowerCase()
-      );
-      if (exists) return false;
-      persist({
-        ...stored,
-        customLabels: [...stored.customLabels, trimmed],
-      });
-      return true;
-    },
-    [persist, stored]
-  );
-
-  const setContactLabels = useCallback(
-    (contactId: string, labels: string[]) => {
-      persist({
-        ...stored,
-        contactLabels: {
-          ...stored.contactLabels,
-          [contactId]: labels,
-        },
-      });
-    },
-    [persist, stored]
-  );
-
-  const getContactLabels = useCallback(
-    (contactId: string) => stored.contactLabels[contactId] ?? [],
-    [stored.contactLabels]
-  );
-
-  return {
-    customLabels: stored.customLabels,
-    addCustomLabel,
-    setContactLabels,
-    getContactLabels,
-  };
-}
+export const BUILTIN_FILTERS: Array<{ id: ConversationFilterId; label: string }> = [
+  { id: "all", label: "Todas" },
+  { id: "visitante", label: "Sin solicitud" },
+  { id: "en_proceso", label: "En proceso" },
+  { id: "solicitud", label: "Con solicitud" },
+  { id: "needsHuman", label: "Requiere atención" },
+  { id: "bot", label: "Bot activo" },
+  { id: "agent", label: "Atención humana" },
+];
 
 const READ_KEY = "peretantico.conversation-read.v1";
 
@@ -127,9 +51,12 @@ export function useReadConversations() {
   return { markRead, isRead };
 }
 
-export const BUILTIN_FILTERS: Array<{ id: ConversationFilterId; label: string }> = [
-  { id: "all", label: "Todas" },
-  { id: "read", label: "Leídas" },
-  { id: "bot", label: "Bot" },
-  { id: "both", label: "Ambos" },
-];
+export function isPipelineFilter(
+  filter: ConversationFilterId
+): filter is "visitante" | "en_proceso" | "solicitud" {
+  return filter === "visitante" || filter === "en_proceso" || filter === "solicitud";
+}
+
+export function isBuiltinFilter(filter: ConversationFilterId): boolean {
+  return BUILTIN_FILTERS.some((f) => f.id === filter);
+}
