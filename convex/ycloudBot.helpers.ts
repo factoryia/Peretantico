@@ -48,11 +48,76 @@ export function buildPriorityQuestion(service: BotServiceSummary): string {
   ].filter(Boolean);
 
   return [
-    `Has seleccionado el servicio de **${serviceName}**.`,
+    `Has seleccionado el servicio de ${serviceName}.`,
     "",
-    details.length ? `Este servicio puede solicitarse con prioridad (${details.join(" y ")}).` : "Este servicio puede solicitarse con prioridad.",
-    "¿Deseas radicarlo como prioridad? Responde sí o no.",
+    details.length
+      ? `Este servicio puede solicitarse en modalidad normal o prioritario (${details.join(" y ")}).`
+      : "Este servicio puede solicitarse en modalidad normal o prioritario.",
+    basePrice ? `1️⃣ Normal (${basePrice})` : "1️⃣ Normal",
+    priorityPrice ? `2️⃣ Prioritario (${priorityPrice})` : "2️⃣ Prioritario",
+    "",
+    "¿Cuál prefieres? Responde 1, 2, normal, prioritario, sí o no.",
   ].join("\n");
+}
+
+export function getSessionFlow(data: unknown): {
+  isPrioritized?: boolean;
+  priorityConfirmed?: boolean;
+  stage?: string | null;
+} {
+  if (!data || typeof data !== "object") return {};
+  const flow = (data as Record<string, unknown>).flow;
+  if (!flow || typeof flow !== "object") return {};
+  return flow as {
+    isPrioritized?: boolean;
+    priorityConfirmed?: boolean;
+    stage?: string | null;
+  };
+}
+
+export function lastOutboundLooksLikePriorityQuestion(normalizedOutbound: string): boolean {
+  if (normalizedOutbound.includes("deseas radicarlo como prioridad")) return true;
+  if (normalizedOutbound.includes("modalidad normal o prioritario")) return true;
+  if (normalizedOutbound.includes("cual prefieres") && normalizedOutbound.includes("prioritario")) return true;
+  return false;
+}
+
+export function parsePriorityAnswer(normalized: string): boolean | null {
+  const answer = normalized.trim();
+  if (!answer) return null;
+  if (/^(si|sí|prioritario|prioridad|2|2️⃣)$/.test(answer)) return true;
+  if (/^(no|normal|1|1️⃣)$/.test(answer)) return false;
+  if (/\bprioritari/.test(answer) && !/\bnormal\b/.test(answer)) return true;
+  if (/\bnormal\b/.test(answer) && !/\bprioritari/.test(answer)) return false;
+  return null;
+}
+
+export function resolveServiceFromInboundText(args: {
+  effectiveText: string;
+  normalizedLastOutbound: string;
+  services: Array<BotServiceSummary & { _id?: string }>;
+  hasSessionServiceId: boolean;
+}): (BotServiceSummary & { _id?: string }) | null {
+  if (args.hasSessionServiceId) return null;
+
+  const sorted = sortServicesForDisplay(args.services);
+  const numericChoice = args.effectiveText.trim().match(/^\d{1,3}$/)?.[0] ?? "";
+  if (numericChoice && lastOutboundLooksLikeServiceListPrompt(args.normalizedLastOutbound)) {
+    return sorted[Number(numericChoice) - 1] ?? null;
+  }
+
+  const normalized = normalizeForMatch(args.effectiveText);
+  if (normalized.length < 4) return null;
+
+  for (const service of sorted) {
+    const serviceName = normalizeForMatch(String(service.name ?? ""));
+    if (!serviceName) continue;
+    if (serviceName.includes(normalized) || normalized.includes(serviceName)) {
+      return service;
+    }
+  }
+
+  return null;
 }
 
 function referencesKnownService(normalized: string, services: BotServiceSummary[]): boolean {
@@ -172,6 +237,7 @@ export function lastOutboundLooksLikeWeAreAskingForInput(args: { normalizedOutbo
   if (normalizedOutbound.includes("vamos con el campo")) return true;
   if (normalizedOutbound.includes("comencemos con el primero")) return true;
   if (normalizedOutbound.includes("responde con el numero o el nombre del servicio")) return true;
+  if (lastOutboundLooksLikePriorityQuestion(normalizedOutbound)) return true;
   if (normalizedOutbound.includes("por favor indicame")) return true;
   if (normalizedOutbound.includes("por favor indiqueme")) return true;
   if (normalizedOutbound.includes("por favor indica")) return true;
@@ -362,6 +428,7 @@ export function buildInboundContextPrompt(args: {
   sessionState?: string | null;
   serviceId?: string | null;
   currentFieldIndex?: number | null;
+  isPrioritized?: boolean | null;
 }): string {
   const contextParts = [
     `contactId=${args.contactId}`,
@@ -376,6 +443,7 @@ export function buildInboundContextPrompt(args: {
     args.sessionState ? `sessionState=${args.sessionState}` : undefined,
     args.serviceId ? `serviceId=${args.serviceId}` : undefined,
     typeof args.currentFieldIndex === "number" ? `fieldIndex=${args.currentFieldIndex}` : undefined,
+    typeof args.isPrioritized === "boolean" ? `isPrioritized=${args.isPrioritized}` : undefined,
   ].filter(Boolean);
 
   return [`[ctx] ${contextParts.join(" ")}`, args.effectiveText].join("\n");

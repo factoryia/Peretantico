@@ -8,6 +8,7 @@ import {
   isRequestPaidToDistributor,
   resolveDistributorPaymentStatus,
 } from "./distributorPayments.helpers";
+import { requestRequiresFilingPhoto } from "./requests.helpers";
 // import { paginationOptsValidator } from "convex/server";
 
 function getNormalizedRequestReadState(request: Doc<"requests">) {
@@ -525,6 +526,20 @@ export const update = mutation({
   },
 });
 
+export const getDeliveryRequirements = query({
+  args: { id: v.id("requests") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const request = await ctx.db.get(args.id);
+    if (!request) return null;
+
+    const requiresFilingPhoto = await requestRequiresFilingPhoto(ctx, args.id);
+    return { requiresFilingPhoto };
+  },
+});
+
 export const distributorUpdateRequest = mutation({
   args: {
     id: v.id("requests"),
@@ -535,6 +550,16 @@ export const distributorUpdateRequest = mutation({
     ),
     observations: v.optional(v.string()),
     evidenceStorageId: v.optional(v.id("_storage")),
+    deliveryAttachments: v.optional(
+      v.array(
+        v.object({
+          storageId: v.id("_storage"),
+          fileName: v.string(),
+          mimeType: v.optional(v.string()),
+          kind: v.union(v.literal("delivery_radicado"), v.literal("delivery_photo")),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -552,9 +577,21 @@ export const distributorUpdateRequest = mutation({
     }
 
     const observations = args.observations?.trim() ?? "";
+    const deliveryAttachments = args.deliveryAttachments ?? [];
+    const requiresFilingPhoto = await requestRequiresFilingPhoto(ctx, args.id);
 
-    if (args.requestStatus === "Atendida" && !args.evidenceStorageId) {
-      throw new Error("Debe adjuntar evidencia para marcar como completada");
+    if (args.requestStatus === "Atendida") {
+      const hasLegacyEvidence = !!args.evidenceStorageId;
+      const hasAnyDeliveryPhoto = deliveryAttachments.length > 0;
+      if (!hasLegacyEvidence && !hasAnyDeliveryPhoto) {
+        throw new Error("Debe adjuntar al menos una foto para marcar como completada");
+      }
+      if (requiresFilingPhoto) {
+        const hasRadicado = deliveryAttachments.some((item) => item.kind === "delivery_radicado");
+        if (!hasRadicado && !hasLegacyEvidence) {
+          throw new Error("Este servicio requiere foto del radicado o sello de recibido");
+        }
+      }
     }
 
     if (
@@ -564,10 +601,32 @@ export const distributorUpdateRequest = mutation({
       throw new Error("Debe escribir observaciones cuando la solicitud queda pendiente o incompleta");
     }
 
+    const radicadoAttachment = deliveryAttachments.find((item) => item.kind === "delivery_radicado");
+    const primaryEvidenceId =
+      args.evidenceStorageId ??
+      radicadoAttachment?.storageId ??
+      deliveryAttachments[0]?.storageId ??
+      request.evidenceStorageId;
+
+    if (deliveryAttachments.length > 0) {
+      await Promise.all(
+        deliveryAttachments.map((item) =>
+          ctx.db.insert("attachments", {
+            requestId: args.id,
+            kind: item.kind,
+            fileName: item.fileName,
+            url: "",
+            mimeType: item.mimeType,
+            storageId: item.storageId,
+          })
+        )
+      );
+    }
+
     await ctx.db.patch(args.id, {
       requestStatus: args.requestStatus,
       observations: observations || request.observations,
-      evidenceStorageId: args.evidenceStorageId ?? request.evidenceStorageId,
+      evidenceStorageId: primaryEvidenceId,
       status: args.requestStatus === "Atendida",
     });
 

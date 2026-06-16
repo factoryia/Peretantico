@@ -5,7 +5,13 @@ export interface RequestFlowAttachmentItem {
   id: string;
   label: string;
   url: string;
-  kind: "service_field" | "payment_receipt" | "evidence" | "other";
+  kind:
+    | "service_field"
+    | "payment_receipt"
+    | "evidence"
+    | "delivery_radicado"
+    | "delivery_photo"
+    | "other";
   fieldId?: string;
   fieldName?: string;
 }
@@ -50,7 +56,15 @@ type BackendRequestLike = {
 };
 
 function mapAttachmentKind(kind: string | undefined): RequestFlowAttachmentItem["kind"] {
-  if (kind === "service_field" || kind === "payment_receipt" || kind === "evidence") return kind;
+  if (
+    kind === "service_field" ||
+    kind === "payment_receipt" ||
+    kind === "evidence" ||
+    kind === "delivery_radicado" ||
+    kind === "delivery_photo"
+  ) {
+    return kind;
+  }
   return "other";
 }
 
@@ -88,19 +102,27 @@ export function buildRequestAttachmentGroups(request: BackendRequestLike): Reque
       const key =
         kind === "payment_receipt"
           ? "payment_receipt"
-          : fieldId
-            ? `field:${fieldId}`
-            : kind === "evidence"
-              ? "evidence"
-              : "other";
+          : kind === "delivery_radicado"
+            ? "delivery_radicado"
+            : kind === "delivery_photo"
+              ? "delivery_photo"
+              : fieldId
+                ? `field:${fieldId}`
+                : kind === "evidence"
+                  ? "evidence"
+                  : "other";
       const title =
         kind === "payment_receipt"
           ? "Comprobante de transferencia"
-          : fieldName
-            ? `Adjuntos · ${fieldName}`
-            : kind === "evidence"
-              ? "Evidencia"
-              : "Adjuntos adicionales";
+          : kind === "delivery_radicado"
+            ? "Foto radicado / sello"
+            : kind === "delivery_photo"
+              ? "Fotos adicionales de entrega"
+              : fieldName
+                ? `Adjuntos · ${fieldName}`
+                : kind === "evidence"
+                  ? "Evidencia"
+                  : "Adjuntos adicionales";
 
       ensureGroup(key, title).items.push({
         id: String(attachment._id ?? attachment.id ?? `${key}:${url}`),

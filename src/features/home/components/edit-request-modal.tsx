@@ -8,6 +8,7 @@ import {
   CreditCard,
   MessageSquare,
   Image,
+  FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,6 +54,7 @@ import type {
   Distributor,
 } from "@/features/home/types/request";
 import type { CompleteRequest } from "../utils/complete-request";
+import { downloadRequestPdfFromCompleteRequest } from "../utils/request-pdf";
 import { useRequestDetail } from "../hooks/use-request-detail";
 
 interface EditRequestModalProps {
@@ -435,6 +437,25 @@ export function EditRequestModal({
                 </DialogDescription>
               </div>
             </div>
+            {request ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2 shrink-0"
+                onClick={() => {
+                  try {
+                    downloadRequestPdfFromCompleteRequest(request);
+                    toast.success("PDF descargado");
+                  } catch {
+                    toast.error("No se pudo generar el PDF");
+                  }
+                }}
+              >
+                <FileDown className="h-4 w-4" />
+                PDF
+              </Button>
+            ) : null}
           </div>
         </DialogHeader>
 

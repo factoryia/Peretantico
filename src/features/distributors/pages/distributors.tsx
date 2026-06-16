@@ -167,7 +167,14 @@ export function Distributors() {
       <div className="h-dvh">
         <SidebarHeader title="Repartidores" />
         <div className="h-full overflow-y-auto pb-20">
-          <div className="space-y-6 font-['Poppins',sans-serif] p-4 md:p-6">
+            <div className="space-y-6 font-['Poppins',sans-serif] p-4 md:p-6">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p className="font-semibold">¿Dónde suben las fotos los repartidores?</p>
+              <p className="mt-1">
+                Esta pantalla sirve para crear y administrar cuentas de repartidor. Las fotos de radicado y evidencia de entrega
+                se cargan en <strong>Mis Entregas</strong> (menú del repartidor), dentro de cada solicitud asignada — no aquí ni en Editar solicitud.
+              </p>
+            </div>
             {/* Header Section */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border relative overflow-hidden border-l-4 border-l-blue-600">
               <div className="flex items-center gap-3">

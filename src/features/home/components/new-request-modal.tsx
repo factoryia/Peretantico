@@ -44,12 +44,13 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvex } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { RequestDataDto } from "../types/request";
 import type { Service } from "@/features/config/types";
 import { toast } from "sonner";
+import { downloadRequestPdf } from "../utils/request-pdf";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -175,6 +176,7 @@ export function NewRequestModal({
 
   const createRequest = useMutation(api.requests.create);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const convex = useConvex();
   
   const applicantsData = useQuery(api.profiles.list, { customersOnly: true }) || [];
   const servicesData = useQuery(api.services.listAll) || [];
@@ -339,9 +341,18 @@ export function NewRequestModal({
         estimatedApplicationHour: values.estimatedHours,
       };
 
-      await createRequest(payload);
+      const result = await createRequest(payload);
+
+      try {
+        const fullRequest = await convex.query(api.requests.get, { id: result.requestId });
+        if (fullRequest) {
+          downloadRequestPdf(fullRequest);
+        }
+      } catch (pdfError) {
+        console.error("PDF generation failed:", pdfError);
+      }
       
-      toast.success("Solicitud creada exitosamente");
+      toast.success("Solicitud creada. Se descargó el PDF para imprimir.");
       onOpenChange(false);
       onSuccess();
       form.reset();

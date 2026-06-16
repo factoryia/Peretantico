@@ -95,13 +95,15 @@ export function AppSidebar() {
                     ["admin", "administrador", "superadmin"].includes(role.toLowerCase())
                   );
                   if (isDistributor && !isAdmin) {
-                    // Mostrar solo "Solicitudes" para distribuidores
-                    return item.url === "/";
+                    return item.url === "/mis-entregas";
+                  }
+                  if (!isDistributor && item.distributorNav) {
+                    return false;
                   }
                   return true;
                 })
                 .map((item) => {
-                  const isActive = pathname === item.url;
+                  const isActive = pathname === item.url || (item.url === "/mis-entregas" && pathname === "/");
 
                   return (
                     <SidebarMenuItem key={item.title}>

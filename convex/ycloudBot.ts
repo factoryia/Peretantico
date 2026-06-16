@@ -20,14 +20,19 @@ import { HUMAN_ESCALATION_REPLY } from "./system/ai/escalationReply";
 import { buildRequestCompletionMessage } from "./system/ai/requestCompletion";
 import { resolveRequestFlow } from "./system/requestFlow";
 import {
+  buildPriorityQuestion,
   buildServicesListReply,
   buildInboundContextPrompt,
   deriveInboundFlowDecision,
   extractCreateRequestCompletion,
+  getSessionFlow,
   getUnsupportedIntentReply,
   isResetThreadTitle,
+  lastOutboundLooksLikePriorityQuestion,
   normalizeForMatch,
+  parsePriorityAnswer,
   resolveAgentEmptyReply,
+  resolveServiceFromInboundText,
 } from "./ycloudBot.helpers";
 import { mergeSessionFlow } from "./whatsappBotState";
 
@@ -770,8 +775,12 @@ export const processInboundMessage = internalAction({
         }
       }
       const allServices = (await ctx.runQuery(internalAny.services.listAll, {})) as Array<{
+        _id?: Id<"services">;
         name?: string;
         status?: boolean;
+        price?: number;
+        hasPriority?: boolean;
+        priorityPrice?: number;
       }>;
       const flowDecision = deriveInboundFlowDecision({
         rawText,
@@ -802,6 +811,73 @@ export const processInboundMessage = internalAction({
         return;
       }
 
+      const sessionFlow = getSessionFlow(session.data);
+      let resolvedIsPrioritized =
+        typeof sessionFlow.isPrioritized === "boolean" ? sessionFlow.isPrioritized : undefined;
+
+      if (lastOutboundLooksLikePriorityQuestion(flowDecision.normalizedLastOutbound)) {
+        const priorityAnswer = parsePriorityAnswer(flowDecision.normalizedCommand);
+        if (priorityAnswer !== null) {
+          resolvedIsPrioritized = priorityAnswer;
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            data: mergeSessionFlow(session.data, {
+              isPrioritized: priorityAnswer,
+              priorityConfirmed: true,
+              stage: "fields",
+            }),
+          });
+        }
+      }
+
+      if (resolvedIsPrioritized === undefined && !sessionFlow.priorityConfirmed) {
+        let serviceForPriority = session.serviceId
+          ? (allServices || []).find((service) => String(service._id) === String(session.serviceId))
+          : resolveServiceFromInboundText({
+              effectiveText,
+              normalizedLastOutbound: flowDecision.normalizedLastOutbound,
+              services: allServices || [],
+              hasSessionServiceId: false,
+            });
+
+        if (serviceForPriority?._id && !session.serviceId) {
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            serviceId: serviceForPriority._id as Id<"services">,
+            state: "IN_PROGRESS",
+          });
+        }
+
+        if (serviceForPriority?.hasPriority) {
+          const replyText = buildPriorityQuestion(serviceForPriority);
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            serviceId: (serviceForPriority._id ?? session.serviceId) as Id<"services">,
+            data: mergeSessionFlow(session.data, { stage: "priority" }),
+            state: "IN_PROGRESS",
+          });
+          await enqueueOutboundMessage(ctx, { contactId, content: replyText });
+          await ctx.runMutation(internalAny.conversationState.updateLastMessage, {
+            contactId,
+            direction: "OUTBOUND",
+            content: replyText,
+            createdAt: Date.now(),
+          });
+          return;
+        }
+
+        if (serviceForPriority || session.serviceId) {
+          resolvedIsPrioritized = false;
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            data: mergeSessionFlow(session.data, {
+              isPrioritized: false,
+              priorityConfirmed: true,
+            }),
+          });
+        }
+      }
+
       const tools = {
         searchProfileByNumber,
         getSpecialDateToday,
@@ -826,6 +902,7 @@ export const processInboundMessage = internalAction({
         sessionState: session.state ? String(session.state) : null,
         serviceId: session.serviceId ? String(session.serviceId) : null,
         currentFieldIndex: typeof session.currentFieldIndex === "number" ? session.currentFieldIndex : null,
+        isPrioritized: typeof resolvedIsPrioritized === "boolean" ? resolvedIsPrioritized : null,
       });
 
       const response = await tanticoAgent.generateText(ctx, { threadId }, {
@@ -849,6 +926,42 @@ export const processInboundMessage = internalAction({
       }).catch((syncError) => {
         console.error("Session flow sync error:", syncError);
       });
+
+      const refreshedSession = (await ctx.runQuery(internalAny.whatsappBotState.getSessionByContact, {
+        contactId,
+      }).catch(() => null)) as typeof session | null;
+      const activeSession = refreshedSession ?? session;
+      const postSyncFlow = getSessionFlow(activeSession.data);
+      const hadGetServiceFields = (response.toolResults ?? []).some(
+        (toolResult) => toolResult?.type === "tool-result" && toolResult?.toolName === "getServiceFields"
+      );
+      let priorityOverrideReply: string | null = null;
+
+      if (
+        activeSession.serviceId &&
+        hadGetServiceFields &&
+        postSyncFlow.isPrioritized === undefined &&
+        !postSyncFlow.priorityConfirmed
+      ) {
+        const selectedService = (allServices || []).find(
+          (service) => String(service._id) === String(activeSession.serviceId)
+        );
+        if (selectedService?.hasPriority) {
+          priorityOverrideReply = buildPriorityQuestion(selectedService);
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            data: mergeSessionFlow(activeSession.data, { stage: "priority" }),
+          });
+        } else {
+          await ctx.runMutation(internalAny.whatsappBotState.patchSession, {
+            id: sessionId,
+            data: mergeSessionFlow(activeSession.data, {
+              isPrioritized: false,
+              priorityConfirmed: true,
+            }),
+          });
+        }
+      }
 
       const rawCompletion = extractCreateRequestCompletion(response.toolResults);
 
@@ -930,6 +1043,10 @@ export const processInboundMessage = internalAction({
         toolResults: response.toolResults,
         lastOutboundContent,
       });
+
+      if (priorityOverrideReply) {
+        replyText = priorityOverrideReply;
+      }
 
       console.log("[processInboundMessage] Final replyText:", {
         length: replyText?.length ?? 0,

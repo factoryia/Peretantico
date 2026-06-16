@@ -36,7 +36,9 @@ describe("chat priority flow integration", () => {
 
     expect(priorityQuestion).toContain("valor normal $40.000");
     expect(priorityQuestion).toContain("valor prioritario $100.000");
-    expect(priorityQuestion).toContain("¿Deseas radicarlo como prioridad? Responde sí o no.");
+    expect(priorityQuestion).toContain("¿Cuál prefieres?");
+    expect(priorityQuestion).toContain("1️⃣ Normal");
+    expect(priorityQuestion).toContain("2️⃣ Prioritario");
 
     const fieldId = "field_eps";
     let createdPayload: Record<string, unknown> | null = null;

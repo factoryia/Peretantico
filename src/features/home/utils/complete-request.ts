@@ -93,7 +93,7 @@ export interface CompleteRequest {
     id: string;
     label: string;
     url: string;
-    kind: "service_field" | "payment_receipt" | "evidence" | "other";
+    kind: "service_field" | "payment_receipt" | "evidence" | "delivery_radicado" | "delivery_photo" | "other";
     fieldId?: string;
     fieldName?: string;
   }[];
@@ -104,7 +104,7 @@ export interface CompleteRequest {
       id: string;
       label: string;
       url: string;
-      kind: "service_field" | "payment_receipt" | "evidence" | "other";
+      kind: "service_field" | "payment_receipt" | "evidence" | "delivery_radicado" | "delivery_photo" | "other";
       fieldId?: string;
       fieldName?: string;
     }[];

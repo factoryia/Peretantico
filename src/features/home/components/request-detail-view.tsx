@@ -4,7 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Image, XCircle } from "lucide-react";
+import { CheckCircle2, Image, XCircle, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RequestHeader } from "./request-header";
 import { PatientDataCard } from "./patient-data-card";
@@ -28,6 +28,11 @@ import { useMutation, useQuery } from "convex/react";
 import { api as convexApi } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { AttachmentsCard } from "./attachments-card";
+import { downloadRequestPdfFromCompleteRequest } from "../utils/request-pdf";
+import { DistributorDeliveryForm } from "./distributor-delivery-form";
+import { ImageModal } from "./image-modal";
+import { useState } from "react";
+import { useDistributorId } from "../hooks/use-distributor-id";
 
 interface RequestDetailViewModalProps {
   isOpen: boolean;
@@ -46,6 +51,9 @@ export function RequestDetailViewModal({
   // onUpdateRequest,
   isDistributor = false,
 }: RequestDetailViewModalProps) {
+  const [previewImage, setPreviewImage] = useState<{ url: string; caption: string } | null>(null);
+  const { data: myDistributorId } = useDistributorId();
+
   // Fetch complete request details when modal is open and we have an ID
   const { data: detailedRequest, isLoading: isDetailLoading } = useRequestDetail(
     isOpen && initialRequest?.id ? initialRequest.id : null
@@ -60,6 +68,12 @@ export function RequestDetailViewModal({
 
   // Use detailed request if available, otherwise fallback to initial
   const request = detailedRequest || initialRequest;
+  const isDeliveryClosed =
+    request?.requestStatus === "Atendida" || request?.requestStatus === "Finalizada";
+  const isAssignedDistributor =
+    Boolean(myDistributorId) && request?.distributor?.id === String(myDistributorId);
+  const canRegisterDelivery =
+    Boolean(request) && !isDeliveryClosed && (isDistributor || isAssignedDistributor);
 
   // Transform data to match our interface with safety checks
   const distributorsList: Distributor[] = Array.isArray(distributorsData)
@@ -351,6 +365,26 @@ export function RequestDetailViewModal({
             statusVariant={getStatusVariant(statusLabel)}
           />
 
+          <div className="flex justify-center border-b bg-slate-50 px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                try {
+                  downloadRequestPdfFromCompleteRequest(request);
+                  toast.success("PDF descargado");
+                } catch (error) {
+                  console.error(error);
+                  toast.error("No se pudo generar el PDF");
+                }
+              }}
+            >
+              <FileDown className="h-4 w-4" />
+              Descargar PDF para imprimir
+            </Button>
+          </div>
+
           {/* Primera fila de tarjetas */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))]">
             {request.infoService?.type !== "node--property_certification" && (
@@ -567,7 +601,36 @@ export function RequestDetailViewModal({
                 </Button>
               </div>
             </div>
-          )}
+            )}
+
+            {canRegisterDelivery ? (
+              <div className="bg-white overflow-hidden px-6 py-7 border-b">
+                <div className="text-[#6B7280] text-[12.8px] uppercase font-semibold pb-4">
+                  Registrar entrega con fotos
+                </div>
+                <DistributorDeliveryForm
+                  requestId={request.id}
+                  initialObservations={request.field_observations}
+                  onPreviewImage={(url, caption) => setPreviewImage({ url, caption })}
+                  onSuccess={() => onOpenChange(false)}
+                />
+              </div>
+            ) : null}
+
+            {!canRegisterDelivery && request?.distributor && !isDeliveryClosed ? (
+              <div className="bg-white overflow-hidden px-6 py-7 border-b">
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 space-y-2">
+                  <p className="font-semibold">Fotos de radicado y evidencia</p>
+                  <p>
+                    Las fotos las sube el repartidor asignado ({request.distributor.name}) desde{" "}
+                    <strong>Mis Entregas</strong> en el menú lateral, al marcar la solicitud como completada.
+                  </p>
+                  <p className="text-blue-800">
+                    No están en Repartidores ni en Editar solicitud: son datos de la visita del repartidor.
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
           {/* Segunda fila de tarjetas */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))]">
@@ -590,6 +653,13 @@ export function RequestDetailViewModal({
           </div>
         </div>
       </DialogContent>
+
+      <ImageModal
+        isOpen={!!previewImage}
+        imageUrl={previewImage?.url ?? ""}
+        caption={previewImage?.caption ?? ""}
+        onClose={() => setPreviewImage(null)}
+      />
     </Dialog>
   );
 }

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useDistributorId } from "../hooks/use-distributor-id";
 import {
   useCompleteRequests,
-  getTodayDateBounds,
   type CompleteRequest,
 } from "../utils/complete-request";
 import { DistributorRequestCard } from "./distributor-request-card";
@@ -24,8 +23,6 @@ export function DistributorDashboard() {
     useState<CompleteRequest | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const todayBounds = getTodayDateBounds();
-
   const {
     data: requestsData,
     isLoading: isLoadingRequests,
@@ -34,7 +31,6 @@ export function DistributorDashboard() {
     isFetching,
   } = useCompleteRequests({
     assignedDistributor: distributorId || "none",
-    ...todayBounds,
   });
 
   const isLoading = isLoadingId || isLoadingRequests;
@@ -61,7 +57,10 @@ export function DistributorDashboard() {
     );
   }
 
-  const requests = requestsData?.data || [];
+  const requests = (requestsData?.data || []).filter((request) => {
+    const status = request.requestStatus ?? "EnProceso";
+    return status !== "Atendida" && status !== "Finalizada";
+  });
 
   return (
     <div className="h-full flex flex-col">
@@ -72,10 +71,10 @@ export function DistributorDashboard() {
           <div className="flex max-sm:flex-col max-sm:text-center items-center sm:justify-between">
             <div className="max-sm:pb-3">
               <h2 className="text-2xl font-bold text-gray-900">
-                Entregas de hoy
+                Mis entregas pendientes
               </h2>
               <p className="text-gray-500 text-sm">
-                Solicitudes asignadas para el día de hoy. Usa tu correo y cédula para ingresar.
+                Aquí aparecen las solicitudes asignadas a ti que aún no están completadas. En cada tarjeta, al final, sube la foto del radicado (si el servicio lo exige) y guarda la entrega.
               </p>
             </div>
             <Button
@@ -99,8 +98,8 @@ export function DistributorDashboard() {
           ) : requests.length === 0 ? (
             <div className="mt-12">
               <EmptyState
-                title="No tienes entregas para hoy"
-                description="Cuando el administrador te asigne solicitudes de hoy, aparecerán aquí."
+                title="No tienes entregas pendientes"
+                description="Cuando el administrador te asigne solicitudes en curso, aparecerán aquí para que subas las fotos al completarlas."
                 onRefresh={refetch}
               />
             </div>

@@ -459,3 +459,34 @@ describe("createRequest completion extraction", () => {
     expect(completion?.completion?.newThreadId).toBe("thread_boxed");
   });
 });
+
+describe("priority flow helpers", () => {
+  it("parses normal and priority answers", async () => {
+    const { parsePriorityAnswer } = await import("../../convex/ycloudBot.helpers");
+
+    expect(parsePriorityAnswer("prioritario")).toBe(true);
+    expect(parsePriorityAnswer("2")).toBe(true);
+    expect(parsePriorityAnswer("si")).toBe(true);
+    expect(parsePriorityAnswer("normal")).toBe(false);
+    expect(parsePriorityAnswer("1")).toBe(false);
+    expect(parsePriorityAnswer("no")).toBe(false);
+    expect(parsePriorityAnswer("medicamentos")).toBe(null);
+  });
+
+  it("resolves service selection from numbered list", async () => {
+    const { resolveServiceFromInboundText } = await import("../../convex/ycloudBot.helpers");
+    const services = [
+      { _id: "svc_1", name: "Partida de Matrimonio", status: true, price: 35000 },
+      { _id: "svc_2", name: "Solicitud de Medicamentos", status: true, price: 40000, hasPriority: true },
+    ];
+
+    const picked = resolveServiceFromInboundText({
+      effectiveText: "2",
+      normalizedLastOutbound: "lista de servicios disponibles responde con el numero o el nombre del servicio",
+      services,
+      hasSessionServiceId: false,
+    });
+
+    expect(picked?._id).toBe("svc_2");
+  });
+});

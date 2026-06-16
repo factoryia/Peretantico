@@ -1,9 +1,15 @@
 import type { DeliveryDriver } from "@/features/distributors/types";
-import { Cog, Banknote, FileText, Mail, MessageSquare, Truck, User } from "lucide-react";
+import { Cog, Banknote, FileText, Mail, MessageSquare, Truck, User, PackageCheck } from "lucide-react";
 
 // Datos de navegación
 export const data = {
   navMain: [
+    {
+      title: "Mis Entregas",
+      url: "/mis-entregas",
+      icon: PackageCheck,
+      distributorNav: true,
+    },
     {
       title: "Solicitudes",
       url: "/",

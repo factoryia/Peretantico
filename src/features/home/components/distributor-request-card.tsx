@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@convex/_generated/api";
 import {
   Card,
   CardHeader,
@@ -11,27 +9,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Eye,
-  Camera,
-  CheckCircle2,
-  Loader2,
-  Upload,
-  ZoomIn,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
+import { Eye, CheckCircle2, ZoomIn } from "lucide-react";
 import type { CompleteRequest } from "../utils/complete-request";
 import { ImageModal } from "./image-modal";
-import type { Id } from "@convex/_generated/dataModel";
+import { DistributorDeliveryForm } from "./distributor-delivery-form";
 
 interface DistributorRequestCardProps {
   request: CompleteRequest;
@@ -44,20 +25,8 @@ export function DistributorRequestCard({
   onSuccess,
   onViewDetail,
 }: DistributorRequestCardProps) {
-  const [file, setFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [modalImageData, setModalImageData] = useState<{
-    url: string;
-    caption: string;
-  }>({ url: "", caption: "" });
-
-  // Convex mutations
-  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const distributorUpdateRequest = useMutation(api.requests.distributorUpdateRequest);
-
-  const [outcome, setOutcome] = useState<"Atendida" | "Incompleta" | "EnProceso">("Atendida");
-  const [observations, setObservations] = useState(request.field_observations ?? "");
+  const [modalImageData, setModalImageData] = useState({ url: "", caption: "" });
 
   const mapRequestStatusToLabel = (status?: string | null) => {
     switch (status) {
@@ -75,110 +44,22 @@ export function DistributorRequestCard({
   };
 
   const statusName = mapRequestStatusToLabel(request.requestStatus);
-
-  const openImageModal = (url: string, caption: string) => {
-    setModalImageData({ url, caption });
-    setIsImageModalOpen(true);
-  };
+  const isClosed = statusName === "Finalizada" || statusName === "Atendida";
 
   const getStatusStyles = (status: string) => {
     const lowerStatus = status.toLowerCase();
-    if (
-      lowerStatus.includes("atendida") ||
-      lowerStatus.includes("finalizada") ||
-      lowerStatus.includes("exito")
-    ) {
+    if (lowerStatus.includes("atendida") || lowerStatus.includes("finalizada")) {
       return "bg-green-100 text-green-700 border-green-200";
     }
     if (lowerStatus.includes("proceso")) {
       return "bg-yellow-100 text-yellow-700 border-yellow-200";
     }
-    if (lowerStatus.includes("incompleta") || lowerStatus.includes("cancel")) {
+    if (lowerStatus.includes("incompleta")) {
       return "bg-red-100 text-red-700 border-red-200";
     }
     return "bg-blue-100 text-blue-700 border-blue-200";
   };
 
-  const isClosed =
-    statusName === "Finalizada" ||
-    statusName === "Atendida";
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
-  const ALLOWED_EXTENSIONS = ["png", "gif", "jpg", "jpeg", "webp"];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (outcome === "Atendida" && !file) {
-      toast.error("Adjunta evidencia para marcar como completada");
-      return;
-    }
-
-    if ((outcome === "Incompleta" || outcome === "EnProceso") && !observations.trim()) {
-      toast.error("Escribe qué pasó con la solicitud");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      let evidenceStorageId: Id<"_storage"> | undefined;
-
-      if (file) {
-        const fileExtension = file.name.split(".").pop()?.toLowerCase();
-        if (!fileExtension || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
-          toast.error(`Formato no válido. Solo: ${ALLOWED_EXTENSIONS.join(", ")}`);
-          setIsSubmitting(false);
-          return;
-        }
-
-        const postUrl = await generateUploadUrl();
-        const result = await fetch(postUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-
-        if (!result.ok) {
-          throw new Error(`Upload failed: ${result.statusText}`);
-        }
-
-        const { storageId } = await result.json();
-        evidenceStorageId = storageId;
-      }
-
-      await distributorUpdateRequest({
-        id: request.id as Id<"requests">,
-        requestStatus: outcome,
-        observations: observations.trim() || undefined,
-        evidenceStorageId,
-      });
-
-      const successMessage =
-        outcome === "Atendida"
-          ? "Solicitud completada"
-          : outcome === "Incompleta"
-            ? "Solicitud marcada como incompleta"
-            : "Solicitud quedó pendiente";
-
-      toast.success(successMessage);
-      setFile(null);
-      if (onSuccess) onSuccess();
-    } catch (error) {
-      console.error("Error al actualizar la solicitud:", error);
-      toast.error(
-        error instanceof Error ? error.message : "No se pudo guardar el resultado"
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Resolver dirección adecuadamente para el repartidor
   const getAddress = () => {
     const info = request.infoService;
     if (info?.type === "node--water_sample_fridge") {
@@ -188,31 +69,19 @@ export function DistributorRequestCard({
         (info as any).senderAddress ||
         "Sin dirección"
       );
-    } else if (info?.type === "node--medical_bills") {
-      return (
-        (info as any).recipientAddress ||
-        (info as any).senderAddress ||
-        "Sin dirección"
-      );
-    } else if (info?.type === "node--request_medication") {
-      return (
-        (info as any).address || request.applicant?.address || "Sin dirección"
-      );
+    }
+    if (info?.type === "node--medical_bills") {
+      return (info as any).recipientAddress || (info as any).senderAddress || "Sin dirección";
+    }
+    if (info?.type === "node--request_medication") {
+      return (info as any).address || request.applicant?.address || "Sin dirección";
     }
     return request.applicant?.address || "Sin dirección";
   };
 
-  // Resolver nombre adecuadamente para el repartidor
   const getFullName = () => {
     const info = request.infoService;
-    if (info?.type === "node--water_sample_fridge") {
-      return (
-        (info as any).recipientFullName ||
-        (info as any).senderFullName ||
-        request.applicant?.name ||
-        "Sin nombre"
-      );
-    } else if (info?.type === "node--medical_bills") {
+    if (info?.type === "node--water_sample_fridge" || info?.type === "node--medical_bills") {
       return (
         (info as any).recipientFullName ||
         (info as any).senderFullName ||
@@ -222,10 +91,6 @@ export function DistributorRequestCard({
     }
     return request.applicant?.name || "Sin nombre";
   };
-
-  const fullName = getFullName();
-
-  const address = getAddress();
 
   return (
     <Card className="overflow-hidden border-2 transition-all hover:shadow-md py-0">
@@ -239,11 +104,7 @@ export function DistributorRequestCard({
               {request.field_application_number}
             </CardTitle>
           </div>
-          <Badge
-            className={`rounded-full px-3 py-0.5 text-[10px] font-semibold border ${getStatusStyles(
-              statusName
-            )}`}
-          >
+          <Badge className={`rounded-full px-3 py-0.5 text-[10px] font-semibold border ${getStatusStyles(statusName)}`}>
             {statusName}
           </Badge>
         </div>
@@ -255,206 +116,73 @@ export function DistributorRequestCard({
             <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
               Cliente / Destinatario
             </Label>
-            <p className="text-sm font-semibold text-gray-800">{fullName}</p>
+            <p className="text-sm font-semibold text-gray-800">{getFullName()}</p>
           </div>
-
           <div>
             <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
               Dirección de Entrega
             </Label>
-            <p className="text-sm text-gray-600 leading-snug">{address}</p>
+            <p className="text-sm text-gray-600 leading-snug">{getAddress()}</p>
           </div>
-
           <div>
             <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
               Detalle del Servicio
             </Label>
-            <p className="text-sm text-gray-600 line-clamp-2 italic">
-              "{request.title}"
-            </p>
+            <p className="text-sm text-gray-600 line-clamp-2 italic">"{request.title}"</p>
           </div>
-
-          {request.field_observations ? (
-            <div>
-              <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
-                Observaciones
-              </Label>
-              <p className="text-sm text-gray-600 italic">"{request.field_observations}"</p>
-            </div>
-          ) : null}
         </div>
       </CardContent>
 
       <CardFooter className="bg-gray-50/30 pt-4 pb-6 border-t flex flex-col gap-3">
         <Button
           variant="secondary"
-          className="w-full h-9 bg-white hover:bg-blue-50 hover:text-blue-600 text-gray-600 border border-gray-100 rounded-lg transition-colors font-semibold text-xs shadow-sm"
+          className="w-full h-9 bg-white hover:bg-blue-50 hover:text-blue-600 text-gray-600 border border-gray-100 rounded-lg font-semibold text-xs shadow-sm"
           onClick={() => onViewDetail?.(request)}
         >
           <Eye className="mr-1.5 h-3.5 w-3.5" />
           Ver detalle de solicitud
         </Button>
 
-        {request.evidenceImage && (
-          <div className="w-full mt-2">
+        {request.evidenceImage ? (
+          <div className="w-full">
             <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight mb-2 block">
               Evidencia de Entrega
             </Label>
             <div
-              className="relative rounded-lg overflow-hidden border border-gray-100 shadow-sm bg-gray-50 aspect-video cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all group"
-              onClick={() =>
-                openImageModal(
-                  request.evidenceImage!.uri,
-                  "Evidencia de entrega"
-                )
-              }
+              className="relative rounded-lg overflow-hidden border aspect-video cursor-pointer group"
+              onClick={() => {
+                setModalImageData({ url: request.evidenceImage!.uri, caption: "Evidencia de entrega" });
+                setIsImageModalOpen(true);
+              }}
             >
-              <img
-                src={request.evidenceImage.uri}
-                alt="Evidencia de entrega"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                onError={(e) => {
-                  (
-                    e.target as HTMLImageElement
-                  ).src = `https://placehold.co/600x400?text=Error+al+cargar+imagen`;
-                }}
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center transition-all">
-                <ZoomIn className="text-white opacity-0 group-hover:opacity-100 w-8 h-8 drop-shadow-lg" />
+              <img src={request.evidenceImage.uri} alt="Evidencia" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center">
+                <ZoomIn className="text-white opacity-0 group-hover:opacity-100 w-8 h-8" />
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {isClosed ? (
-          <div className="w-full flex flex-col items-center justify-center py-2 text-green-600 gap-1">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="text-sm font-semibold">
-                {statusName === "Atendida" ? "Servicio completado" : statusName}
-              </span>
-            </div>
+          <div className="w-full flex items-center justify-center py-2 text-green-600 gap-2">
+            <CheckCircle2 className="h-5 w-5" />
+            <span className="text-sm font-semibold">Servicio completado</span>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="w-full space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
-                Resultado de la visita
-              </Label>
-              <Select
-                value={outcome}
-                onValueChange={(value) =>
-                  setOutcome(value as "Atendida" | "Incompleta" | "EnProceso")
-                }
-              >
-                <SelectTrigger className="h-9 bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Atendida">Completada</SelectItem>
-                  <SelectItem value="Incompleta">Incompleta (a medias)</SelectItem>
-                  <SelectItem value="EnProceso">Pendiente / no completada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase text-gray-400 font-bold tracking-tight">
-                Observaciones
-              </Label>
-              <Textarea
-                value={observations}
-                onChange={(e) => setObservations(e.target.value)}
-                placeholder={
-                  outcome === "Atendida"
-                    ? "Opcional: notas de la entrega"
-                    : "Ej: faltó documento, no había pago, no pudieron reclamar todo..."
-                }
-                className="min-h-[72px] resize-none bg-white text-sm"
-              />
-            </div>
-
-            {file ? (
-              <div
-                className="relative rounded-lg overflow-hidden border border-blue-100 aspect-video bg-blue-50/30 cursor-pointer hover:ring-2 hover:ring-blue-500/50 transition-all group"
-                onClick={() =>
-                  openImageModal(URL.createObjectURL(file), "Vista previa de evidencia")
-                }
-              >
-                <img
-                  src={URL.createObjectURL(file)}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  alt="Vista previa"
-                />
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2 h-6 w-6 rounded-full z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFile(null);
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ) : null}
-
-            {outcome === "Atendida" ? (
-              <div className="relative group">
-                <input
-                  type="file"
-                  id={`evidence-${request.id}`}
-                  className="hidden"
-                  onChange={handleFileChange}
-                  accept=".png,.gif,.jpg,.jpeg,.webp"
-                  disabled={isSubmitting}
-                />
-                <label
-                  htmlFor={`evidence-${request.id}`}
-                  className={`flex items-center justify-center gap-2 w-full p-3 rounded-xl border-2 border-dashed transition-all cursor-pointer
-                    ${
-                      file
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-500"
-                    } ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  {file ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span className="text-xs font-medium truncate max-w-[200px]">
-                        {file.name}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-4 w-4" />
-                      <span className="text-xs font-medium">Adjuntar evidencia (obligatoria)</span>
-                    </>
-                  )}
-                </label>
-              </div>
-            ) : null}
-
-            <Button
-              type="submit"
-              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm transition-all"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Guardar resultado
-                </>
-              )}
-            </Button>
-          </form>
+          <div className="w-full space-y-2 border-t border-dashed border-gray-200 pt-3">
+            <Label className="text-[10px] uppercase text-blue-700 font-bold tracking-tight block">
+              Completar entrega — subir fotos aquí
+            </Label>
+            <DistributorDeliveryForm
+            requestId={request.id}
+            initialObservations={request.field_observations}
+            onPreviewImage={(url, caption) => {
+              setModalImageData({ url, caption });
+              setIsImageModalOpen(true);
+            }}
+            onSuccess={onSuccess}
+          />
+          </div>
         )}
       </CardFooter>
 

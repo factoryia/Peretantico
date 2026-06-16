@@ -10,6 +10,8 @@ export type BotSessionFlowState = {
   addressConfirmed?: boolean;
   paymentDraft?: { method?: string | null };
   collectedData?: Record<string, unknown>;
+  isPrioritized?: boolean;
+  priorityConfirmed?: boolean;
 };
 
 export function mergeSessionFlow(

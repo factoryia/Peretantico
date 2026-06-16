@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { Home } from "@/features/home/pages/home";
+import { DistributorDashboard } from "@/features/home/components/distributor-dashboard";
 import { Reports } from "@/features/reports/pages/reports";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Distributors } from "@/features/distributors/pages/distributors";
@@ -47,6 +48,7 @@ export default function App() {
           <Route element={<PrivateRoutes />}>
             <Route element={<DashboardLayout />}>
               <Route path="/" element={<Home />} />
+              <Route path="/mis-entregas" element={<DistributorDashboard />} />
 
               {/* Rutas exclusivas para admin (excluidas para distribuidores) */}
               <Route
